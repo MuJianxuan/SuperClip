@@ -58,6 +58,19 @@
    - 维护搜索词、选中项、滚动位置、最近显示器等会话级瞬时状态
    - 区分“同一会话重开可恢复”与“完整重启后默认清空”的边界
 
+## 模块职责矩阵
+| 模块 | 输入 | 主要输出 | 状态归属 | 失败时的系统行为 |
+|---|---|---|---|---|
+| Tray / Status Item | tray click、app reopen、global shortcut | `tray-popover` 显示 / 隐藏指令 | 宿主 runtime | 定位失败时交给 `Window Placement Service` 回退 |
+| Clipboard Monitor | pasteboard diff、pause/resume 设置、exclusion rules | 原始 clipboard snapshot | Rust 后台长驻服务 | 读取失败时重试并记错误，不阻断历史浏览 |
+| Clipboard Normalizer | 原始 snapshot | 统一 item / payload / preview / hash | Rust 内部纯逻辑层 | 不支持类型时降级为 `truncated / unsupported` 元数据 |
+| Repository + Search | normalized item、settings、cleanup task | SQLite 持久化、FTS 索引、分页结果 | SQLite + Rust repository | `DB_LOCKED` 时串行排队，迁移失败时切入 recovery mode |
+| Paste Orchestrator | selected item、target app、permission status | copy-only / direct-paste 结果、fallback 事件 | Rust 编排层 | 任一步失败都必须回退为 copy-only 或只读解释 |
+| Shortcut Service | 用户录入、系统注册结果 | 当前 binding、冲突结果、注册状态 | Rust + OS integration | 冲突或注册失败返回稳定错误码，不污染现有绑定 |
+| Window Placement Service | display hint、safe area、window mode | tray-relative / compact / fallback window 结果 | 宿主窗口层 | 记录 `window-fallback-used` 并保持同一内容壳体 |
+| Session UI State Service | query、selection、scroll、presentation reason | reopen 恢复态 | 前端 + Rust 共享瞬时态 | 冷启动与 crash recovery 默认清空敏感搜索上下文 |
+| Diagnostics Service | 导出动作、最近错误、状态快照 | 结构化 json 诊断包 | Rust 本地文件输出 | 导出失败返回 `DIAGNOSTICS_EXPORT_FAILED`，不影响主流程 |
+
 ## IPC 契约
 ### Commands
 - `clipboard:list`：分页获取历史列表
@@ -232,6 +245,19 @@ P1 预留键（schema 冻结，P0 首版不暴露）：
 
 - `settings:update` 只允许修改声明在 schema 内的 key；未知 key 一律返回稳定错误码，不做静默落库。
 
+### session_ui_state（进程内瞬时态，不落 SQLite）
+- `query`
+- `selected_item_id`
+- `scroll_anchor`
+- `presentation_reason`
+- `last_display_id`
+- `last_window_mode`
+- `restored_from_session`
+- `updated_at`
+
+- 该状态只在同一 app process 生命周期内有效，不进入 SQLite，不参与诊断导出的敏感内容快照。
+- `show_on_startup`、crash recovery、cold start reopen 默认强制清空 `query`，避免旧搜索词被被动暴露。
+
 ### exclusion_rules
 - id
 - rule_type（bundle_id / keyword / content_kind）
@@ -254,6 +280,47 @@ P1 预留键（schema 冻结，P0 首版不暴露）：
 - 置顶项不参与自动淘汰
 - 重复内容只更新 `last_seen_at` / `use_count`
 - 后台定期执行 `VACUUM` / `PRAGMA optimize`
+
+## 状态机与一致性边界
+### app runtime
+- `booting` -> `ready`
+- `booting` -> `migration_in_progress`
+- `migration_in_progress` -> `ready`
+- `migration_in_progress` -> `recovery_mode`
+- `ready` -> `quitting`
+
+### monitor runtime
+- `active`
+- `paused`
+- `recovering`
+
+- 只有 `active` 允许接收新的 clipboard snapshot；`paused` 仍允许搜索 / 浏览历史。
+
+### window presentation
+- `hidden`
+- `tray_popover`
+- `compact_popover`
+- `fallback_window`
+
+- 这四个状态只允许单实例切换，不允许创建第二套主窗口壳体。
+
+### paste action
+- `idle`
+- `prepare_payload`
+- `write_pasteboard`
+- `attempt_direct_paste`
+- `fallback_copy_only`
+- `completed` / `failed`
+
+- `completed` 并不等于 direct paste 成功；fallback copy-only 也算用户主链路完成，但必须记录原因码。
+
+## 并发、事务与幂等策略
+- Clipboard Monitor 到 Repository 的写路径使用串行队列，避免 pasteboard 高频变化与 SQLite 写锁互相放大。
+- 以 `content_hash + kind + normalized payload fingerprint` 作为幂等判断基础；重复写入只更新 `last_seen_at` 与计数。
+- `clipboard:delete` 与 `clipboard:restore` 必须包裹在单事务中，保证历史表与 `clipboard_trash` 不会出现双写不一致。
+- `clipboard:clear` 与后台清理任务互斥；清空历史时暂停低优先级维护任务，避免用户感知到长时间锁等待。
+- 搜索请求优先走只读连接 / 快照视图，不等待后台 `VACUUM`、`PRAGMA optimize` 完成。
+- `migration_in_progress`、`recovery_mode`、`db_locked beyond threshold` 必须通过稳定错误码回传前端，前端不可自行猜测异常含义。
 
 ## 关键实现决策
 - **不要**把 `arboard` 作为唯一方案：它更适合 text/image 参考，不足以覆盖 file / rich text 全量需求。
@@ -287,6 +354,17 @@ P1 预留键（schema 冻结，P0 首版不暴露）：
 | `image` | direct paste（best effort） | 仅对接受标准图片 pasteboard 的目标应用尝试；失败统一回退 copy-only |
 | `file` | copy-only | P0 不承诺跨应用 file URL direct paste，一律不模拟“自动粘贴文件” |
 | `truncated` / `unsupported` | copy-only 或 view-only | 根据是否存在可复制摘要决定是否开放 copy-only |
+
+## 兼容性验证与回退策略
+| 验证层 | 目标类型 | 后端策略 | UI 反馈契约 | 必须记录的诊断字段 |
+|---|---|---|---|---|
+| `plain_text_targets` | 单行 / 多行文本输入区、Terminal、IDE | 直接写 plain text 后触发 paste | 成功可静默；失败必须提示已回退为 copy-only | `kind=text`、`target_class=text`、`result`、`error_code?` |
+| `rich_text_targets` | 富文本编辑区、邮件正文、文档编辑器 | 优先写 HTML / RTF，同时附 plain text | 若退化为 plain text，必须说明“格式未保留” | `kind=html/rtf`、`degraded_to=plain_text?` |
+| `image_targets` | 接受图片 pasteboard 的输入区 | 写图片二进制并尝试 paste | 若失败，必须在 1 秒内明确提示已回退 copy-only | `kind=image`、`fallback_used=true` |
+| `file_targets` | Finder / IDE / 浏览器上传区 | 不尝试 direct paste，只执行 copy-only | 主动作直接显示 copy-only，不制造“即将自动粘贴文件”的错觉 | `kind=file`、`strategy=copy_only_fixed` |
+
+- `Paste Orchestrator` 不维护“无限制兼容名单”；P0 只维护 **类型分层 + 失败回退**，避免宿主耦合过深。
+- 若未来需要按应用做专项兼容，只能作为 P1+ 的增量能力，而不是在 P0 用特判堆叠。
 
 ## 失败分类
 - `NO_ACCESSIBILITY`
@@ -341,6 +419,22 @@ P1 预留键（schema 冻结，P0 首版不暴露）：
 - `clipboard:restore` 仅在缓冲期内可用，恢复成功后重新进入正常排序与搜索结果。
 - `clipboard:clear` 直接永久清空历史，不进入恢复缓冲区。
 
+## 宿主集成风险缓解机制
+### 登录启动 / 冷启动
+- 登录启动只负责恢复宿主驻留，不负责恢复旧搜索词、旧选中项或旧展开态。
+- `show_on_startup=true` 时仅允许触发一次 `startup_autoshow`；若同一冷启动周期内收到重复 reopen 事件，后续事件必须被去重。
+- 登录启动失败不得阻断 app ready；失败事件通过 `startup-integration-failed` 上报并保留设置页 retry 能力。
+
+### Dock reopen / 单窗口约束
+- 所有 reopen 信号（Dock、tray、shortcut）都必须先经过窗口协调层（`Window Coordinator`，可归属于 `Window Placement / Lifecycle` 管理层）去重，再决定显示模式。
+- 判定已有主界面壳体存在时，只允许 `show existing shell`，禁止新建第二窗口实例。
+- 若定位中的旧窗口句柄不可用，应先销毁句柄引用再复用同一逻辑窗口 id，避免“视觉上一个、内部两个”。
+
+### 多显示器 / 安全区回退
+- `Window Placement Service` 在真正展示前必须先做一次 display snapshot；若展示时显示器集合已变化，立即重算而不是沿用旧 anchor。
+- 当 tray anchor、焦点应用显示器、最近成功显示器三者冲突时，优先级为：当前交互上下文 > 最近成功显示器 > 主显示器。
+- 任一回退都必须带 `fallback_reason` 与 `chosen_window_mode`，便于诊断与复现。
+
 ## 空状态派生规则
 - `startup_autoshow`：满足 `show_on_startup=true` 且冷启动首次展示时触发，默认使用空搜索态文案，不读取旧搜索词。
 - `no_history`：历史列表为空且当前无关键词时触发。
@@ -389,6 +483,32 @@ P1 预留键（schema 冻结，P0 首版不暴露）：
 - 删除单条后若用户点击撤销，优先从短期恢复缓冲区恢复；若缓冲区过期则给出已过期提示，不当作系统错误。
 - Dock reopen 失败时，优先回退为主显示器居中工具窗口，不把失败暴露成致命错误。
 
+## 可观测性与诊断闭环
+- 所有核心路径统一写结构化日志，最低字段包含：`timestamp`、`service`、`action`、`result`、`error_code?`、`duration_ms?`、`item_id?`、`kind?`、`display_id?`。
+- `window-fallback-used`、`paste-failed`、`startup-integration-failed`、`migration-state-changed`、`shortcut-conflict-detected` 必须同时具备：
+  - 面向 UI 的可读状态
+  - 面向诊断导出的结构化记录
+  - 面向测试与回归的稳定错误码
+- 诊断导出数据源分为三层：
+  1. runtime state snapshot（权限、迁移、窗口模式）
+  2. recent structured errors（最近错误与上下文标签）
+  3. storage health summary（schema version、row count、fts 状态、文件大小区间）
+- 不做远端 telemetry；可观测性的目标是 **本地可排障**，不是运营埋点。
+- 性能证据、失败回退证据、恢复模式证据要能与 PRD 验收矩阵逐项映射，避免“有日志但无法验收”。
+
+## 诊断字段映射契约
+| 事件 / 状态 | 导出分段 | 必备字段 | 说明 |
+|---|---|---|---|
+| `paste-failed` / `fallback_copy_only` | `recent_errors` | `error_code`、`kind`、`target_class?`、`fallback_used`、`duration_ms` | 用于定位 direct paste 失败与回退是否按时完成 |
+| `window-fallback-used` | `window_fallback_records` | `display_id`、`fallback_reason`、`window_mode`、`safe_area_snapshot?` | 用于定位多显示器 / 刘海区 / tray anchor 失效问题 |
+| `startup-integration-failed` | `recent_errors` | `error_code`、`startup_phase`、`setting_value` | 用于排查登录启动集成失败 |
+| `migration-state-changed` / `recovery-mode-changed` | `migration_summary` + `recent_errors` | `schema_version`、`migration_phase`、`error_code?` | 用于判断是否进入恢复模式以及原因 |
+| `permission-status-changed` | `permissions` | `accessibility_trusted`、`checked_at` | 用于确认权限状态与最近检查时间 |
+| `settings-updated`（失败） | `recent_errors` | `error_code`、`setting_key` | 仅记录失败更新，避免导出过量操作噪声 |
+
+- 诊断导出生成前必须执行一次 runtime snapshot merge，确保“当前状态”与“最近错误”时间线可对齐。
+- 导出实现必须对字段缺失做降级保护：允许字段为空，但不允许分段缺席或结构破坏。
+
 ## Capability / Feature Matrix
 ### Rust features
 - `tray-icon`：系统托盘必开
@@ -411,6 +531,16 @@ P1 预留键（schema 冻结，P0 首版不暴露）：
 - 集成测试：SQLite 读写、FTS 搜索、权限降级
 - 前端测试：列表渲染、搜索、设置持久化、状态展示
 - 手工 smoke：复制、唤起、暂停、恢复、直接粘贴、删除后撤销、诊断导出
+
+## 失败注入测试矩阵
+| 注入场景 | 注入方式 | 预期保护 | 验证重点 |
+|---|---|---|---|
+| 迁移失败 | 人工制造 schema version 不匹配 / migration error | 进入 recovery mode，只读可浏览 | 写路径被拒绝、诊断可导出 |
+| `DB_LOCKED` 超阈值 | 并发占用 SQLite 写锁 | 写入排队或返回稳定错误，不破坏搜索浏览 | 不出现 UI 卡死与数据库损坏 |
+| Accessibility 运行中撤销 | 运行期间撤销系统授权 | direct paste 立即禁用，copy-only 保持可用 | 顶部状态、错误码、权限页入口一致 |
+| tray anchor / positioner 不可用 | 模拟 anchor 丢失、safe area 不足 | 回退为 compact 或 fallback window | 单窗口约束、`window-fallback-used` 记录完整 |
+| diagnostics 保存失败 / 用户取消 | 模拟无权限写入、用户取消保存 | 取消不报错；失败给出 retry | 导出行为与 toast 契约一致 |
+| rich text / image paste 目标拒绝 | 模拟目标应用不接受 payload | 退化或回退 copy-only | 1 秒内完成闭环并保留 error code |
 
 ## 验收与证据映射
 | 场景 | 主验证层 | 最低证据 |

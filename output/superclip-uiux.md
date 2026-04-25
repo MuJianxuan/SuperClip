@@ -58,7 +58,7 @@
 - 左侧：粘贴记录列表
 - 右侧：选中项摘要 + 功能列表
 - 顶部：搜索框、监听状态、权限状态
-- 底部：快捷操作提示
+- 底部：快捷操作提示（`↑↓`、`Enter`、`Cmd+Enter`、`Space`、`Esc`）
 
 ### 2. 设置窗口
 - 通用
@@ -89,6 +89,25 @@
 - 一键打开系统设置
 - 直接粘贴降级说明
 
+## 信息架构与导航模型
+### tray-popover
+1. `Header`
+   - 搜索框
+   - 监听状态 pill
+   - 权限状态 / 轻提示
+2. `Primary Workspace`
+   - 左侧历史列表
+   - 右侧详情摘要
+   - 右侧功能列表
+3. `Footer`
+   - 键盘快捷提示
+   - 当前默认动作说明
+
+### settings window
+- 一级导航固定为：`通用` / `快捷键` / `粘贴行为` / `隐私与排除规则` / `外观` / `启动与更新` / `关于`
+- P0 不在 tray-popover 内直接暴露“登录时启动”开关，避免与 settings 的单一事实源冲突；popover 只提供进入设置的路径与状态摘要。
+- `诊断导出` 允许同时出现在 `关于` 分组与 popover 功能列表中，但都指向同一动作语义与同一反馈样式。
+
 ## 菜单栏 popover 版式
 - 建议宽度：840 ~ 880px
 - 建议最大高度：640px
@@ -117,6 +136,14 @@
 - 完整退出后重新启动：默认不恢复旧搜索词。
 - 启用“启动时自动显示”时：首次打开仍以空搜索态展示，避免在开机后直接暴露历史筛选内容。
 - 若用户从 Dock 重新打开且当前为同一会话，沿用同一恢复规则，不额外创建第二窗口。
+
+## 焦点管理与键盘优先策略
+- 打开 `tray-popover` 后默认焦点始终落在搜索框；若存在首条历史项，列表选中态同步建立，但不抢走文本输入焦点。
+- `Tab / Shift+Tab` 焦点顺序固定为：搜索框 -> 左侧列表操作热点 -> 右侧主动作 -> 功能列表 -> footer 辅助说明。
+- 用户用 `↑ / ↓` 浏览列表时，焦点语义保持在“列表浏览模式”；除非显式 `Tab` 到右侧，否则不自动跳到详情区。
+- 删除单条后，焦点优先回到“下一条可选历史项”；若列表为空，则回到搜索框并展示对应空状态。
+- Toast 出现时不主动抢焦点；只有阻塞态（迁移中 / 恢复中）允许以全局遮罩接管焦点。
+- `Esc` 的优先级从高到低为：退出快捷键录入 -> 收起详情展开态 -> 关闭 popover；避免一个按键跨层级误伤。
 
 ## 搜索高亮规则
 - 搜索高亮必须消费后端返回的 `highlight_ranges`、`match_type`、`matched_fields`；前端不得自行重新做模糊匹配。
@@ -150,9 +177,20 @@
 - 清空历史
 - 权限状态 / 打开系统设置
 - 导出诊断
-- 登录时启动
 - 关于
 - 退出
+
+## 组件清单与状态覆盖
+| 组件 | 必备状态 | 说明 |
+|---|---|---|
+| SearchField | default / focus / composing / searching / empty / error | error 仅用于异常搜索态，不替代空状态 |
+| HistoryRow | default / hover / selected / pinned / truncated / disabled(read-only) | `selected` 与 `pinned` 可以并存，但视觉优先级是 selected > pinned |
+| PrimaryActionButton | default / hover / focus / loading / disabled / fallback-confirmed | 当 direct paste 失败回退时，不切换为全新按钮，只更新文案与 toast |
+| StatusPill | monitoring / paused / permission-missing / recovery-readonly | 不同状态必须有文字，不只靠颜色 |
+| Banner | warning / info / readonly / permission | 顶部 banner 只承载“持续状态”，瞬时反馈走 toast |
+| Toast | success / warning / error / undo | undo toast 必须包含剩余时间与明确动作 |
+| ConfirmDialog | clear-history only | P0 不把单条删除做成 confirm dialog |
+| RuleEditorRow | default / editing / disabled / validation-error | 用于排除规则编辑，不引入复杂表格交互 |
 
 ## 交互规则
 - `Enter`：执行默认动作（直接粘贴 / 仅复制，按设置切换）
@@ -179,6 +217,18 @@
 | File | 仅复制 | Pin / Delete | 主按钮直接显示“仅复制”，并给 tooltip 说明 P0 不承诺 direct paste |
 | Truncated / Unsupported | 查看摘要 / 仅复制摘要 | 查看详情 | 明确提示“当前项不支持直接粘贴” |
 
+## `direct_paste` 反馈分层
+| 结果类型 | UI 反馈 | 文案方向 | 交互要求 |
+|---|---|---|---|
+| direct paste 成功 | 轻量成功反馈，可弱化 | 告知已完成，不必要求用户再操作 | 不抢焦点、不遮挡继续操作 |
+| rich text 退化为 plain text | warning toast | 明确“已粘贴，但格式未保留” | 允许用户继续工作，不弹阻断框 |
+| image / rich text 回退为 copy-only | warning toast + 主按钮状态更新 | 明确“已复制到剪贴板，可手动粘贴” | 1 秒内出现反馈，并保持当前列表上下文 |
+| unsupported / truncated | 按钮禁用或文案改写 | 明确“当前项不支持直接粘贴” | 不允许用户误触后才发现失败 |
+| 权限缺失导致无法 direct paste | 顶部 banner + 主按钮禁用说明 | 明确“需要 Accessibility 才能直接粘贴” | 保留 copy-only 路径与打开系统设置入口 |
+
+- 所有 fallback / degrade 提示都必须以“你现在还能怎么继续做”为落点，不能只说失败原因。
+- direct paste 的成功 / 退化 / 回退文案必须与 Architecture 中的 error code / result 分类一一对应。
+
 ## 内容预览规则
 - 文本默认展示两行，超长后折叠并显示“展开”。
 - 图片默认展示缩略图与尺寸，点击后放大到右侧摘要区。
@@ -192,6 +242,46 @@
 - 焦点高亮不可被完全移除。
 - 对比度需满足可读性要求，避免浅灰字压浅灰底。
 - 尊重系统 reduced motion，避免大范围弹跳动效。
+
+## 可用性验证任务（文档冻结前）
+| 任务 | 目标 | 成功标准 |
+|---|---|---|
+| 通过快捷键找回上一条文本并再次使用 | 验证主任务效率 | 首次接触用户可在 10 秒内完成，且无需理解额外概念 |
+| 搜索图片 / 文件并理解可执行动作 | 验证类型差异可理解性 | 用户能在不试错的前提下分辨“可 direct paste / 仅复制 / 仅查看摘要” |
+| 未授权 Accessibility 时完成 copy-only | 验证降级链路 | 用户能理解为什么 direct paste 不可用，并找到“打开系统设置”入口 |
+| 删除后撤销一条记录 | 验证轻破坏性操作闭环 | 用户能看懂 toast 与剩余时间，不会误以为永久丢失 |
+| 在副屏 / 刘海屏发生定位回退时继续搜索 | 验证多显示器容错 | 用户知道界面已回退为居中窗口，但不会因此丢失任务上下文 |
+
+- 设计 QA 最低结论要求：主任务完成率、错误恢复路径、键盘优先路径三项都必须可演示，不允许只展示静态美术层。
+
+## 实现风险走查脚本（UI 视角）
+1. **Text happy path**
+   - 触发快捷键 -> 搜索 -> `Enter`
+   - 预期：焦点不乱跳，任务完成后 UI 可自然关闭或保持上下文
+2. **Rich text degrade**
+   - 选中 HTML / RTF -> 在不支持富文本的目标区执行
+   - 预期：toast 明确“格式未保留”，而不是笼统失败
+3. **Image fallback**
+   - 在不支持图片 pasteboard 的目标区执行
+   - 预期：1 秒内出现“已复制到剪贴板，可手动粘贴”
+4. **Dock reopen 去重**
+   - 已打开主界面时再通过 Dock 唤起
+   - 预期：只复用现有壳体，不出现第二个窗口，也不打断当前搜索上下文
+5. **Recovery mode**
+   - 进入只读模式后尝试 pin / delete / clear
+   - 预期：操作保持 disabled 或给出只读说明，不出现“可点但失败含糊”的状态
+6. **Diagnostics export**
+   - 取消保存 / 导出失败 / 成功导出各跑一次
+   - 预期：取消静默、失败可重试、成功可复制路径
+
+## 宿主集成异常态呈现规范
+| 场景 | 展示层级 | 必须出现的内容 | 禁止行为 |
+|---|---|---|---|
+| 登录启动更新失败 | settings inline error | “未能更新开机启动设置，应用仍可正常使用” + Retry | 不弹系统级阻断框 |
+| Dock / tray 定位回退 | toast 或顶部轻提示 | “已切换为居中窗口显示” | 不创建第二窗口，不要求用户重新搜索 |
+| 恢复模式进入 | 顶部 warning banner + 只读状态条 | 当前只读、允许动作、导出诊断入口 | 不让危险按钮保持可点击 |
+| 诊断导出失败 | toast + 当前入口保留 | 失败原因摘要 + Retry | 不让用户误以为已成功导出 |
+| 权限运行中失效 | 顶部 banner + 主按钮状态变化 | direct paste 已不可用、仍可 copy-only、可打开系统设置 | 不弹连续骚扰式弹窗 |
 
 ## 微文案规则
 - banner、toast、empty state、confirm modal 的文案都必须说明“发生了什么 + 该怎么做”。
@@ -247,6 +337,11 @@
 | 直接粘贴失败 | toast | 自动回退为仅复制 | 否 |
 | 恢复中 / 迁移中 | 全局遮罩 | 仅观察状态 | 是 |
 | 恢复模式（只读） | 顶部 warning banner + 只读状态条 | 浏览、搜索、仅复制、导出诊断 | 否 |
+
+- `direct_paste` 失败、退化、权限缺失三者在视觉上必须可区分：
+  - **失败并已回退**：toast + copy-only 可继续
+  - **退化成功**：warning toast，但任务已完成
+  - **权限缺失**：持续 banner / disabled state，而不是瞬时 toast
 
 ## 视觉禁令
 - 禁止 emoji 图标
