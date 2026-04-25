@@ -50,6 +50,10 @@
    - 处理启动、退出、崩溃恢复、迁移恢复
    - 保证菜单栏常驻与窗口状态恢复
 
+8. **Window Placement Service**
+   - 负责 tray-relative 定位、显示器选择、安全区避让与回退窗口策略
+   - 在菜单栏定位失败时回退为当前显示器的居中工具窗口
+
 ## IPC 契约
 ### Commands
 - `clipboard:list`：分页获取历史列表
@@ -57,22 +61,32 @@
 - `clipboard:get`：获取单条记录详情与预览
 - `clipboard:copy`：仅复制到系统剪贴板
 - `clipboard:paste`：执行直接粘贴或回退
+- `clipboard:pin` / `clipboard:unpin`：更新单条记录的置顶状态
 - `clipboard:delete`：删除单条记录
+- `clipboard:restore`：从短期恢复缓冲区恢复单条记录
 - `clipboard:clear`：清空历史
 - `monitor:toggle`：切换监听状态
 - `settings:get` / `settings:update`：读取与更新设置
 - `permission:check-accessibility`：检查 Accessibility 状态
 - `permission:open-accessibility`：打开系统设置引导
+- `diagnostics:export`：导出本地诊断包
 - `app:show-settings`：打开设置窗口
 - `app:quit`：显式退出
 
 ### Events
 - `history-updated`
 - `search-results-updated`
+- `item-updated`
+- `item-deleted`
+- `item-restored`
 - `monitor-status-changed`
 - `permission-status-changed`
 - `paste-failed`
 - `migration-state-changed`
+- `recovery-mode-changed`
+- `window-fallback-used`
+- `startup-integration-failed`
+- `diagnostics-exported`
 - `reindex-started`
 - `reindex-finished`
 - `settings-updated`
@@ -86,6 +100,10 @@
 - 前端默认仅接收摘要、预览文本、元信息与状态，不直接暴露大字段。
 - 原始 payload 通过按需接口获取，并且仅对当前选中项开放。
 - 所有 command / event payload 都必须包含稳定的 `version` 或兼容字段，避免后续迁移破坏。
+- `diagnostics:export` 返回 `file_path`、`exported_at`、`included_sections`、`version`；失败时返回稳定错误码。
+- `clipboard:delete` 返回 `undo_token`、`expires_at`、`version`；若恢复缓冲区已过期则返回 `UNDO_EXPIRED`。
+- `clipboard:restore` 只接受有效 `undo_token`，成功后返回恢复后的条目摘要。
+- 进入恢复模式后，所有写库 command 必须返回 `RECOVERY_MODE_READ_ONLY`，前端据此统一降级 UI。
 
 ## 数据模型
 ### clipboard_items
@@ -95,7 +113,9 @@
 - preview_text
 - source_app
 - is_pinned
+- pinned_at
 - use_count
+- last_used_at
 - payload_size_bytes
 - is_truncated
 - is_sensitive
@@ -111,6 +131,16 @@
 - image_blob
 - file_urls_json
 - extra_json
+
+### clipboard_trash
+- trash_id
+- item_id
+- undo_token
+- item_json
+- payload_json
+- deleted_at
+- expires_at
+- deleted_by_action（delete）
 
 ### settings
 - key
@@ -144,6 +174,14 @@
 - **要**使用 tray-relative window positioning（positioner）让 popover 贴近菜单栏。
 - **要**区分“数据库写入中”和“索引更新中”，不使用“同步中”措辞。
 
+## 窗口定位与多显示器策略
+- 菜单栏点击路径：优先使用 tray anchor 所在显示器进行 tray-relative 定位。
+- 全局快捷键路径：优先使用当前焦点应用所在显示器；若无法解析，则回退主显示器。
+- 安全区策略：popover 必须避开刘海区、菜单栏保留区与屏幕边缘，搜索框和顶部状态条不能被裁切。
+- 标准模式宽度保持 840 ~ 880px；当当前显示器安全区不足时降级为 720 ~ 760px 的紧凑模式。
+- 若紧凑模式仍无法满足安全区、或 positioner 返回不可用，则改用同一 `tray-popover` 内容壳体，以居中工具窗口模式显示。
+- 回退到居中工具窗口时，必须保留全部核心动作；同时发出 `window-fallback-used` 事件供诊断与日志记录。
+
 ## 直接粘贴时序
 1. 读取当前选中项的可粘贴 payload。
 2. 写入系统剪贴板。
@@ -151,11 +189,26 @@
 4. 若目标应用失焦、快捷键失败或权限不足，则立即回退为仅复制。
 5. 回退完成后恢复可追踪状态，并发出 `paste-failed` 事件与可读提示。
 
+## 直接粘贴支持矩阵
+| kind | P0 默认策略 | 说明 |
+|---|---|---|
+| `text` | direct paste | 标准成功路径，必须作为冒烟测试基线 |
+| `html` / `rtf` | direct paste（best effort） | 写入富文本格式并附带 plain text；目标应用若仅接受纯文本，则允许退化为 plain text 粘贴 |
+| `image` | direct paste（best effort） | 仅对接受标准图片 pasteboard 的目标应用尝试；失败统一回退 copy-only |
+| `file` | copy-only | P0 不承诺跨应用 file URL direct paste，一律不模拟“自动粘贴文件” |
+| `truncated` / `unsupported` | copy-only 或 view-only | 根据是否存在可复制摘要决定是否开放 copy-only |
+
 ## 失败分类
 - `NO_ACCESSIBILITY`
 - `TARGET_APP_NOT_FOCUSED`
 - `PASTEBOARD_WRITE_FAILED`
 - `PAYLOAD_UNSUPPORTED`
+- `USER_CANCELLED`
+- `WINDOW_POSITION_UNAVAILABLE`
+- `LOGIN_ITEM_UPDATE_FAILED`
+- `RECOVERY_MODE_READ_ONLY`
+- `DIAGNOSTICS_EXPORT_FAILED`
+- `UNDO_EXPIRED`
 - `DB_LOCKED`
 - `MIGRATION_IN_PROGRESS`
 - `UNKNOWN`
@@ -181,9 +234,16 @@
 - 关闭窗口不退出，仅隐藏主界面
 - 退出必须显式通过功能列表执行
 - 崩溃后重启：恢复窗口状态、监听状态与数据库连接
+- 登录启动默认只恢复后台驻留，不主动弹出主界面；是否启动时自动显示由设置项单独控制。
+- 登录启动开关更新失败时，返回 `LOGIN_ITEM_UPDATE_FAILED`，并发出 `startup-integration-failed` 事件。
 - 迁移失败：进入恢复模式，优先保障历史可读
 - 若 DB 锁冲突：串行写入 + busy timeout
+- 迁移进行中 / 恢复中：属于阻塞态，前端显示全局遮罩，不开放交互写操作。
 - 恢复模式下只开放浏览、搜索、复制与诊断，不开放直接粘贴。
+- 恢复模式下禁止 `clipboard:pin` / `clipboard:unpin` / `clipboard:delete` / `clipboard:clear` / `settings:update` 等写库 command。
+- `clipboard:delete` 将条目移入默认 30 秒的短期恢复缓冲区，便于撤销；过期项由后台自动清理，不影响正常历史列表。
+- `clipboard:restore` 仅在缓冲期内可用，恢复成功后重新进入正常排序与搜索结果。
+- `clipboard:clear` 直接永久清空历史，不进入恢复缓冲区。
 
 ## 安全边界
 - 数据默认只存本地 SQLite，不同步到任何远端服务。
@@ -193,6 +253,7 @@
 
 ## 搜索与排序
 - 默认顺序：置顶优先，其余按最近复制 / 使用倒序
+- 置顶项内部按最近置顶时间倒序
 - 搜索命中优先级：精确 > 前缀 > 包含 > 最近性
 - 中文搜索：FTS + 归一化列 + `LIKE` / contains 回退
 - 搜索结果支持高亮与来源标记
@@ -202,6 +263,8 @@
 - 搜索结果刷新：1k 条历史记录下 P95 不超过 120ms。
 - 菜单栏唤起：P95 不超过 300ms。
 - 后台监听空转：持续 CPU 低于 5%。
+- 常驻内存：目标低于 220MB。
+- direct paste 失败回退并给出提示：目标 1 秒内完成。
 - WAL + busy_timeout 保证写入高峰不阻塞前端浏览。
 
 ## 错误处理
@@ -209,7 +272,9 @@
 - DB 锁冲突：排队写入
 - 权限缺失：降级到仅复制，并提示打开系统设置
 - popover 打开失败：回退到主窗口 / 重试定位
+- 登录启动集成失败：保留当前设置页上下文，提示重试，不影响主界面常规使用
 - 直接粘贴失败：自动回退为仅复制并恢复快照
+- 删除单条后若用户点击撤销，优先从短期恢复缓冲区恢复；若缓冲区过期则给出已过期提示，不当作系统错误。
 
 ## Capability / Feature Matrix
 ### Rust features
@@ -221,14 +286,25 @@
 - `global-shortcut:allow-is-registered` / `global-shortcut:allow-register` / `global-shortcut:allow-unregister`：全局快捷键注册与注销
 - `positioner:default`：定位菜单栏 popover
 - 与打开系统设置相关的权限按最小授权原则单独配置，例如 `shell:allow-open` 或等价能力
+- 诊断导出需要最小范围的保存对话框与目标路径写入能力，不给整个用户目录宽泛写权限
 
 ### Window scope
 - `tray-popover` 允许读取历史、执行复制/粘贴、更新局部状态
-- `settings` 允许更新设置与查看诊断
+- `settings` 允许更新设置、查看诊断、触发诊断导出
 - `permission-guide` 仅允许权限检查与跳转系统设置
 
 ## 测试策略
 - Rust 单元测试：归一化、hash、去重、schema 迁移
 - 集成测试：SQLite 读写、FTS 搜索、权限降级
 - 前端测试：列表渲染、搜索、设置持久化、状态展示
-- 手工 smoke：复制、唤起、暂停、恢复、直接粘贴
+- 手工 smoke：复制、唤起、暂停、恢复、直接粘贴、删除后撤销、诊断导出
+
+## 验收与证据映射
+| 场景 | 主验证层 | 最低证据 |
+|---|---|---|
+| tray 唤起 | 手工 smoke | 当前显示器录屏 |
+| 副屏快捷键唤起 | 手工 smoke | 副屏录屏 + 定位日志 |
+| 登录启动失败降级 | 手工 smoke + 集成 | 设置页提示截图 + 错误日志 |
+| 恢复模式只读 | 集成 + 手工 smoke | 状态截图 + 诊断导出文件 |
+| 删除后撤销 | 集成 + 前端测试 | UI 录屏 + restore 日志 |
+| 诊断导出取消 | 手工 smoke | 无错误 toast 录屏 |
