@@ -54,6 +54,10 @@
    - 负责 tray-relative 定位、显示器选择、安全区避让与回退窗口策略
    - 在菜单栏定位失败时回退为当前显示器的居中工具窗口
 
+9. **Session UI State Service**
+   - 维护搜索词、选中项、滚动位置、最近显示器等会话级瞬时状态
+   - 区分“同一会话重开可恢复”与“完整重启后默认清空”的边界
+
 ## IPC 契约
 ### Commands
 - `clipboard:list`：分页获取历史列表
@@ -104,6 +108,8 @@
 - `clipboard:delete` 返回 `undo_token`、`expires_at`、`version`；若恢复缓冲区已过期则返回 `UNDO_EXPIRED`。
 - `clipboard:restore` 只接受有效 `undo_token`，成功后返回恢复后的条目摘要。
 - 进入恢复模式后，所有写库 command 必须返回 `RECOVERY_MODE_READ_ONLY`，前端据此统一降级 UI。
+- `tray-popover` 打开时可附带 `session_restore_scope`（`session` / `cold_start`）与 `target_display_hint`，用于决定是否恢复搜索上下文。
+- 前端状态 payload 应额外带出 `presentation_reason`（`manual_open` / `startup_autoshow` / `no_history` / `search_empty` / `recovery_mode`），用于稳定选择首屏文案。
 
 ## 数据模型
 ### clipboard_items
@@ -146,6 +152,13 @@
 - key
 - value_json
 
+建议键名：
+- `launch_at_login`
+- `show_on_startup`
+- `default_action`
+- `theme_mode`
+- `history_limit`
+
 ### exclusion_rules
 - id
 - rule_type（bundle_id / keyword / content_kind）
@@ -177,10 +190,12 @@
 ## 窗口定位与多显示器策略
 - 菜单栏点击路径：优先使用 tray anchor 所在显示器进行 tray-relative 定位。
 - 全局快捷键路径：优先使用当前焦点应用所在显示器；若无法解析，则回退主显示器。
+- Dock 点击或系统 reopen 事件：优先使用最近一次成功展示的显示器；若显示器已断开，则回退主显示器。
 - 安全区策略：popover 必须避开刘海区、菜单栏保留区与屏幕边缘，搜索框和顶部状态条不能被裁切。
 - 标准模式宽度保持 840 ~ 880px；当当前显示器安全区不足时降级为 720 ~ 760px 的紧凑模式。
 - 若紧凑模式仍无法满足安全区、或 positioner 返回不可用，则改用同一 `tray-popover` 内容壳体，以居中工具窗口模式显示。
 - 回退到居中工具窗口时，必须保留全部核心动作；同时发出 `window-fallback-used` 事件供诊断与日志记录。
+- 若宿主不支持完全隐藏 Dock，则 Dock 只绑定到“show existing shell”语义，不允许通过 Dock 创建额外主窗口实例。
 
 ## 直接粘贴时序
 1. 读取当前选中项的可粘贴 payload。
@@ -236,6 +251,8 @@
 - 崩溃后重启：恢复窗口状态、监听状态与数据库连接
 - 登录启动默认只恢复后台驻留，不主动弹出主界面；是否启动时自动显示由设置项单独控制。
 - 登录启动开关更新失败时，返回 `LOGIN_ITEM_UPDATE_FAILED`，并发出 `startup-integration-failed` 事件。
+- 同一进程会话内的 reopen（快捷键 / tray / Dock）允许恢复瞬时搜索上下文；完整重启、登录启动自动展示与崩溃后恢复默认清空旧搜索词。
+- 若启用 `show_on_startup`，启动后仅自动展示一次主界面壳体；不重复回放上次搜索结果，也不额外打开设置窗口。
 - 迁移失败：进入恢复模式，优先保障历史可读
 - 若 DB 锁冲突：串行写入 + busy timeout
 - 迁移进行中 / 恢复中：属于阻塞态，前端显示全局遮罩，不开放交互写操作。
@@ -244,6 +261,13 @@
 - `clipboard:delete` 将条目移入默认 30 秒的短期恢复缓冲区，便于撤销；过期项由后台自动清理，不影响正常历史列表。
 - `clipboard:restore` 仅在缓冲期内可用，恢复成功后重新进入正常排序与搜索结果。
 - `clipboard:clear` 直接永久清空历史，不进入恢复缓冲区。
+
+## 空状态派生规则
+- `startup_autoshow`：满足 `show_on_startup=true` 且冷启动首次展示时触发，默认使用空搜索态文案，不读取旧搜索词。
+- `no_history`：历史列表为空且当前无关键词时触发。
+- `search_empty`：当前存在关键词且结果集为空时触发。
+- `recovery_mode`：恢复模式优先级最高；若同时满足无历史或搜索无结果，仍优先展示恢复模式文案与只读限制。
+- 前端不得自行凭 UI 猜测首屏语义，优先依据后端派生状态与 `presentation_reason` 渲染。
 
 ## 安全边界
 - 数据默认只存本地 SQLite，不同步到任何远端服务。
@@ -275,6 +299,7 @@
 - 登录启动集成失败：保留当前设置页上下文，提示重试，不影响主界面常规使用
 - 直接粘贴失败：自动回退为仅复制并恢复快照
 - 删除单条后若用户点击撤销，优先从短期恢复缓冲区恢复；若缓冲区过期则给出已过期提示，不当作系统错误。
+- Dock reopen 失败时，优先回退为主显示器居中工具窗口，不把失败暴露成致命错误。
 
 ## Capability / Feature Matrix
 ### Rust features
@@ -305,6 +330,8 @@
 | tray 唤起 | 手工 smoke | 当前显示器录屏 |
 | 副屏快捷键唤起 | 手工 smoke | 副屏录屏 + 定位日志 |
 | 登录启动失败降级 | 手工 smoke + 集成 | 设置页提示截图 + 错误日志 |
+| 启动自动显示空搜索态 | 手工 smoke + 前端测试 | 首屏截图 + 无旧搜索词日志 |
+| 搜索无结果空状态 | 前端测试 + 手工 smoke | UI 截图 |
 | 恢复模式只读 | 集成 + 手工 smoke | 状态截图 + 诊断导出文件 |
 | 删除后撤销 | 集成 + 前端测试 | UI 录屏 + restore 日志 |
 | 诊断导出取消 | 手工 smoke | 无错误 toast 录屏 |
