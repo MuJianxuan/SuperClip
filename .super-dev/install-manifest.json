@@ -1,0 +1,27 @@
+{
+  "targets": {
+    "codex-cli": {
+      "family": "codex",
+      "host": "codex-cli",
+      "installed_at": "2026-04-24T16:31:14.071457+00:00",
+      "paths": [
+        "/Users/rao/.agents/skills/super-dev",
+        "/Users/rao/AiDoWork/SuperClip/.agents/plugins/marketplace.json",
+        "/Users/rao/AiDoWork/SuperClip/.agents/skills/super-dev-seeai/SKILL.md",
+        "/Users/rao/AiDoWork/SuperClip/.agents/skills/super-dev/SKILL.md",
+        "/Users/rao/AiDoWork/SuperClip/AGENTS.md",
+        "/Users/rao/AiDoWork/SuperClip/plugins/super-dev-codex/.codex-plugin/plugin.json",
+        "/Users/rao/AiDoWork/SuperClip/plugins/super-dev-codex/README.md",
+        "/Users/rao/AiDoWork/SuperClip/plugins/super-dev-codex/skills/super-dev-seeai/SKILL.md",
+        "/Users/rao/AiDoWork/SuperClip/plugins/super-dev-codex/skills/super-dev/SKILL.md"
+      ],
+      "scopes": {
+        "global": true,
+        "project": true,
+        "runtime": false
+      }
+    }
+  },
+  "updated_at": "2026-04-24T16:31:14.071934+00:00",
+  "version": 1
+}
