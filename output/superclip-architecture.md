@@ -71,6 +71,15 @@
 - `clipboard:clear`：清空历史
 - `monitor:toggle`：切换监听状态
 - `settings:get` / `settings:update`：读取与更新设置
+- `rules:list`：读取排除规则列表与计数摘要
+- `rules:upsert`：创建或更新单条排除规则
+- `rules:delete`：删除单条排除规则
+- `rules:clear`：清空排除规则
+- `shortcut:get`：获取当前全局快捷键绑定与默认值
+- `shortcut:start-recording` / `shortcut:cancel-recording`：开始 / 取消快捷键录入态
+- `shortcut:validate`：校验候选快捷键是否与系统或应用内已有绑定冲突
+- `shortcut:update`：提交新的快捷键绑定
+- `shortcut:restore-default`：恢复默认全局快捷键
 - `permission:check-accessibility`：检查 Accessibility 状态
 - `permission:open-accessibility`：打开系统设置引导
 - `diagnostics:export`：导出本地诊断包
@@ -94,6 +103,11 @@
 - `reindex-started`
 - `reindex-finished`
 - `settings-updated`
+- `shortcut-recording-started`
+- `shortcut-recording-cancelled`
+- `shortcut-conflict-detected`
+- `shortcut-updated`
+- `exclusion-rules-updated`
 
 ### Windows
 - `tray-popover`：主交互窗口
@@ -110,6 +124,48 @@
 - 进入恢复模式后，所有写库 command 必须返回 `RECOVERY_MODE_READ_ONLY`，前端据此统一降级 UI。
 - `tray-popover` 打开时可附带 `session_restore_scope`（`session` / `cold_start`）与 `target_display_hint`，用于决定是否恢复搜索上下文。
 - 前端状态 payload 应额外带出 `presentation_reason`（`manual_open` / `startup_autoshow` / `no_history` / `search_empty` / `recovery_mode`），用于稳定选择首屏文案。
+- `settings:get` / `settings:update` 的返回结构必须带 `schema_version`、`exposed_keys`、`reserved_keys`，避免前端误把预留项当成首版 UI 必需项。
+- `settings:get` 只返回标量设置与规则摘要；排除规则明细通过 `rules:list` 获取。
+- `shortcut:*` 命令的返回结构统一带 `binding`、`is_registered`、`source`（`user` / `default`）、`version`；冲突校验额外返回 `conflict_type` 与 `conflict_target`。
+
+### 搜索结果 payload
+- `clipboard:search` 请求字段至少包含：`query`、`limit`、`cursor?`、`kind_filter?`、`include_pinned=true`、`version`。
+- `clipboard:search` 返回字段至少包含：`query`、`normalized_query`、`results[]`、`total`、`next_cursor?`、`search_time_ms`、`version`。
+- `results[]` 中每个摘要项至少包含：
+  - `id`、`kind`、`preview_text`、`preview_meta`
+  - `source_app`、`origin_bundle_id`
+  - `is_pinned`、`pinned_at`
+  - `created_at`、`last_seen_at`、`last_used_at`
+  - `is_truncated`
+  - `match_type`（`exact` / `prefix` / `contains` / `recent`）
+  - `rank_score`
+  - `matched_fields`
+  - `highlight_ranges`
+  - `version`
+- `highlight_ranges` 结构统一为 `{ field, start, end }[]`；`field` 仅允许 `preview_text`、`source_app`、`file_name`、`normalized_plain_text`。
+- 前端禁止脱离 `highlight_ranges` 自行做模糊高亮；最多只允许在开发兜底态下禁用高亮，而不是重新计算高亮。
+
+### 预览元数据契约（`preview_meta`）
+- 所有列表首屏展示所需的类型化元数据必须进入 `preview_meta`，**不得仅存放在 `extra_json`**。
+- `text`：`{ char_count, line_count }`
+- `html` / `rtf`：`{ char_count, line_count, has_html, has_rtf, normalized_plain_text }`
+- `image`：`{ width, height, thumbnail_strategy, mime_type? }`
+- `file`：`{ file_count, primary_name, path_preview }`
+- `truncated` / `unsupported`：`{ truncated_reason, original_estimated_size? }`
+
+### 诊断导出 schema
+- `diagnostics:export` 产物固定包含：
+  - `app_info`
+  - `os_info`
+  - `permissions`
+  - `migration_summary`
+  - `db_health_summary`
+  - `recent_errors`
+  - `settings_summary`
+  - `window_fallback_records`
+- `recent_errors` 默认最多 50 条；`window_fallback_records` 默认最多 20 条。
+- `settings_summary` 仅允许导出标量设置与规则数量，不导出排除关键词明文。
+- 诊断包禁止导出原始剪贴板 payload、图片二进制、完整 HTML / RTF、完整文件路径与文件实体内容。
 
 ## 数据模型
 ### clipboard_items
@@ -117,6 +173,7 @@
 - kind（text / image / file / html / rtf）
 - content_hash
 - preview_text
+- preview_meta_json
 - source_app
 - is_pinned
 - pinned_at
@@ -136,7 +193,7 @@
 - text_rtf
 - image_blob
 - file_urls_json
-- extra_json
+- extra_json（仅用于非首屏渲染必需的扩展字段）
 
 ### clipboard_trash
 - trash_id
@@ -152,12 +209,28 @@
 - key
 - value_json
 
-建议键名：
-- `launch_at_login`
-- `show_on_startup`
-- `default_action`
-- `theme_mode`
-- `history_limit`
+P0 暴露设置键：
+
+| key | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `global_shortcut` | string | `Cmd+Shift+V` | 全局唤起热键 |
+| `history_limit` | integer | `1000` | 建议范围 `100 ~ 5000` |
+| `default_action` | enum | `direct_paste` | `direct_paste` / `copy_only` |
+| `theme_mode` | enum | `light` | `light` / `dark` / `system` |
+| `launch_at_login` | boolean | `false` | 登录时启动 |
+| `show_on_startup` | boolean | `false` | 冷启动后自动展示主界面 |
+
+P1 预留键（schema 冻结，P0 首版不暴露）：
+
+| key | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `restore_clipboard_delay_ms` | integer | `150` | 直接粘贴后恢复剪贴板的内部延迟 |
+| `density_mode` | enum | `comfortable` | 列表密度 |
+| `row_height_mode` | enum | `default` | 行高预设 |
+| `hover_emphasis` | enum | `standard` | hover 强度 |
+| `thumbnail_density` | enum | `balanced` | 缩略图密度 |
+
+- `settings:update` 只允许修改声明在 schema 内的 key；未知 key 一律返回稳定错误码，不做静默落库。
 
 ### exclusion_rules
 - id
@@ -165,6 +238,8 @@
 - rule_value
 - is_enabled
 - created_at / updated_at
+
+- 排除规则通过 `rules:list / upsert / delete / clear` 单独管理，不混入 `settings` 表的标量键。
 
 ### fts_clipboard_items
 - 对 `text_plain`、`preview_text`、文件名、`source_app` 建索引
@@ -218,6 +293,10 @@
 - `TARGET_APP_NOT_FOCUSED`
 - `PASTEBOARD_WRITE_FAILED`
 - `PAYLOAD_UNSUPPORTED`
+- `SHORTCUT_CONFLICT_SYSTEM`
+- `SHORTCUT_CONFLICT_APP`
+- `SHORTCUT_INVALID`
+- `SHORTCUT_RECORDING_TIMEOUT`
 - `USER_CANCELLED`
 - `WINDOW_POSITION_UNAVAILABLE`
 - `LOGIN_ITEM_UPDATE_FAILED`
@@ -281,6 +360,7 @@
 - 搜索命中优先级：精确 > 前缀 > 包含 > 最近性
 - 中文搜索：FTS + 归一化列 + `LIKE` / contains 回退
 - 搜索结果支持高亮与来源标记
+- 当置顶数量超过 50 条时，后端在列表响应与 `settings:get` 中附带 `pin_count_warning=true`，由前端展示轻量提示但不阻断操作。
 
 ## 性能预算
 - 启动到可唤起：目标 3 秒内进入可交互状态。
@@ -290,6 +370,14 @@
 - 常驻内存：目标低于 220MB。
 - direct paste 失败回退并给出提示：目标 1 秒内完成。
 - WAL + busy_timeout 保证写入高峰不阻塞前端浏览。
+
+## 性能验证口径与证据
+- **冷启动口径**：从宿主进程创建到 `tray-popover` 搜索框可输入为止；日志需记录 `app_start`、`window_ready` 两个时间点。
+- **搜索口径**：基于固定 1000 条样本集执行至少 20 次查询，输出 P50 / P95 / max，并记录查询词类别（精确 / 前缀 / 包含 / 中文回退）。
+- **菜单栏唤起口径**：分别测量主屏 tray 点击、副屏快捷键、Dock reopen 三类入口，每类至少保留一次录屏或结构化计时日志。
+- **CPU / 内存口径**：在监听空转 5 分钟窗口内采样，保留 Activity Monitor 截图或等价结构化采样结果。
+- **失败回退口径**：至少保留 1 次 direct paste 失败后回退 copy-only 的录屏、错误码与完成耗时。
+- **恢复模式口径**：至少保留 1 次迁移失败进入恢复模式的截图与诊断导出样例。
 
 ## 错误处理
 - Clipboard 读取失败：重试 + 轻提示
