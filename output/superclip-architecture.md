@@ -50,6 +50,43 @@
    - 处理启动、退出、崩溃恢复、迁移恢复
    - 保证菜单栏常驻与窗口状态恢复
 
+## IPC 契约
+### Commands
+- `clipboard:list`：分页获取历史列表
+- `clipboard:search`：按关键词、来源、类型搜索
+- `clipboard:get`：获取单条记录详情与预览
+- `clipboard:copy`：仅复制到系统剪贴板
+- `clipboard:paste`：执行直接粘贴或回退
+- `clipboard:delete`：删除单条记录
+- `clipboard:clear`：清空历史
+- `monitor:toggle`：切换监听状态
+- `settings:get` / `settings:update`：读取与更新设置
+- `permission:check-accessibility`：检查 Accessibility 状态
+- `permission:open-accessibility`：打开系统设置引导
+- `app:show-settings`：打开设置窗口
+- `app:quit`：显式退出
+
+### Events
+- `history-updated`
+- `search-results-updated`
+- `monitor-status-changed`
+- `permission-status-changed`
+- `paste-failed`
+- `migration-state-changed`
+- `reindex-started`
+- `reindex-finished`
+- `settings-updated`
+
+### Windows
+- `tray-popover`：主交互窗口
+- `settings`：设置窗口
+- `permission-guide`：权限引导层
+
+### Payload 约定
+- 前端默认仅接收摘要、预览文本、元信息与状态，不直接暴露大字段。
+- 原始 payload 通过按需接口获取，并且仅对当前选中项开放。
+- 所有 command / event payload 都必须包含稳定的 `version` 或兼容字段，避免后续迁移破坏。
+
 ## 数据模型
 ### clipboard_items
 - id
@@ -61,6 +98,9 @@
 - use_count
 - payload_size_bytes
 - is_truncated
+- is_sensitive
+- origin_bundle_id
+- preview_strategy
 - created_at / last_seen_at
 
 ### clipboard_payloads
@@ -75,6 +115,13 @@
 ### settings
 - key
 - value_json
+
+### exclusion_rules
+- id
+- rule_type（bundle_id / keyword / content_kind）
+- rule_value
+- is_enabled
+- created_at / updated_at
 
 ### fts_clipboard_items
 - 对 `text_plain`、`preview_text`、文件名、`source_app` 建索引
@@ -96,6 +143,22 @@
 - **要**把 Accessibility 作为直接粘贴门槛。
 - **要**使用 tray-relative window positioning（positioner）让 popover 贴近菜单栏。
 - **要**区分“数据库写入中”和“索引更新中”，不使用“同步中”措辞。
+
+## 直接粘贴时序
+1. 读取当前选中项的可粘贴 payload。
+2. 写入系统剪贴板。
+3. 若 Accessibility 可用，则恢复目标应用焦点并触发粘贴快捷键。
+4. 若目标应用失焦、快捷键失败或权限不足，则立即回退为仅复制。
+5. 回退完成后恢复可追踪状态，并发出 `paste-failed` 事件与可读提示。
+
+## 失败分类
+- `NO_ACCESSIBILITY`
+- `TARGET_APP_NOT_FOCUSED`
+- `PASTEBOARD_WRITE_FAILED`
+- `PAYLOAD_UNSUPPORTED`
+- `DB_LOCKED`
+- `MIGRATION_IN_PROGRESS`
+- `UNKNOWN`
 
 ## 典型数据流
 1. 用户复制内容
@@ -120,6 +183,13 @@
 - 崩溃后重启：恢复窗口状态、监听状态与数据库连接
 - 迁移失败：进入恢复模式，优先保障历史可读
 - 若 DB 锁冲突：串行写入 + busy timeout
+- 恢复模式下只开放浏览、搜索、复制与诊断，不开放直接粘贴。
+
+## 安全边界
+- 数据默认只存本地 SQLite，不同步到任何远端服务。
+- 前端不直接持有大 payload 的长期引用，避免无意扩散敏感内容。
+- 临时图片、截断内容和迁移中间态都必须可清理、可追踪、可恢复。
+- 允许用户通过排除规则跳过敏感来源，但不强制自动识别密码类内容。
 
 ## 搜索与排序
 - 默认顺序：置顶优先，其余按最近复制 / 使用倒序
@@ -127,12 +197,35 @@
 - 中文搜索：FTS + 归一化列 + `LIKE` / contains 回退
 - 搜索结果支持高亮与来源标记
 
+## 性能预算
+- 启动到可唤起：目标 3 秒内进入可交互状态。
+- 搜索结果刷新：1k 条历史记录下 P95 不超过 120ms。
+- 菜单栏唤起：P95 不超过 300ms。
+- 后台监听空转：持续 CPU 低于 5%。
+- WAL + busy_timeout 保证写入高峰不阻塞前端浏览。
+
 ## 错误处理
 - Clipboard 读取失败：重试 + 轻提示
 - DB 锁冲突：排队写入
 - 权限缺失：降级到仅复制，并提示打开系统设置
 - popover 打开失败：回退到主窗口 / 重试定位
 - 直接粘贴失败：自动回退为仅复制并恢复快照
+
+## Capability / Feature Matrix
+### Rust features
+- `tray-icon`：系统托盘必开
+- `positioner` 插件在 tray-relative 场景下需要启用 `tray-icon` feature
+
+### Capability permissions
+- `core:default`：主窗口基础 IPC
+- `global-shortcut:allow-is-registered` / `global-shortcut:allow-register` / `global-shortcut:allow-unregister`：全局快捷键注册与注销
+- `positioner:default`：定位菜单栏 popover
+- 与打开系统设置相关的权限按最小授权原则单独配置，例如 `shell:allow-open` 或等价能力
+
+### Window scope
+- `tray-popover` 允许读取历史、执行复制/粘贴、更新局部状态
+- `settings` 允许更新设置与查看诊断
+- `permission-guide` 仅允许权限检查与跳转系统设置
 
 ## 测试策略
 - Rust 单元测试：归一化、hash、去重、schema 迁移
