@@ -329,6 +329,19 @@ P1 预留键（schema 冻结，P0 首版不暴露）：
 - **要**使用 tray-relative window positioning（positioner）让 popover 贴近菜单栏。
 - **要**区分“数据库写入中”和“索引更新中”，不使用“同步中”措辞。
 
+### 2026-04-26 后端落地补充
+- 当前 backend 阶段先落地 **真实 SQLite / WAL / FTS + macOS pasteboard 基础适配**，用于关闭 M2 本地数据闭环。
+- macOS 基础适配当前由 `pbpaste / pbcopy` 覆盖 text / RTF，由 AppleScriptObjC `NSPasteboardTypeHTML` 覆盖 HTML flavor，由 `arboard` 覆盖 image 读写；file 先由“已存在本地路径文本”归一化进入 file payload。
+- Accessibility trusted 检查已接入 `ApplicationServices.AXIsProcessTrusted()`；未授权时 direct paste 固定回退为 copy-only。
+- P0 command 路径已发出稳定事件 payload：history/search/item/delete/restore/monitor/permission/paste/window/startup/diagnostics/settings/shortcut/rules；`reindex-*` 保留给后续重建索引能力。
+- 因此 backend core 当前状态定义为 `sqlite_clipboard_core` 已完成，后续进入 quality 阶段补失败注入与证据包。
+
+### 2026-04-26 质量返工补充
+- `settings` 已落入 SQLite 表，持久化 `default_action`、`theme_mode`、`history_limit`、`show_on_startup`；`launch_at_login` 仍以宿主 autostart 状态为准并在 `settings:get` 同步。
+- `exclusion_rules` 已落入 SQLite 表，`rules:list / upsert / delete / clear` 不再依赖内存数组；diagnostics 仅导出规则数量，不导出规则明文。
+- `Clipboard Monitor` 在写入 `clipboard_items` 前读取启用规则并执行过滤：`content_kind` 匹配内容类型，`keyword` 匹配 title / preview / plain text，`bundle_id` 暂按当前可用 `source_app` 字段匹配，后续可增强为真实前台 App Bundle ID。
+- `clipboard:search` 的每条结果已带 `match_type`、`matched_fields`、`highlight_ranges`；前端 `HistoryRow` 按后端范围渲染高亮，不自行做模糊高亮。
+
 ## 窗口定位与多显示器策略
 - 菜单栏点击路径：优先使用 tray anchor 所在显示器进行 tray-relative 定位。
 - 全局快捷键路径：优先使用当前焦点应用所在显示器；若无法解析，则回退主显示器。
@@ -378,6 +391,7 @@ P1 预留键（schema 冻结，P0 首版不暴露）：
 - `USER_CANCELLED`
 - `WINDOW_POSITION_UNAVAILABLE`
 - `LOGIN_ITEM_UPDATE_FAILED`
+- `RULE_DUPLICATE`
 - `RECOVERY_MODE_READ_ONLY`
 - `DIAGNOSTICS_EXPORT_FAILED`
 - `UNDO_EXPIRED`
@@ -468,9 +482,9 @@ P1 预留键（schema 冻结，P0 首版不暴露）：
 ## 性能验证口径与证据
 - **冷启动口径**：从宿主进程创建到 `tray-popover` 搜索框可输入为止；日志需记录 `app_start`、`window_ready` 两个时间点。
 - **搜索口径**：基于固定 1000 条样本集执行至少 20 次查询，输出 P50 / P95 / max，并记录查询词类别（精确 / 前缀 / 包含 / 中文回退）。
-- **菜单栏唤起口径**：分别测量主屏 tray 点击、副屏快捷键、Dock reopen 三类入口，每类至少保留一次录屏或结构化计时日志。
+- **菜单栏唤起口径**：分别测量主屏 tray 点击、副屏快捷键、Dock reopen 三类入口，每类至少保留一次截图、结构化计时日志、diagnostics 或手工验收记录；录屏为可选增强证据。
 - **CPU / 内存口径**：在监听空转 5 分钟窗口内采样，保留 Activity Monitor 截图或等价结构化采样结果。
-- **失败回退口径**：至少保留 1 次 direct paste 失败后回退 copy-only 的录屏、错误码与完成耗时。
+- **失败回退口径**：至少保留 1 次 direct paste 失败后回退 copy-only 的错误码与完成耗时，并用截图、结构化日志、diagnostics 或手工验收记录留证；录屏为可选增强证据。
 - **恢复模式口径**：至少保留 1 次迁移失败进入恢复模式的截图与诊断导出样例。
 
 ## 错误处理
@@ -545,11 +559,11 @@ P1 预留键（schema 冻结，P0 首版不暴露）：
 ## 验收与证据映射
 | 场景 | 主验证层 | 最低证据 |
 |---|---|---|
-| tray 唤起 | 手工 smoke | 当前显示器录屏 |
-| 副屏快捷键唤起 | 手工 smoke | 副屏录屏 + 定位日志 |
+| tray 唤起 | 手工 smoke | 当前显示器截图 / 结构化日志 / 手工验收记录；录屏可选 |
+| 副屏快捷键唤起 | 手工 smoke | 定位日志 + 截图或手工验收记录；录屏可选 |
 | 登录启动失败降级 | 手工 smoke + 集成 | 设置页提示截图 + 错误日志 |
 | 启动自动显示空搜索态 | 手工 smoke + 前端测试 | 首屏截图 + 无旧搜索词日志 |
 | 搜索无结果空状态 | 前端测试 + 手工 smoke | UI 截图 |
 | 恢复模式只读 | 集成 + 手工 smoke | 状态截图 + 诊断导出文件 |
-| 删除后撤销 | 集成 + 前端测试 | UI 录屏 + restore 日志 |
-| 诊断导出取消 | 手工 smoke | 无错误 toast 录屏 |
+| 删除后撤销 | 集成 + 前端测试 | restore 日志 + UI 截图或手工验收记录；录屏可选 |
+| 诊断导出取消 | 手工 smoke | 无错误 toast 截图或手工验收记录；录屏可选 |

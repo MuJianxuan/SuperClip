@@ -1,0 +1,1299 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SuperClip UI / UX Design Canvas</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: oklch(0.975 0.01 250);
+      --bg-2: oklch(0.952 0.008 250);
+      --surface: oklch(1 0 0);
+      --surface-2: oklch(0.985 0.006 250);
+      --surface-3: oklch(0.965 0.008 250);
+      --border: oklch(0.9 0.01 250);
+      --border-strong: oklch(0.83 0.012 250);
+      --text: oklch(0.225 0.02 250);
+      --text-2: oklch(0.42 0.015 250);
+      --text-3: oklch(0.57 0.012 250);
+      --accent: oklch(0.28 0.02 250);
+      --accent-soft: oklch(0.9 0.01 250);
+      --accent-line: oklch(0.72 0.03 248);
+      --success: oklch(0.62 0.11 155);
+      --warning: oklch(0.74 0.11 85);
+      --danger: oklch(0.61 0.14 28);
+      --shadow: 0 22px 48px rgba(22, 26, 36, 0.08);
+      --radius-xl: 20px;
+      --radius-lg: 16px;
+      --radius-md: 12px;
+      --radius-sm: 9px;
+      --gap: 18px;
+      --window-w: 864px;
+      --window-h: 640px;
+      --window-compact-w: 744px;
+      --window-compact-h: 560px;
+      --settings-w: 980px;
+      --settings-h: 760px;
+      --font-ui: "Inter", "SF Pro Text", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "SF Mono", ui-monospace, "Menlo", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-ui);
+      background:
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+      color: var(--text);
+      min-height: 100vh;
+      text-wrap: pretty;
+    }
+
+    .page {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 28px 24px 40px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(360px, 0.7fr);
+      gap: 20px;
+      align-items: stretch;
+      margin-bottom: 22px;
+    }
+
+    .hero-panel,
+    .system-panel,
+    .direction-card,
+    .mini-card {
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .hero-panel {
+      padding: 24px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+
+    h1 {
+      margin: 14px 0 10px;
+      font-size: 28px;
+      line-height: 1.12;
+      letter-spacing: -0.02em;
+    }
+
+    .lede {
+      margin: 0;
+      max-width: 70ch;
+      color: var(--text-2);
+      font-size: 15px;
+      line-height: 1.72;
+    }
+
+    .hero-points {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .point {
+      padding: 14px 14px 13px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .point .label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .point .value {
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--text);
+    }
+
+    .system-panel {
+      padding: 18px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .system-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .system-title h2,
+    .section-head h2 {
+      margin: 0;
+      font-size: 16px;
+      letter-spacing: -0.01em;
+    }
+
+    .system-title p,
+    .section-head p {
+      margin: 4px 0 0;
+      color: var(--text-2);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .token-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .token {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      padding: 12px;
+      min-height: 82px;
+    }
+
+    .token .k {
+      display: inline-flex;
+      margin-bottom: 8px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      color: var(--text-2);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .token .v {
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text);
+    }
+
+    .canvas {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 16px;
+    }
+
+    .direction-card {
+      padding: 18px;
+      overflow: hidden;
+    }
+
+    .direction-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .direction-head h3 {
+      margin: 0 0 6px;
+      font-size: 18px;
+      letter-spacing: -0.01em;
+    }
+
+    .direction-head p {
+      margin: 0;
+      color: var(--text-2);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .size-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .badge.primary {
+      background: oklch(0.95 0.012 250);
+      color: var(--accent);
+      border-color: var(--border-strong);
+    }
+
+    .stage {
+      position: relative;
+      border-radius: 22px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.75), rgba(245,248,252,0.9)),
+        var(--surface);
+      border: 1px solid var(--border);
+      padding: 14px;
+      overflow: hidden;
+    }
+
+    .stage::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 22px;
+      border: 1px solid rgba(255,255,255,0.5);
+      pointer-events: none;
+    }
+
+    .stage-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+      color: var(--text-2);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .window-shell {
+      position: absolute;
+      left: 0;
+      top: 0;
+      border-radius: 18px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      box-shadow: 0 18px 38px rgba(18, 24, 36, 0.08);
+      overflow: hidden;
+    }
+
+    .window-titlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, var(--surface), var(--surface-2));
+    }
+
+    .traffic {
+      display: flex;
+      gap: 7px;
+    }
+
+    .dot {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--surface-3);
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+
+    .titlebar-copy {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-2);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .titlebar-copy code {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 4px 6px;
+      border-radius: 7px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .window-body {
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .search-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 44px;
+      padding: 0 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--text-2);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+    }
+
+    .search-box strong {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 34px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text-2);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .pill.success { color: var(--success); }
+    .pill.warning { color: var(--warning); }
+    .pill.danger { color: var(--danger); }
+
+    .workbench {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(240px, 0.85fr);
+      gap: 12px;
+      min-height: 422px;
+    }
+
+    .list,
+    .detail {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .list-head,
+    .detail-head {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-2);
+      font-weight: 700;
+    }
+
+    .rows {
+      display: grid;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 66px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .row:first-child { border-top: 0; }
+
+    .thumb {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background:
+        linear-gradient(145deg, rgba(255,255,255,0.92), rgba(229,237,246,0.96));
+      display: grid;
+      place-items: center;
+      color: var(--text-3);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .thumb.text {
+      background: linear-gradient(145deg, oklch(0.985 0.004 250), oklch(0.94 0.007 250));
+    }
+
+    .thumb.image {
+      background:
+        linear-gradient(135deg, oklch(0.92 0.03 198), oklch(0.98 0.006 250));
+    }
+
+    .thumb.file {
+      background:
+        linear-gradient(135deg, oklch(0.94 0.02 82), oklch(0.98 0.006 250));
+    }
+
+    .meta {
+      min-width: 0;
+    }
+
+    .meta .title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.35;
+      color: var(--text);
+    }
+
+    .meta .desc {
+      margin-top: 5px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--text-2);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .row-info {
+      display: grid;
+      justify-items: end;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-3);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .row.selected {
+      background: linear-gradient(90deg, rgba(232, 238, 245, 0.9), rgba(255, 255, 255, 0.96));
+      box-shadow: inset 3px 0 0 var(--accent-line);
+    }
+
+    .row.selected .meta .title {
+      color: var(--accent);
+    }
+
+    .flag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 7px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .detail {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    .detail-body {
+      display: grid;
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .preview-box {
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, var(--surface), var(--surface-2));
+      padding: 12px;
+    }
+
+    .preview-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .preview-copy {
+      color: var(--text-2);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .action-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .action {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      height: 42px;
+      padding: 0 12px;
+      border-radius: 11px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .action.secondary {
+      color: var(--text-2);
+      font-weight: 600;
+      background: var(--surface-2);
+    }
+
+    .footer-hint {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 14px;
+      border-top: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text-2);
+      font-size: 11px;
+      line-height: 1.55;
+    }
+
+    .mini-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .mini-card {
+      padding: 12px;
+      box-shadow: none;
+      background: rgba(255,255,255,0.75);
+    }
+
+    .mini-card h4 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .mini-lines {
+      display: grid;
+      gap: 8px;
+    }
+
+    .line {
+      height: 10px;
+      border-radius: 999px;
+      background: var(--surface-3);
+    }
+
+    .line.short { width: 56%; }
+    .line.mid { width: 78%; }
+    .line.long { width: 92%; }
+
+    .small-grid {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .tiny {
+      font-size: 11px;
+      color: var(--text-2);
+      line-height: 1.45;
+    }
+
+    .palette {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .swatch {
+      width: 24px;
+      height: 24px;
+      border-radius: 7px;
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+
+    .swatch.bg { background: var(--bg); }
+    .swatch.surface { background: var(--surface); }
+    .swatch.accent { background: var(--accent-soft); }
+    .swatch.warn { background: color-mix(in oklch, var(--warning) 24%, white); }
+    .swatch.success { background: color-mix(in oklch, var(--success) 20%, white); }
+
+    .variant-a {
+      --accent-line: oklch(0.73 0.03 248);
+      --shell-w: 864px;
+      --shell-h: 640px;
+      --shell-scale: 0.54;
+    }
+
+    .variant-b {
+      --accent-line: oklch(0.58 0.03 235);
+      --shell-w: 744px;
+      --shell-h: 560px;
+      --shell-scale: 0.58;
+    }
+
+    .variant-c {
+      --accent-line: oklch(0.7 0.028 255);
+      --shell-w: 880px;
+      --shell-h: 640px;
+      --shell-scale: 0.53;
+    }
+
+    .scaled-space {
+      position: relative;
+      width: calc(var(--shell-w) * var(--shell-scale));
+      height: calc(var(--shell-h) * var(--shell-scale));
+      overflow: hidden;
+    }
+
+    .window-shell {
+      width: var(--shell-w);
+      height: var(--shell-h);
+      transform: scale(var(--shell-scale));
+      transform-origin: top left;
+    }
+
+    .variant-a .mini-row,
+    .variant-b .mini-row,
+    .variant-c .mini-row {
+      margin-top: 0;
+    }
+
+    .variant-b .row {
+      min-height: 60px;
+      padding-top: 9px;
+      padding-bottom: 9px;
+    }
+
+    .variant-b .window-body { padding: 12px; }
+    .variant-b .search-box { height: 40px; }
+    .variant-b .workbench { min-height: 374px; grid-template-columns: minmax(0, 1.08fr) minmax(220px, 0.92fr); }
+    .variant-c .search-box { height: 46px; }
+    .variant-c .window-body { padding: 15px; }
+    .variant-c .workbench { grid-template-columns: minmax(0, 1.2fr) minmax(250px, 0.8fr); min-height: 424px; }
+
+    .meta-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .meta-chip {
+      padding: 12px 12px 11px;
+      border-radius: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .meta-chip .k {
+      color: var(--text-3);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .meta-chip .v {
+      margin-top: 6px;
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 1280px) {
+      .hero { grid-template-columns: 1fr; }
+      .canvas { grid-template-columns: 1fr; }
+      .meta-strip { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 760px) {
+      .page { padding-inline: 16px; }
+      .hero-points,
+      .token-grid,
+      .meta-strip,
+      .mini-row { grid-template-columns: 1fr; }
+      h1 { font-size: 24px; }
+      .search-row { grid-template-columns: 1fr; }
+      .workbench { grid-template-columns: 1fr; }
+      .row { grid-template-columns: 44px minmax(0, 1fr); }
+      .row-info { grid-column: 1 / -1; justify-items: start; text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="hero-panel">
+        <div class="eyebrow">SuperClip · macOS 菜单栏剪贴板应用 · 三方向设计 canvas</div>
+        <h1>把主面板控制在真实窗口尺寸里，再谈视觉风格。</h1>
+        <p class="lede">
+          这版不是营销页，而是给 SuperClip 的菜单栏主界面、设置页和权限引导做三套可比较的 UI 方向。
+          所有方案都遵守同一套产品边界：本地优先、键盘优先、双栏工作区、copy-only / direct paste 双动作，
+          并把主面板尺寸压在可放进 mac 菜单栏回退窗口的范围内。
+        </p>
+        <div class="hero-points">
+          <div class="point">
+            <span class="label">主面板尺寸</span>
+            <div class="value">推荐 864×640；安全区不足时降到 744×560 的紧凑模式，再不行回退到居中工具窗口。</div>
+          </div>
+          <div class="point">
+            <span class="label">设置窗口</span>
+            <div class="value">更高的纵向窗口，优先装下热键、排除规则、启动行为、诊断导出，不挤压主面板。</div>
+          </div>
+          <div class="point">
+            <span class="label">冻结系统</span>
+            <div class="value">Lucide / Inter + SF Pro fallback / shadcn-ui + Radix + Tailwind / tray-popover + settings + permission-guide。</div>
+          </div>
+          <div class="point">
+            <span class="label">功能边界</span>
+            <div class="value">不做云同步、不做 AI，总体是一个能快速找回、再次执行、失败可回退的本地回贴工具。</div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="system-panel">
+        <div class="system-title">
+          <div>
+            <h2>已冻结的设计系统</h2>
+            <p>先锁图标、字体、token、组件生态和页面骨架，再比较视觉方向。</p>
+          </div>
+        </div>
+        <div class="token-grid">
+          <div class="token">
+            <div class="k">图标库</div>
+            <div class="v">Lucide 风格线性图标。按钮里优先使用明确图标，不靠花哨装饰。</div>
+          </div>
+          <div class="token">
+            <div class="k">字体系统</div>
+            <div class="v">Inter + SF Pro fallback；等宽内容用 SF Mono / ui-monospace。</div>
+          </div>
+          <div class="token">
+            <div class="k">设计 token</div>
+            <div class="v">只用语义 token，不直接把颜色硬编码成紫粉渐变或浏览器默认蓝。</div>
+          </div>
+          <div class="token">
+            <div class="k">组件生态</div>
+            <div class="v">shadcn/ui + Radix + Tailwind，保持 mac 工具感，不做卡片堆叠。</div>
+          </div>
+        </div>
+        <div class="token">
+          <div class="k">页面骨架</div>
+          <div class="v">tray-popover 为默认主界面，settings 为纵向配置窗，permission-guide 负责 Accessibility 引导。</div>
+          <div class="palette" aria-hidden="true">
+            <span class="swatch bg"></span>
+            <span class="swatch surface"></span>
+            <span class="swatch accent"></span>
+            <span class="swatch warn"></span>
+            <span class="swatch success"></span>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="meta-strip" aria-label="核心窗口尺寸">
+      <div class="meta-chip">
+        <div class="k">Tray popover</div>
+        <div class="v">默认 864×640<br/>紧凑 744×560</div>
+      </div>
+      <div class="meta-chip">
+        <div class="k">Settings window</div>
+        <div class="v">约 980×760<br/>纵向滚动优先</div>
+      </div>
+      <div class="meta-chip">
+        <div class="k">Permission guide</div>
+        <div class="v">小尺寸引导层<br/>只解释权限和回退</div>
+      </div>
+      <div class="meta-chip">
+        <div class="k">Layout rule</div>
+        <div class="v">双栏工作区 + 独立滚动<br/>首屏始终见搜索框</div>
+      </div>
+    </section>
+
+    <section class="canvas">
+      <article class="direction-card variant-a">
+        <div class="direction-head">
+          <div>
+            <h3>A · 安静工具箱</h3>
+            <p>最贴近需求文档。白底、轻边框、双栏稳定，适合做默认推荐方案。</p>
+          </div>
+          <div class="size-badges">
+            <span class="badge primary">推荐</span>
+            <span class="badge">主面板 864×640</span>
+            <span class="badge">紧凑 744×560</span>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="stage-label">
+            <span>tray-popover · 双栏稳定布局</span>
+            <span>搜索框始终首屏可见</span>
+          </div>
+          <div class="scaled-space">
+            <div class="window-shell">
+              <div class="window-titlebar">
+                <div class="traffic" aria-hidden="true">
+                  <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                </div>
+                <div class="titlebar-copy">
+                  <span>SuperClip</span>
+                  <code>tray-popover</code>
+                </div>
+                <div class="pill success">监控中</div>
+              </div>
+              <div class="window-body">
+                <div class="search-row">
+                  <div class="search-box"><strong>搜索</strong><span>最近 1,000 条记录、来源应用、文件名、摘要</span></div>
+                  <div class="pill warning">Accessibility 需检查</div>
+                  <div class="pill">默认 direct paste</div>
+                </div>
+                <div class="workbench">
+                  <section class="list">
+                    <div class="list-head">
+                      <span>粘贴记录</span>
+                      <span>123 条 · 置顶 8</span>
+                    </div>
+                    <div class="rows">
+                      <div class="row selected">
+                        <div class="thumb text">TXT</div>
+                        <div class="meta">
+                          <div class="title"><span class="flag">Pinned</span> 终端命令片段</div>
+                          <div class="desc">brew install / cargo check / build notes。两行摘要，选中后可直接粘贴或仅复制。</div>
+                        </div>
+                        <div class="row-info">
+                          <span>Cmd</span>
+                          <span>2m 前</span>
+                        </div>
+                      </div>
+                      <div class="row">
+                        <div class="thumb image">IMG</div>
+                        <div class="meta">
+                          <div class="title">设计截图</div>
+                          <div class="desc">1536×1024 · 可预览缩略图 · direct paste 视目标应用能力决定。</div>
+                        </div>
+                        <div class="row-info">
+                          <span>Photos</span>
+                          <span>8m 前</span>
+                        </div>
+                      </div>
+                      <div class="row">
+                        <div class="thumb file">FILE</div>
+                        <div class="meta">
+                          <div class="title">项目文件 3 个</div>
+                          <div class="desc">SuperClip PRD / architecture / uiux。文件类默认仅复制，不承诺 direct paste。</div>
+                        </div>
+                        <div class="row-info">
+                          <span>Finder</span>
+                          <span>32m 前</span>
+                        </div>
+                      </div>
+                      <div class="row">
+                        <div class="thumb text">HTML</div>
+                        <div class="meta">
+                          <div class="title">富文本片段</div>
+                          <div class="desc">优先保留富文本，目标不支持时退化为 plain text，再退化为 copy-only。</div>
+                        </div>
+                        <div class="row-info">
+                          <span>Docs</span>
+                          <span>1h 前</span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                  <aside class="detail">
+                    <div class="detail-head">
+                      <span>选中项摘要</span>
+                      <span>Space 展开 / 收起</span>
+                    </div>
+                    <div class="detail-body">
+                      <div class="preview-box">
+                        <div class="preview-title">
+                          <span>终端命令片段</span>
+                          <span>Text · 142 字</span>
+                        </div>
+                        <div class="preview-copy">适合直接粘贴到当前目标应用，也可只复制到剪贴板。失败时自动回退为 copy-only，并保留当前上下文。</div>
+                      </div>
+                      <div class="action-grid">
+                        <div class="action">直接粘贴 <span>Enter</span></div>
+                        <div class="action secondary">仅复制 <span>Cmd+Enter</span></div>
+                        <div class="action secondary">置顶 / 取消置顶 <span>P</span></div>
+                        <div class="action secondary">删除并可撤销 <span>Delete</span></div>
+                      </div>
+                      <div class="mini-row">
+                        <div class="mini-card">
+                          <h4>权限导向</h4>
+                          <div class="mini-lines">
+                            <div class="line long"></div>
+                            <div class="line mid"></div>
+                            <div class="line short"></div>
+                          </div>
+                          <div class="tiny">direct paste 受 Accessibility 约束，copy-only 永远保留。</div>
+                        </div>
+                        <div class="mini-card">
+                          <h4>设置入口</h4>
+                          <div class="mini-lines">
+                            <div class="line mid"></div>
+                            <div class="line long"></div>
+                            <div class="line short"></div>
+                          </div>
+                          <div class="tiny">设置页分成通用、快捷键、粘贴行为、隐私与排除规则、外观、启动与更新、关于。</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="footer-hint">
+                      <span>↑↓ 切换</span><span>Enter 默认动作</span><span>Cmd+Enter 相反动作</span><span>Esc 关闭</span>
+                    </div>
+                  </aside>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mini-row" style="margin-top: 14px;">
+          <div class="mini-card">
+            <h4>Settings window</h4>
+            <div class="mini-lines">
+              <div class="line long"></div>
+              <div class="line mid"></div>
+              <div class="line long"></div>
+              <div class="line short"></div>
+            </div>
+            <div class="small-grid">
+              <div class="tiny">表单分区清晰，排除规则独立成块，不和标量设置混在一起。</div>
+              <span class="badge">约 980×760</span>
+            </div>
+          </div>
+          <div class="mini-card">
+            <h4>Permission guide</h4>
+            <div class="mini-lines">
+              <div class="line mid"></div>
+              <div class="line long"></div>
+              <div class="line short"></div>
+              <div class="line mid"></div>
+            </div>
+            <div class="small-grid">
+              <div class="tiny">只做权限状态、打开系统设置、copy-only 降级说明，不塞进复杂流程。</div>
+              <span class="badge">轻引导层</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="direction-card variant-b">
+        <div class="direction-head">
+          <div>
+            <h3>B · 密度优先</h3>
+            <p>更像命令面板。行高更紧、动作更明显，适合重键盘用户与高频粘贴场景。</p>
+          </div>
+          <div class="size-badges">
+            <span class="badge">主面板 744×560</span>
+            <span class="badge">更紧凑</span>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="stage-label">
+            <span>tray-popover · 紧凑模式</span>
+            <span>右侧动作列更强调执行</span>
+          </div>
+          <div class="scaled-space">
+            <div class="window-shell">
+              <div class="window-titlebar">
+                <div class="traffic" aria-hidden="true">
+                  <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                </div>
+                <div class="titlebar-copy">
+                  <span>SuperClip</span>
+                  <code>compact</code>
+                </div>
+                <div class="pill warning">紧凑模式</div>
+              </div>
+              <div class="window-body">
+                <div class="search-row">
+                  <div class="search-box"><strong>Search</strong><span>Command palette style · 仍保持中文语义</span></div>
+                  <div class="pill">次要动作先藏后显</div>
+                  <div class="pill danger">退化提示更直白</div>
+                </div>
+                <div class="workbench">
+                  <section class="list">
+                    <div class="list-head">
+                      <span>记录</span>
+                      <span>可滚动</span>
+                    </div>
+                    <div class="rows">
+                      <div class="row selected">
+                        <div class="thumb text">T</div>
+                        <div class="meta">
+                          <div class="title">最近复制的一段说明</div>
+                          <div class="desc">直接粘贴按钮是主视觉核心，撤销、置顶和删除更像后续操作。</div>
+                        </div>
+                        <div class="row-info">
+                          <span>Enter</span>
+                          <span>now</span>
+                        </div>
+                      </div>
+                      <div class="row">
+                        <div class="thumb image">I</div>
+                        <div class="meta">
+                          <div class="title">图像素材</div>
+                          <div class="desc">缩略图更小，列表信息更浓，适合快速扫读。</div>
+                        </div>
+                        <div class="row-info"><span>copy</span><span>8m</span></div>
+                      </div>
+                      <div class="row">
+                        <div class="thumb file">F</div>
+                        <div class="meta">
+                          <div class="title">文件集</div>
+                          <div class="desc">文件类仍然只复制，但在视觉上和文本项保持同一栈，不切换另一个语言。</div>
+                        </div>
+                        <div class="row-info"><span>copy</span><span>32m</span></div>
+                      </div>
+                    </div>
+                  </section>
+                  <aside class="detail">
+                    <div class="detail-head">
+                      <span>动作优先</span>
+                      <span>默认 Enter</span>
+                    </div>
+                    <div class="detail-body">
+                      <div class="preview-box">
+                        <div class="preview-title">
+                          <span>直接粘贴</span>
+                          <span class="pill success" style="height: 26px;">优先</span>
+                        </div>
+                        <div class="preview-copy">主按钮更强势，次要动作收束到折叠区。适合把用户的注意力压缩在“找、按、继续”这条链路上。</div>
+                      </div>
+                      <div class="action-grid">
+                        <div class="action">Paste now <span>Enter</span></div>
+                        <div class="action secondary">Copy only <span>Cmd+Enter</span></div>
+                        <div class="action secondary">Settings <span>S</span></div>
+                        <div class="action secondary">Diagnostics <span>D</span></div>
+                      </div>
+                      <div class="mini-card" style="background: var(--surface);">
+                        <h4>状态层</h4>
+                        <div class="mini-lines">
+                          <div class="line long"></div>
+                          <div class="line long"></div>
+                          <div class="line mid"></div>
+                        </div>
+                        <div class="tiny">banner 只表示持续状态，toast 只处理瞬时反馈，避免多个层同时抢注意力。</div>
+                      </div>
+                    </div>
+                    <div class="footer-hint">
+                      <span>更适合熟练用户</span><span>更少留白</span><span>更强操作感</span>
+                    </div>
+                  </aside>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mini-row" style="margin-top: 14px;">
+          <div class="mini-card">
+            <h4>Settings window</h4>
+            <div class="mini-lines">
+              <div class="line long"></div>
+              <div class="line long"></div>
+              <div class="line mid"></div>
+            </div>
+            <div class="small-grid">
+              <div class="tiny">更像表单化控制台，适合把快捷键和排除规则放在同一阅读节奏里。</div>
+              <span class="badge">更紧凑</span>
+            </div>
+          </div>
+          <div class="mini-card">
+            <h4>Permission guide</h4>
+            <div class="mini-lines">
+              <div class="line short"></div>
+              <div class="line long"></div>
+              <div class="line mid"></div>
+            </div>
+            <div class="small-grid">
+              <div class="tiny">只给一条路：检查权限 -> 打开系统设置 -> 回到主面板验证 direct paste。</div>
+              <span class="badge">单向引导</span>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="direction-card variant-c">
+        <div class="direction-head">
+          <div>
+            <h3>C · 轻浮层</h3>
+            <p>更有呼吸感的版本。仍是工具，不变成营销页，但视觉上对副屏和刘海区更友好。</p>
+          </div>
+          <div class="size-badges">
+            <span class="badge">主面板 880×640</span>
+            <span class="badge">更宽松</span>
+          </div>
+        </div>
+        <div class="stage">
+          <div class="stage-label">
+            <span>tray-popover · 宽体布局</span>
+            <span>适合大屏或副屏</span>
+          </div>
+          <div class="scaled-space">
+            <div class="window-shell">
+              <div class="window-titlebar">
+                <div class="traffic" aria-hidden="true">
+                  <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+                </div>
+                <div class="titlebar-copy">
+                  <span>SuperClip</span>
+                  <code>wide</code>
+                </div>
+                <div class="pill">深浅一致</div>
+              </div>
+              <div class="window-body">
+                <div class="search-row">
+                  <div class="search-box"><strong>搜索</strong><span>更宽的输入框和更松的状态行，适合中文长查询</span></div>
+                  <div class="pill success">监听正常</div>
+                  <div class="pill">撤销 30s</div>
+                </div>
+                <div class="workbench">
+                  <section class="list">
+                    <div class="list-head">
+                      <span>粘贴记录</span>
+                      <span>置顶永远在上</span>
+                    </div>
+                    <div class="rows">
+                      <div class="row selected">
+                        <div class="thumb text">A</div>
+                        <div class="meta">
+                          <div class="title"><span class="flag">Pinned</span> 产品需求文档</div>
+                          <div class="desc">列表行略高，摘要更完整，适合在每条记录里读出来源、时间和状态。</div>
+                        </div>
+                        <div class="row-info"><span>Markdown</span><span>2m</span></div>
+                      </div>
+                      <div class="row">
+                        <div class="thumb image">P</div>
+                        <div class="meta">
+                          <div class="title">图片预览</div>
+                          <div class="desc">右侧留给放大预览、尺寸和 direct paste 的结果说明。</div>
+                        </div>
+                        <div class="row-info"><span>1536×1024</span><span>8m</span></div>
+                      </div>
+                      <div class="row">
+                        <div class="thumb text">H</div>
+                        <div class="meta">
+                          <div class="title">HTML / RTF 片段</div>
+                          <div class="desc">富文本退化信息更清楚，用户能看懂格式是否保留。</div>
+                        </div>
+                        <div class="row-info"><span>Rich</span><span>35m</span></div>
+                      </div>
+                    </div>
+                  </section>
+                  <aside class="detail">
+                    <div class="detail-head">
+                      <span>摘要与动作</span>
+                      <span>Space 查看更多</span>
+                    </div>
+                    <div class="detail-body">
+                      <div class="preview-box">
+                        <div class="preview-title">
+                          <span>产品需求文档</span>
+                          <span>Preview</span>
+                        </div>
+                        <div class="preview-copy">这一版把右侧摘要做得更像“解释层”，把可执行动作显性放在下方。适合需要更强信息层级的桌面环境。</div>
+                      </div>
+                      <div class="action-grid">
+                        <div class="action">直接粘贴 <span>Enter</span></div>
+                        <div class="action secondary">仅复制 <span>Cmd+Enter</span></div>
+                        <div class="action secondary">打开设置 <span>⌘,</span></div>
+                        <div class="action secondary">导出诊断 <span>⇧⌘D</span></div>
+                      </div>
+                      <div class="mini-card" style="background: var(--surface);">
+                        <h4>回退说明</h4>
+                        <div class="mini-lines">
+                          <div class="line long"></div>
+                          <div class="line long"></div>
+                          <div class="line long"></div>
+                        </div>
+                        <div class="tiny">当刘海区或菜单栏安全区不足时，这套更宽松的布局会退回到居中窗口，但保持同一壳体和同一组件语言。</div>
+                      </div>
+                    </div>
+                    <div class="footer-hint">
+                      <span>更适合大屏</span><span>更适合副屏</span><span>更适合长列表预览</span>
+                    </div>
+                  </aside>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mini-row" style="margin-top: 14px;">
+          <div class="mini-card">
+            <h4>Settings window</h4>
+            <div class="mini-lines">
+              <div class="line mid"></div>
+              <div class="line long"></div>
+              <div class="line long"></div>
+              <div class="line mid"></div>
+            </div>
+            <div class="small-grid">
+              <div class="tiny">适合更长的规则说明和更明显的分组标题，但不把页面做成营销式卡片墙。</div>
+              <span class="badge">宽松</span>
+            </div>
+          </div>
+          <div class="mini-card">
+            <h4>Permission guide</h4>
+            <div class="mini-lines">
+              <div class="line long"></div>
+              <div class="line mid"></div>
+              <div class="line long"></div>
+            </div>
+            <div class="small-grid">
+              <div class="tiny">保留状态、退化原因和下一步动作，少文案但信息不丢。</div>
+              <span class="badge">清晰</span>
+            </div>
+          </div>
+        </div>
+      </article>
+    </section>
+  </div>
+</body>
+</html>

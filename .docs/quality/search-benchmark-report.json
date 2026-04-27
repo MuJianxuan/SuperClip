@@ -1,0 +1,399 @@
+{
+  "generatedAt": "2026-04-27T13:09:32.492Z",
+  "dataset": {
+    "size": 1000,
+    "kindDistribution": {
+      "text": 200,
+      "html": 200,
+      "rtf": 200,
+      "image": 200,
+      "file": 200
+    }
+  },
+  "summary": {
+    "queryCount": 24,
+    "p50Ms": 0.537,
+    "p95Ms": 1.495,
+    "maxMs": 2.23
+  },
+  "queries": [
+    {
+      "label": "exact_text",
+      "query": "deploy checklist for release train",
+      "category": "exact",
+      "total": 80,
+      "p50Ms": 0.588,
+      "p95Ms": 0.737,
+      "maxMs": 1.171,
+      "sampleIds": [
+        "bench-0001",
+        "bench-0002",
+        "bench-0003",
+        "bench-0005",
+        "bench-0051"
+      ]
+    },
+    {
+      "label": "prefix_text",
+      "query": "deploy",
+      "category": "prefix",
+      "total": 80,
+      "p50Ms": 0.513,
+      "p95Ms": 0.766,
+      "maxMs": 1.115,
+      "sampleIds": [
+        "bench-0001",
+        "bench-0002",
+        "bench-0003",
+        "bench-0005",
+        "bench-0051"
+      ]
+    },
+    {
+      "label": "contains_text",
+      "query": "rollback runbook",
+      "category": "contains",
+      "total": 80,
+      "p50Ms": 0.526,
+      "p95Ms": 1.638,
+      "maxMs": 1.762,
+      "sampleIds": [
+        "bench-0006",
+        "bench-0007",
+        "bench-0008",
+        "bench-0010",
+        "bench-0056"
+      ]
+    },
+    {
+      "label": "exact_chinese",
+      "query": "剪贴板回退验证记录",
+      "category": "chinese",
+      "total": 105,
+      "p50Ms": 0.539,
+      "p95Ms": 1.209,
+      "maxMs": 1.219,
+      "sampleIds": [
+        "bench-0001",
+        "bench-0002",
+        "bench-0003",
+        "bench-0004",
+        "bench-0005"
+      ]
+    },
+    {
+      "label": "prefix_chinese",
+      "query": "支付回调",
+      "category": "chinese",
+      "total": 105,
+      "p50Ms": 0.616,
+      "p95Ms": 1.196,
+      "maxMs": 1.331,
+      "sampleIds": [
+        "bench-0008",
+        "bench-0009",
+        "bench-0010",
+        "bench-0011",
+        "bench-0012"
+      ]
+    },
+    {
+      "label": "contains_chinese",
+      "query": "安全区回退",
+      "category": "chinese",
+      "total": 98,
+      "p50Ms": 0.545,
+      "p95Ms": 0.938,
+      "maxMs": 1.052,
+      "sampleIds": [
+        "bench-0050",
+        "bench-0051",
+        "bench-0052",
+        "bench-0053",
+        "bench-0054"
+      ]
+    },
+    {
+      "label": "diagnostics",
+      "query": "diagnostics export",
+      "category": "contains",
+      "total": 120,
+      "p50Ms": 0.605,
+      "p95Ms": 0.886,
+      "maxMs": 0.939,
+      "sampleIds": [
+        "bench-0016",
+        "bench-0017",
+        "bench-0018",
+        "bench-0020",
+        "bench-0024"
+      ]
+    },
+    {
+      "label": "window_fallback",
+      "query": "window fallback",
+      "category": "contains",
+      "total": 80,
+      "p50Ms": 0.65,
+      "p95Ms": 1.198,
+      "maxMs": 1.226,
+      "sampleIds": [
+        "bench-0021",
+        "bench-0022",
+        "bench-0023",
+        "bench-0025",
+        "bench-0071"
+      ]
+    },
+    {
+      "label": "privacy",
+      "query": "privacy exclusion",
+      "category": "contains",
+      "total": 80,
+      "p50Ms": 0.536,
+      "p95Ms": 1.001,
+      "maxMs": 1.256,
+      "sampleIds": [
+        "bench-0026",
+        "bench-0027",
+        "bench-0028",
+        "bench-0030",
+        "bench-0076"
+      ]
+    },
+    {
+      "label": "launch_login",
+      "query": "launch at login",
+      "category": "contains",
+      "total": 80,
+      "p50Ms": 0.537,
+      "p95Ms": 1.339,
+      "maxMs": 1.506,
+      "sampleIds": [
+        "bench-0041",
+        "bench-0042",
+        "bench-0043",
+        "bench-0045",
+        "bench-0091"
+      ]
+    },
+    {
+      "label": "dock_reopen",
+      "query": "dock reopen",
+      "category": "contains",
+      "total": 80,
+      "p50Ms": 0.457,
+      "p95Ms": 0.646,
+      "maxMs": 0.766,
+      "sampleIds": [
+        "bench-0046",
+        "bench-0047",
+        "bench-0048",
+        "bench-0050",
+        "bench-0096"
+      ]
+    },
+    {
+      "label": "search_baseline",
+      "query": "search benchmark baseline",
+      "category": "contains",
+      "total": 80,
+      "p50Ms": 0.496,
+      "p95Ms": 0.625,
+      "maxMs": 0.691,
+      "sampleIds": [
+        "bench-0031",
+        "bench-0032",
+        "bench-0033",
+        "bench-0035",
+        "bench-0081"
+      ]
+    },
+    {
+      "label": "恢复模式",
+      "query": "恢复模式",
+      "category": "chinese",
+      "total": 104,
+      "p50Ms": 0.44,
+      "p95Ms": 0.546,
+      "maxMs": 0.586,
+      "sampleIds": [
+        "bench-0015",
+        "bench-0016",
+        "bench-0017",
+        "bench-0018",
+        "bench-0019"
+      ]
+    },
+    {
+      "label": "诊断导出",
+      "query": "诊断导出",
+      "category": "chinese",
+      "total": 98,
+      "p50Ms": 0.421,
+      "p95Ms": 0.685,
+      "maxMs": 0.728,
+      "sampleIds": [
+        "bench-0057",
+        "bench-0058",
+        "bench-0059",
+        "bench-0060",
+        "bench-0061"
+      ]
+    },
+    {
+      "label": "多显示器",
+      "query": "多显示器",
+      "category": "chinese",
+      "total": 98,
+      "p50Ms": 0.475,
+      "p95Ms": 0.963,
+      "maxMs": 1.442,
+      "sampleIds": [
+        "bench-0050",
+        "bench-0051",
+        "bench-0052",
+        "bench-0053",
+        "bench-0054"
+      ]
+    },
+    {
+      "label": "快捷键冲突",
+      "query": "快捷键冲突",
+      "category": "chinese",
+      "total": 98,
+      "p50Ms": 0.502,
+      "p95Ms": 0.929,
+      "maxMs": 1.449,
+      "sampleIds": [
+        "bench-0064",
+        "bench-0065",
+        "bench-0066",
+        "bench-0067",
+        "bench-0068"
+      ]
+    },
+    {
+      "label": "mail_rich_text",
+      "query": "mail draft formatting",
+      "category": "contains",
+      "total": 80,
+      "p50Ms": 0.501,
+      "p95Ms": 1.04,
+      "maxMs": 1.127,
+      "sampleIds": [
+        "bench-0012",
+        "bench-0013",
+        "bench-0037",
+        "bench-0038",
+        "bench-0062"
+      ]
+    },
+    {
+      "label": "image_capture",
+      "query": "dashboard capture",
+      "category": "contains",
+      "total": 40,
+      "p50Ms": 0.571,
+      "p95Ms": 0.995,
+      "maxMs": 1.029,
+      "sampleIds": [
+        "bench-0004",
+        "bench-0029",
+        "bench-0054",
+        "bench-0079",
+        "bench-0104"
+      ]
+    },
+    {
+      "label": "file_pdf",
+      "query": "Product-Spec-v12.pdf",
+      "category": "exact",
+      "total": 40,
+      "p50Ms": 0.535,
+      "p95Ms": 0.969,
+      "maxMs": 1.026,
+      "sampleIds": [
+        "bench-0005",
+        "bench-0030",
+        "bench-0055",
+        "bench-0080",
+        "bench-0105"
+      ]
+    },
+    {
+      "label": "browser_upload",
+      "query": "customer-feedback-export.xlsx",
+      "category": "exact",
+      "total": 40,
+      "p50Ms": 0.59,
+      "p95Ms": 1.047,
+      "maxMs": 1.141,
+      "sampleIds": [
+        "bench-0025",
+        "bench-0050",
+        "bench-0075",
+        "bench-0100",
+        "bench-0125"
+      ]
+    },
+    {
+      "label": "no_result",
+      "query": "unmatched synthetic probe",
+      "category": "negative",
+      "total": 0,
+      "p50Ms": 0.732,
+      "p95Ms": 1.243,
+      "maxMs": 1.395,
+      "sampleIds": []
+    },
+    {
+      "label": "source_app",
+      "query": "figma",
+      "category": "contains",
+      "total": 100,
+      "p50Ms": 0.785,
+      "p95Ms": 1.495,
+      "maxMs": 1.698,
+      "sampleIds": [
+        "bench-0003",
+        "bench-0013",
+        "bench-0023",
+        "bench-0033",
+        "bench-0043"
+      ]
+    },
+    {
+      "label": "meta_kind",
+      "query": "image pasteboard",
+      "category": "contains",
+      "total": 200,
+      "p50Ms": 0.784,
+      "p95Ms": 1.385,
+      "maxMs": 2.23,
+      "sampleIds": [
+        "bench-0004",
+        "bench-0009",
+        "bench-0014",
+        "bench-0019",
+        "bench-0024"
+      ]
+    },
+    {
+      "label": "terminal",
+      "query": "warp",
+      "category": "contains",
+      "total": 100,
+      "p50Ms": 0.724,
+      "p95Ms": 1.185,
+      "maxMs": 1.247,
+      "sampleIds": [
+        "bench-0004",
+        "bench-0014",
+        "bench-0024",
+        "bench-0034",
+        "bench-0044"
+      ]
+    }
+  ]
+}

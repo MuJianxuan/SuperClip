@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "updated_at": "2026-04-27T00:00:00+08:00",
+  "source": "reconstructed_from_repository_state",
+  "flow_contract": "SUPER_DEV_FLOW_CONTRACT_V1",
+  "phase_chain": [
+    "research",
+    "docs",
+    "docs_confirm",
+    "spec",
+    "frontend",
+    "preview_confirm",
+    "backend",
+    "quality",
+    "delivery"
+  ],
+  "current_phase": "delivery",
+  "next_phase": null,
+  "active_change_id": "2026-04-25-superclip-p0-local-clipboard-core",
+  "active_change": {
+    "proposal": ".super-dev/changes/2026-04-25-superclip-p0-local-clipboard-core/proposal.md",
+    "tasks": ".super-dev/changes/2026-04-25-superclip-p0-local-clipboard-core/tasks.md"
+  },
+  "documents": {
+    "research": "output/superclip-research.md",
+    "prd": "output/superclip-prd.md",
+    "architecture": "output/superclip-architecture.md",
+    "uiux": "output/superclip-uiux.md"
+  },
+  "gates": {
+    "doc_confirm": {
+      "required": true,
+      "status": "passed_inferred_from_existing_spec"
+    },
+    "preview_confirm": {
+      "required": true,
+      "status": "passed"
+    }
+  },
+  "completed": {
+    "research": true,
+    "docs": true,
+    "docs_confirm": true,
+    "spec": true,
+    "frontend_m1_shell": true,
+    "frontend_runtime_smoke": true,
+    "backend_sqlite_text_core": true,
+    "backend_core": true,
+    "quality_evidence": true,
+    "delivery": true
+  },
+  "implementation_status": {
+    "frontend_build": "passed",
+    "rust_check": "passed",
+    "data_backend": "sqlite_fts",
+    "clipboard_monitor": "text_html_rtf_image_file_basic",
+    "sqlite_fts": "implemented",
+    "direct_paste_orchestrator": "copy_then_osascript_best_effort",
+    "accessibility_check": "real_AXIsProcessTrusted_best_effort",
+    "event_matrix": "p0_command_paths_emitting",
+    "desktop_controls": "menu_bar_status_item_tray_menu_close_hide_dock_reopen_global_shortcut_connected",
+    "menu_bar_requirement": "confirmed_in_prd_and_tasks",
+    "quality_evidence": "accepted_with_screenshots_structured_logs_diagnostics_and_manual_acceptance_records",
+    "rustfmt": "passed",
+    "host_video_capture": "not_required_recording_optional",
+    "backend_runtime_smoke": ".docs/quality/2026-04-26-backend-runtime-smoke.md",
+    "failure_injection_smoke": ".docs/quality/2026-04-26-quality-failure-injection.md",
+    "host_tauri_smoke": ".docs/quality/2026-04-26-host-tauri-runtime-smoke.md",
+    "host_tauri_screenshot": ".docs/quality/screenshots/host-tauri-superclip-20260426-1201.png"
+  },
+  "unfinished_tasks": [],
+  "next_recommended_action": "P0 已进入 delivery。交付说明应引用 2026-04-27 任务完整性复核、现有截图、结构化日志、diagnostics 样例和手工验收记录；录屏仅作为后续可选增强证据。"
+}
