@@ -96,14 +96,14 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4">
+    <section className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-3.5">
       <div>
-        <h3 className="text-base font-semibold text-[var(--text-primary)]">{title}</h3>
-        <p className="mt-1.5 max-w-[38rem] text-sm leading-5 text-[var(--text-secondary)]">
+        <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">{title}</h3>
+        <p className="mt-1 max-w-[38rem] text-[12px] leading-5 text-[var(--text-secondary)]">
           {description}
         </p>
       </div>
-      <div className="mt-4 space-y-3">{children}</div>
+      <div className="mt-3 space-y-2.5">{children}</div>
     </section>
   );
 }
@@ -118,10 +118,10 @@ function Row({
   action: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 min-[820px]:flex-row min-[820px]:items-center min-[820px]:justify-between">
+    <div className="flex flex-col gap-2.5 rounded-[14px] border border-[var(--border)] bg-[var(--surface-2)] px-3.5 py-3 min-[820px]:flex-row min-[820px]:items-center min-[820px]:justify-between">
       <div className="min-w-0">
-        <p className="text-sm font-medium text-[var(--text-primary)]">{label}</p>
-        <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{hint}</p>
+        <p className="text-[13px] font-medium text-[var(--text-primary)]">{label}</p>
+        <p className="mt-1 text-[12px] leading-5 text-[var(--text-secondary)]">{hint}</p>
       </div>
       <div className="shrink-0">{action}</div>
     </div>
@@ -425,19 +425,19 @@ export function SettingsShell({
   }, [activeSection, isShortcutRecording, onShortcutCancel]);
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[rgba(15,19,26,0.28)] px-4 py-4 backdrop-blur-md sm:px-6 sm:py-6">
-      <div className="flex h-[min(90vh,780px)] w-full max-w-[1080px] overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_28px_90px_rgba(13,18,24,0.22)]">
-        <aside className="hidden w-[112px] shrink-0 border-r border-[var(--border)] bg-[#14181a] p-3 text-white min-[920px]:flex min-[920px]:flex-col">
-          <div className="mx-auto h-10 w-10 rounded-[14px] bg-[#edf261]" />
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[rgba(15,19,26,0.24)] p-3 backdrop-blur-md">
+      <div className="flex h-[calc(100vh-1.5rem)] w-full max-w-[980px] overflow-hidden rounded-[22px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_28px_80px_rgba(13,18,24,0.18)]">
+        <aside className="hidden w-[86px] shrink-0 border-r border-[var(--border)] bg-[#14181a] p-3 text-white min-[840px]:flex min-[840px]:flex-col">
+          <div className="mx-auto h-9 w-9 rounded-[13px] bg-[#edf261]" />
 
-          <nav className="mt-6 space-y-2">
+          <nav className="mt-5 space-y-1.5">
             {sections.map((section) => (
               <button
                 key={section.key}
                 type="button"
                 onClick={() => setActiveSection(section.key)}
                 className={cn(
-                  "flex w-full flex-col items-center gap-1 rounded-[16px] border px-2 py-2.5 text-center transition-colors",
+                  "flex w-full flex-col items-center gap-1 rounded-[13px] border px-1.5 py-2 text-center transition-colors",
                   activeSection === section.key
                     ? "border-white bg-white text-[#14181a]"
                     : "border-transparent bg-transparent text-white/70 hover:bg-white/10 hover:text-white",
@@ -449,23 +449,23 @@ export function SettingsShell({
             ))}
           </nav>
 
-          <div className="mt-auto rounded-[16px] border border-white/10 bg-white/10 px-3 py-3 text-center">
+          <div className="mt-auto rounded-[13px] border border-white/10 bg-white/10 px-2 py-3 text-center">
             <p className="text-[10px] font-medium text-white/60">SuperClip</p>
             <p className="mt-1 text-[11px] font-semibold">0.1.0</p>
           </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="border-b border-[var(--border)] px-5 py-4 sm:px-6">
+          <header className="border-b border-[var(--border)] bg-[var(--surface-raised)] px-4 py-3">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[var(--text-tertiary)]">
+                <p className="text-[11px] font-semibold uppercase text-[var(--text-tertiary)]">
                   Settings
                 </p>
-                <h2 className="mt-1 text-[24px] font-semibold tracking-[-0.03em] text-[var(--text-primary)]">
+                <h2 className="mt-1 text-[20px] font-semibold text-[var(--text-primary)]">
                   {activeSectionMeta.label}
                 </h2>
-                <p className="mt-1.5 max-w-[34rem] text-sm leading-5 text-[var(--text-secondary)]">
+                <p className="mt-1 max-w-[34rem] text-[12px] leading-5 text-[var(--text-secondary)]">
                   常用控制靠前，说明文字只保留必要上下文。
                 </p>
               </div>
@@ -485,7 +485,7 @@ export function SettingsShell({
               </div>
             </div>
 
-            <div className="mt-4 flex gap-2 overflow-x-auto min-[920px]:hidden">
+            <div className="mt-3 flex gap-2 overflow-x-auto min-[840px]:hidden">
               {sections.map((section) => (
                 <button
                   key={section.key}
@@ -505,7 +505,7 @@ export function SettingsShell({
           </header>
 
           <ScrollArea className="min-h-0 flex-1">
-            <div className="space-y-5 px-5 py-5 sm:px-6 sm:py-6">
+            <div className="space-y-3.5 px-4 py-4">
               {readOnlyMode ? (
                 <div className="rounded-[16px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 text-sm text-[var(--warning-text)]">
                   只读模式：修改类操作已禁用。
@@ -660,7 +660,7 @@ export function SettingsShell({
                     </div>
 
                     <div className="mt-4 rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-tertiary)]">
+                      <p className="text-xs font-semibold uppercase text-[var(--text-tertiary)]">
                         录入
                       </p>
                       <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">
@@ -855,7 +855,7 @@ export function SettingsShell({
                         >
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-tertiary)]">
+                              <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[10px] font-semibold uppercase text-[var(--text-tertiary)]">
                                 {ruleKindLabels[rule.kind]}
                               </span>
                               <span className="text-sm font-medium text-[var(--text-primary)]">{rule.value}</span>

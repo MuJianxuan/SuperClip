@@ -1,0 +1,498 @@
+<style>
+  .sc-stage {
+    display: grid;
+    gap: 22px;
+  }
+  .sc-note {
+    border: 1px solid #e4e4e7;
+    border-radius: 18px;
+    padding: 16px 18px;
+    background: #fafafa;
+    color: #52525b;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .sc-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+  .sc-choice {
+    cursor: pointer;
+    border: 1px solid #dedee3;
+    border-radius: 22px;
+    background: #fff;
+    overflow: hidden;
+    transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+  }
+  .sc-choice:hover {
+    transform: translateY(-2px);
+    border-color: #18181b;
+    box-shadow: 0 18px 48px rgba(20, 20, 24, .12);
+  }
+  .sc-mini {
+    min-height: 420px;
+    padding: 16px;
+  }
+  .sc-meta {
+    padding: 15px 16px 17px;
+    border-top: 1px solid #eeeef1;
+  }
+  .sc-meta h3 {
+    margin: 0 0 7px;
+    font-size: 18px;
+  }
+  .sc-meta p {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.55;
+    color: #62626b;
+  }
+  .mock-a {
+    background: #f7f7f4;
+    color: #151518;
+  }
+  .a-shell {
+    height: 388px;
+    border: 1px solid #d7d7d1;
+    border-radius: 16px;
+    background: #fcfcfa;
+    display: grid;
+    grid-template-rows: 60px 1fr 42px;
+    overflow: hidden;
+  }
+  .a-top {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    border-bottom: 1px solid #e6e6df;
+  }
+  .a-search {
+    height: 36px;
+    border: 1px solid #d9d9d2;
+    border-radius: 10px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    color: #77776f;
+    font-size: 12px;
+  }
+  .a-chip {
+    height: 28px;
+    border: 1px solid #d9d9d2;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 10px;
+    font-size: 11px;
+    color: #52524d;
+    background: #fafaf7;
+  }
+  .a-body {
+    display: grid;
+    grid-template-columns: 1.08fr .92fr;
+    min-height: 0;
+  }
+  .a-list {
+    border-right: 1px solid #e6e6df;
+    padding: 10px;
+    display: grid;
+    gap: 8px;
+    align-content: start;
+  }
+  .a-row {
+    border-radius: 12px;
+    padding: 10px;
+    display: grid;
+    grid-template-columns: 30px 1fr auto;
+    gap: 10px;
+    align-items: start;
+  }
+  .a-row.active {
+    background: #111;
+    color: #fff;
+  }
+  .a-icon {
+    height: 30px;
+    width: 30px;
+    border-radius: 9px;
+    background: #ecece5;
+  }
+  .a-row.active .a-icon {
+    background: #2f2f32;
+  }
+  .a-line {
+    height: 8px;
+    border-radius: 99px;
+    background: currentColor;
+    opacity: .28;
+    margin: 5px 0;
+  }
+  .a-detail {
+    padding: 14px;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    gap: 12px;
+  }
+  .a-preview {
+    border: 1px solid #e1e1dc;
+    border-radius: 14px;
+    background: #f5f5ef;
+    padding: 14px;
+  }
+  .a-button {
+    height: 38px;
+    border-radius: 11px;
+    background: #18181b;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+  }
+  .a-foot {
+    border-top: 1px solid #e6e6df;
+    padding: 10px 12px;
+    display: flex;
+    justify-content: space-between;
+    color: #77776f;
+    font-size: 11px;
+  }
+  .mock-b {
+    background: #f6f9f7;
+  }
+  .b-shell {
+    height: 388px;
+    border-radius: 20px;
+    background: #ffffff;
+    border: 1px solid #dfe8e1;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: 68px 1fr 54px;
+  }
+  .b-top {
+    padding: 12px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+    border-bottom: 1px solid #edf2ee;
+  }
+  .b-search {
+    height: 42px;
+    border-radius: 14px;
+    background: #eef7f0;
+    display: flex;
+    align-items: center;
+    padding: 0 13px;
+    color: #55715f;
+    font-size: 12px;
+  }
+  .b-tabs {
+    display: flex;
+    gap: 6px;
+  }
+  .b-pill {
+    border-radius: 999px;
+    padding: 7px 9px;
+    font-size: 10px;
+    background: #fff;
+    border: 1px solid #dfe8e1;
+    color: #58705e;
+  }
+  .b-body {
+    padding: 12px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-content: start;
+  }
+  .b-card {
+    min-height: 92px;
+    border-radius: 16px;
+    border: 1px solid #e1e9e3;
+    background: #fbfdfb;
+    padding: 11px;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    gap: 8px;
+  }
+  .b-card.hot {
+    border-color: #171c19;
+    box-shadow: 0 12px 26px rgba(48, 77, 58, .16);
+  }
+  .b-tag {
+    width: fit-content;
+    border-radius: 999px;
+    padding: 4px 7px;
+    background: #dff0e5;
+    color: #315c3f;
+    font-size: 10px;
+  }
+  .b-line {
+    height: 8px;
+    border-radius: 999px;
+    background: #8da797;
+    opacity: .35;
+    margin: 5px 0;
+  }
+  .b-foot {
+    border-top: 1px solid #edf2ee;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 10px 12px;
+  }
+  .b-action {
+    height: 34px;
+    border-radius: 12px;
+    background: #183322;
+    color: #fff;
+    padding: 0 14px;
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+  }
+  .b-ghost {
+    color: #637a68;
+    font-size: 11px;
+  }
+  .mock-c {
+    background: #f8f6ff;
+  }
+  .c-shell {
+    height: 388px;
+    border: 1px solid #dfd9f1;
+    border-radius: 24px;
+    background: #fff;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 72px 1fr;
+  }
+  .c-rail {
+    background: #171421;
+    display: grid;
+    grid-template-rows: auto 1fr auto;
+    padding: 12px 10px;
+    gap: 14px;
+  }
+  .c-logo {
+    height: 42px;
+    border-radius: 15px;
+    background: #f6ff74;
+  }
+  .c-dot {
+    height: 34px;
+    width: 34px;
+    margin: 0 auto 8px;
+    border-radius: 12px;
+    background: rgba(255,255,255,.12);
+  }
+  .c-dot.hot {
+    background: #ffffff;
+  }
+  .c-main {
+    display: grid;
+    grid-template-rows: 72px 1fr;
+  }
+  .c-head {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 10px;
+    padding: 14px;
+    border-bottom: 1px solid #eeeaf8;
+  }
+  .c-title {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .c-search {
+    margin-top: 7px;
+    height: 10px;
+    width: 72%;
+    border-radius: 99px;
+    background: #d8d3e8;
+  }
+  .c-action {
+    height: 38px;
+    border-radius: 999px;
+    background: #f6ff74;
+    color: #171421;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .c-body {
+    display: grid;
+    grid-template-columns: .82fr 1.18fr;
+    min-height: 0;
+  }
+  .c-stack {
+    border-right: 1px solid #eeeaf8;
+    padding: 12px;
+    display: grid;
+    gap: 8px;
+    align-content: start;
+  }
+  .c-item {
+    border-radius: 15px;
+    padding: 10px;
+    background: #f7f4ff;
+  }
+  .c-item.hot {
+    background: #171421;
+  }
+  .c-line {
+    height: 8px;
+    border-radius: 99px;
+    background: #9188ad;
+    opacity: .45;
+    margin: 5px 0;
+  }
+  .c-item.hot .c-line {
+    background: #fff;
+  }
+  .c-settings {
+    padding: 12px;
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    gap: 10px;
+  }
+  .c-panel {
+    border: 1px solid #eeeaf8;
+    border-radius: 17px;
+    padding: 12px;
+    display: grid;
+    gap: 9px;
+  }
+  .c-setting-row {
+    display: grid;
+    grid-template-columns: 1fr 34px;
+    align-items: center;
+    gap: 10px;
+  }
+  .c-toggle {
+    height: 20px;
+    border-radius: 999px;
+    background: #171421;
+  }
+  @media (max-width: 980px) {
+    .sc-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+
+<div class="sc-stage">
+  <div>
+    <h2>选择重设计方向</h2>
+    <p class="subtitle">三套都默认删掉实现说明和 P0 文档口吻，保留核心能力：搜索、列表、预览、主动作、设置。点击一个方向即可。</p>
+  </div>
+
+  <div class="sc-note">
+    参考收敛：Raycast 的搜索优先与右侧详情、Paste/Pasta 的视觉历史与类型筛选、Maccy/Alfred 的 no-fluff 和原生设置心智。下面不是最终 UI，只用来决定主方向。
+  </div>
+
+  <div class="sc-grid">
+    <div class="sc-choice" data-choice="a-command" onclick="toggleSelect(this)">
+      <div class="sc-mini mock-a">
+        <div class="a-shell">
+          <div class="a-top">
+            <div class="a-search">Search clips, apps, files...</div>
+            <div class="a-chip">Listening</div>
+            <div class="a-chip">⌘⇧V</div>
+          </div>
+          <div class="a-body">
+            <div class="a-list">
+              <div class="a-row active"><div class="a-icon"></div><div><div class="a-line" style="width:92%"></div><div class="a-line" style="width:62%"></div></div><span style="font-size:10px">Text</span></div>
+              <div class="a-row"><div class="a-icon"></div><div><div class="a-line" style="width:82%"></div><div class="a-line" style="width:48%"></div></div><span style="font-size:10px">File</span></div>
+              <div class="a-row"><div class="a-icon"></div><div><div class="a-line" style="width:74%"></div><div class="a-line" style="width:55%"></div></div><span style="font-size:10px">HTML</span></div>
+              <div class="a-row"><div class="a-icon"></div><div><div class="a-line" style="width:65%"></div><div class="a-line" style="width:35%"></div></div><span style="font-size:10px">Img</span></div>
+            </div>
+            <div class="a-detail">
+              <div><div class="a-line" style="width:68%;height:12px;opacity:.72"></div><div class="a-line" style="width:42%"></div></div>
+              <div class="a-preview"><div class="a-line" style="width:92%"></div><div class="a-line" style="width:84%"></div><div class="a-line" style="width:75%"></div><div class="a-line" style="width:58%"></div></div>
+              <div class="a-button">Paste</div>
+            </div>
+          </div>
+          <div class="a-foot"><span>↑↓ Browse</span><span>Enter Paste · ⌘Enter Copy</span></div>
+        </div>
+      </div>
+      <div class="sc-meta">
+        <h3>A · Command Clean</h3>
+        <p>最接近 Raycast/Maccy：搜索框是主角，右侧只做预览和一个主按钮。年轻感来自更干净的比例、短标签和轻微工业质感。</p>
+      </div>
+    </div>
+
+    <div class="sc-choice" data-choice="b-visual" onclick="toggleSelect(this)">
+      <div class="sc-mini mock-b">
+        <div class="b-shell">
+          <div class="b-top">
+            <div class="b-search">Find anything copied...</div>
+            <div class="b-tabs"><span class="b-pill">All</span><span class="b-pill">Text</span><span class="b-pill">Image</span></div>
+          </div>
+          <div class="b-body">
+            <div class="b-card hot"><span class="b-tag">Pinned</span><div><div class="b-line" style="width:84%"></div><div class="b-line" style="width:58%"></div></div><span class="b-ghost">Notion · now</span></div>
+            <div class="b-card"><span class="b-tag">Image</span><div><div class="b-line" style="width:72%"></div><div class="b-line" style="width:44%"></div></div><span class="b-ghost">Figma · 2m</span></div>
+            <div class="b-card"><span class="b-tag">Link</span><div><div class="b-line" style="width:90%"></div><div class="b-line" style="width:54%"></div></div><span class="b-ghost">Safari · 8m</span></div>
+            <div class="b-card"><span class="b-tag">File</span><div><div class="b-line" style="width:66%"></div><div class="b-line" style="width:36%"></div></div><span class="b-ghost">Finder · 11m</span></div>
+          </div>
+          <div class="b-foot">
+            <div class="b-action">Paste</div>
+            <span class="b-ghost">Copy · Pin · Delete</span>
+            <span class="b-ghost">Settings</span>
+          </div>
+        </div>
+      </div>
+      <div class="sc-meta">
+        <h3>B · Visual Shelf</h3>
+        <p>更接近 Paste/Pasta：剪贴板像可浏览素材架。信息更少但预览更强，适合图片/文件/富文本混合场景，视觉更年轻。</p>
+      </div>
+    </div>
+
+    <div class="sc-choice" data-choice="c-studio" onclick="toggleSelect(this)">
+      <div class="sc-mini mock-c">
+        <div class="c-shell">
+          <div class="c-rail">
+            <div class="c-logo"></div>
+            <div><div class="c-dot hot"></div><div class="c-dot"></div><div class="c-dot"></div></div>
+            <div class="c-dot"></div>
+          </div>
+          <div class="c-main">
+            <div class="c-head">
+              <div><div class="c-title">Clipboard</div><div class="c-search"></div></div>
+              <div class="c-action">Paste</div>
+            </div>
+            <div class="c-body">
+              <div class="c-stack">
+                <div class="c-item hot"><div class="c-line" style="width:80%"></div><div class="c-line" style="width:54%"></div></div>
+                <div class="c-item"><div class="c-line" style="width:72%"></div><div class="c-line" style="width:42%"></div></div>
+                <div class="c-item"><div class="c-line" style="width:88%"></div><div class="c-line" style="width:62%"></div></div>
+              </div>
+              <div class="c-settings">
+                <div class="c-title" style="font-size:15px">Settings</div>
+                <div class="c-panel">
+                  <div class="c-setting-row"><div><div class="c-line" style="width:68%"></div><div class="c-line" style="width:42%"></div></div><div class="c-toggle"></div></div>
+                  <div class="c-setting-row"><div><div class="c-line" style="width:74%"></div><div class="c-line" style="width:36%"></div></div><div class="c-toggle" style="background:#d8d3e8"></div></div>
+                </div>
+                <div class="c-panel"><div class="c-line" style="width:48%"></div><div class="c-line" style="width:84%"></div><div class="c-line" style="width:65%"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="sc-meta">
+        <h3>C · Studio Utility</h3>
+        <p>最有个性：左侧图标轨道统一主面板和设置页，强调年轻应用感。会牺牲一点 macOS 原生感，但品牌记忆点最强。</p>
+      </div>
+    </div>
+  </div>
+</div>

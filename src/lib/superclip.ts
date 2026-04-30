@@ -120,7 +120,7 @@ export type PresentationReason =
   | "search_empty"
   | "recovery_mode";
 
-export type WindowMode = "tray_popover" | "compact_popover" | "fallback_window";
+export type WindowMode = "small_window" | "large_window" | "fallback_window";
 export type MigrationPhase = "ready" | "migration_in_progress" | "recovery_mode";
 
 export interface RuntimeStateResponse {
@@ -391,7 +391,7 @@ let fallbackSettings: SettingsResponse = {
 let fallbackRuntimeState: RuntimeStateResponse = {
   presentationReason: "manual_open",
   lastDisplayId: "main",
-  lastWindowMode: "tray_popover",
+  lastWindowMode: "small_window",
   fallbackReason: null,
   migrationPhase: "ready",
   isRecoveryMode: false,
@@ -404,7 +404,7 @@ let fallbackSessionUiState: SessionUiStateResponse = {
   scrollAnchor: null,
   presentationReason: "manual_open",
   lastDisplayId: "main",
-  lastWindowMode: "tray_popover",
+  lastWindowMode: "small_window",
   restoredFromSession: false,
   updatedAt: "2026-04-25T20:10:00+08:00",
 };
@@ -909,15 +909,13 @@ export async function windowPlacementRefresh() {
     const previousMode = fallbackRuntimeState.lastWindowMode;
     const previousReason = fallbackRuntimeState.fallbackReason;
     const lastWindowMode: WindowMode =
-      width >= 960 && height >= 680
-        ? "tray_popover"
-        : width >= 800 && height >= 620
-          ? "compact_popover"
+      width >= 960 && height >= 660
+        ? "large_window"
+        : width >= 740 && height >= 540
+          ? "small_window"
           : "fallback_window";
     const fallbackReason =
-      lastWindowMode === "compact_popover"
-        ? "safe_area_compact"
-        : lastWindowMode === "fallback_window"
+      lastWindowMode === "fallback_window"
           ? "safe_area_fallback"
           : null;
     const updatedAt = new Date().toISOString();

@@ -105,7 +105,7 @@ const initialShortcut: ShortcutStateResponse = {
 const initialRuntimeState: RuntimeStateResponse = {
   presentationReason: "manual_open",
   lastDisplayId: "main",
-  lastWindowMode: "tray_popover",
+  lastWindowMode: "small_window",
   fallbackReason: null,
   migrationPhase: "ready",
   isRecoveryMode: false,
@@ -368,10 +368,9 @@ function App() {
     }
 
     let active = true;
-    let frame = 0;
 
-    const refreshPlacement = async () => {
-      const nextRuntimeState = await windowPlacementRefresh().catch(() => runtimeStateGet());
+    const syncRuntimeState = async () => {
+      const nextRuntimeState = await runtimeStateGet();
 
       if (!active) {
         return;
@@ -383,24 +382,14 @@ function App() {
       }));
     };
 
-    const handleResize = () => {
-      window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(() => {
-        void refreshPlacement();
-      });
-    };
-
     const handleFocus = () => {
-      void refreshPlacement();
+      void syncRuntimeState();
     };
 
-    window.addEventListener("resize", handleResize);
     window.addEventListener("focus", handleFocus);
 
     return () => {
       active = false;
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("resize", handleResize);
       window.removeEventListener("focus", handleFocus);
     };
   }, [isSessionHydrated]);
@@ -441,32 +430,53 @@ function App() {
       return;
     }
 
-    let unlisten: (() => void) | undefined;
+    let unlisten: Array<() => void> = [];
     let disposed = false;
+
+    const syncRuntimeState = () => {
+      void runtimeStateGet()
+        .then((nextRuntimeState) => {
+          if (disposed) {
+            return;
+          }
+
+          setRuntimeState((current) => ({
+            ...current,
+            ...nextRuntimeState,
+          }));
+        })
+        .catch(() => {});
+    };
 
     void import("@tauri-apps/api/event")
       .then(({ listen }) =>
-        listen("app:show-settings", () => {
-          if (!disposed) {
-            setIsSettingsOpen(true);
-          }
-        }),
+        Promise.all([
+          listen("app:show-settings", () => {
+            if (!disposed) {
+              setIsSettingsOpen(true);
+            }
+          }),
+          listen("window-size-mode-changed", syncRuntimeState),
+          listen("window-fallback-used", syncRuntimeState),
+        ]),
       )
-      .then((cleanup) => {
+      .then((cleanupFns) => {
         if (disposed) {
-          void cleanup();
+          cleanupFns.forEach((cleanup) => {
+            void cleanup();
+          });
           return;
         }
 
-        unlisten = cleanup;
+        unlisten = cleanupFns;
       })
       .catch(() => {});
 
     return () => {
       disposed = true;
-      if (unlisten) {
-        void unlisten();
-      }
+      unlisten.forEach((cleanup) => {
+        void cleanup();
+      });
     };
   }, []);
 
@@ -621,7 +631,7 @@ function App() {
   const pinnedCount = clipboardItems.filter((item) => item.isPinned).length;
   const isRecoveryMode = runtimeState.isRecoveryMode;
   const isMigrationBlocking = runtimeState.migrationPhase === "migration_in_progress";
-  const isCompactMode = runtimeState.lastWindowMode === "compact_popover";
+  const isLargeWindow = runtimeState.lastWindowMode === "large_window";
   const isFallbackWindow = runtimeState.lastWindowMode === "fallback_window";
   const SelectedKindIcon = selectedItem ? getClipboardIcon(selectedItem.kind) : FileImage;
   const selectedKindLabel = selectedItem ? getClipboardKindLabel(selectedItem.kind) : "Item";
@@ -633,17 +643,23 @@ function App() {
   const permissionLabel = permission.accessibilityTrusted
     ? "Accessibility 已授权"
     : "Accessibility 未授权";
-  const shellMaxWidthClass = isCompactMode
+  const shellMaxWidthClass = isLargeWindow
     ? "max-w-[980px]"
     : isFallbackWindow
-      ? "max-w-[1080px]"
-      : "max-w-[1120px]";
-  const workspaceGridClass = isCompactMode
-    ? "grid flex-1 grid-cols-1 min-[920px]:grid-cols-[minmax(0,1fr)_minmax(300px,0.78fr)]"
-    : "grid flex-1 grid-cols-1 min-[980px]:grid-cols-[minmax(0,1.12fr)_minmax(330px,0.88fr)]";
-  const functionPanelClass = isCompactMode
-    ? "mt-4 flex h-[188px] flex-none flex-col rounded-[20px] border border-[var(--border)] bg-[var(--surface)]"
-    : "mt-4 flex min-h-0 flex-1 flex-col rounded-[20px] border border-[var(--border)] bg-[var(--surface)]";
+      ? "max-w-[960px]"
+      : "max-w-[760px]";
+  const workspaceGridClass = isLargeWindow
+    ? "grid min-h-0 flex-1 grid-cols-[minmax(0,1.15fr)_330px] overflow-hidden"
+    : "grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_278px] overflow-hidden";
+  const functionPanelClass = isLargeWindow
+    ? "mt-3 flex min-h-0 flex-1 flex-col rounded-[18px] border border-[var(--border)] bg-[var(--surface)]"
+    : "mt-2 flex h-[58px] flex-none rounded-[16px] border border-[var(--border)] bg-[var(--surface)]";
+  const detailCardClass = isLargeWindow
+    ? "rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-3"
+    : "rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-2.5";
+  const previewShellClass = isLargeWindow
+    ? "mt-3 rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] p-2.5"
+    : "mt-2 rounded-[14px] border border-[var(--border)] bg-[var(--surface-2)] p-2";
 
   const functionItems = [
     {
@@ -1364,14 +1380,14 @@ function App() {
 
   return (
     <TooltipProvider delayDuration={180}>
-      <main className="min-h-screen px-4 py-4 text-[var(--text-primary)] sm:px-6 sm:py-6">
+      <main className="h-screen overflow-hidden p-3 text-[var(--text-primary)]">
         {isShellDismissed ? (
-          <section className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-[420px] items-center justify-center">
+          <section className="mx-auto flex h-full w-full max-w-[420px] items-center justify-center">
             <div className="w-full rounded-[24px] border border-[var(--border)] bg-[var(--surface)] px-6 py-7 text-center shadow-[0_18px_48px_rgba(25,31,38,0.12)]">
               <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] text-[var(--accent)]">
                 <AppWindow className="h-5 w-5" />
               </div>
-              <h1 className="mt-4 text-xl font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
+              <h1 className="mt-4 text-xl font-semibold text-[var(--text-primary)]">
                 面板已隐藏
               </h1>
               <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
@@ -1385,28 +1401,23 @@ function App() {
           </section>
         ) : (
         <section
-          className={`relative mx-auto flex min-h-[calc(100vh-2rem)] w-full ${shellMaxWidthClass} flex-col overflow-hidden rounded-[24px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_18px_60px_rgba(25,31,38,0.14)] backdrop-blur-xl`}
+          className={`relative mx-auto flex h-full w-full ${shellMaxWidthClass} flex-col overflow-hidden rounded-[22px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_20px_54px_rgba(25,31,38,0.12)] backdrop-blur-xl`}
         >
-          <header className="flex flex-col gap-4 border-b border-[var(--border)] px-5 py-4 sm:px-6">
-            <div className="flex flex-col gap-4 min-[980px]:flex-row min-[980px]:items-center min-[980px]:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-[16px] border border-[var(--border-strong)] bg-[var(--surface-2)] text-[var(--accent)] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+          <header className="flex flex-col gap-3 border-b border-[var(--border)] bg-[var(--surface-raised)] px-4 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border border-[var(--border-strong)] bg-[var(--accent-soft)] text-[var(--accent)] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
                   <AppWindow className="h-5 w-5" />
                 </div>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[var(--text-tertiary)]">
-                    Clipboard
-                  </p>
-                  <div className="mt-1 flex items-center gap-2">
-                    <h1 className="text-[26px] font-semibold leading-none tracking-[-0.03em] text-[var(--text-primary)]">
-                      SuperClip
-                    </h1>
-                  </div>
-                  <p className="mt-2 text-sm text-[var(--text-secondary)]">本地、快速、键盘优先。</p>
+                <div className="min-w-0">
+                  <h1 className="truncate text-[18px] font-semibold leading-none text-[var(--text-primary)]">
+                    SuperClip
+                  </h1>
+                  <p className="mt-1 text-[11px] text-[var(--text-secondary)]">本地 · 快捷 · 固定窗口</p>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
                 <StatusPill
                   tone={isMonitoring ? "success" : "warning"}
                   label={isMonitoring ? "正在监听" : "已暂停监听"}
@@ -1424,7 +1435,7 @@ function App() {
               </div>
             </div>
 
-            <label className="flex items-center gap-3 rounded-[18px] border border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] transition-colors focus-within:bg-[var(--surface)]">
+            <label className="flex h-11 items-center gap-3 rounded-[16px] border border-[var(--border-strong)] bg-white px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] transition-colors focus-within:bg-[var(--surface)]">
               <Search className="h-4 w-4 text-[var(--text-tertiary)]" />
               <input
                 autoFocus
@@ -1436,7 +1447,7 @@ function App() {
                   });
                 }}
                 placeholder="搜索剪贴板、来源应用、文件名"
-                className="w-full bg-transparent text-[15px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
+                className="w-full bg-transparent text-[14px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
               />
               <span className="hidden rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] sm:inline-flex">
                 {shortcut.binding}
@@ -1445,7 +1456,7 @@ function App() {
           </header>
 
           {!permission.accessibilityTrusted || isRecoveryMode || isFallbackWindow ? (
-            <div className="space-y-3 border-b border-[var(--border)] bg-[var(--surface-raised)] px-5 py-4 sm:px-6">
+            <div className="space-y-2 border-b border-[var(--border)] bg-[var(--surface-raised)] px-4 py-3">
               {!permission.accessibilityTrusted ? (
                 <div className="flex flex-col gap-3 rounded-[18px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 min-[920px]:flex-row min-[920px]:items-center min-[920px]:justify-between">
                   <div>
@@ -1489,8 +1500,8 @@ function App() {
           ) : null}
 
           <div className={workspaceGridClass}>
-            <section className="flex min-h-0 flex-col px-5 py-5 sm:px-6">
-              <div className="mb-3 flex items-center justify-between gap-3">
+            <section className="flex min-h-0 flex-col px-3.5 py-3.5">
+              <div className="mb-2.5 flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-sm font-semibold text-[var(--text-primary)]">历史</h2>
                   <p className="mt-1 text-xs text-[var(--text-secondary)]">
@@ -1516,7 +1527,7 @@ function App() {
               </div>
 
               <ScrollArea className="min-h-0 flex-1 pr-1" viewportRef={listViewportRef}>
-                <div className="space-y-2 pb-3 pr-3">
+                <div className="space-y-2 pb-2 pr-2">
                   {clipboardItems.length ? (
                     clipboardItems.map((item) => (
                       <HistoryRow
@@ -1563,12 +1574,12 @@ function App() {
               </ScrollArea>
             </section>
 
-            <section className="flex min-h-0 flex-col border-t border-[var(--border)] bg-[var(--surface-raised)] px-5 py-5 min-[980px]:border-l min-[980px]:border-t-0 sm:px-6">
-              <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4">
+            <section className="flex min-h-0 flex-col overflow-hidden border-l border-[var(--border)] bg-[var(--surface-raised)] px-3.5 py-3.5">
+              <div className={detailCardClass}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="truncate text-lg font-semibold tracking-[-0.02em] text-[var(--text-primary)]">
+                      <h2 className="truncate text-[15px] font-semibold text-[var(--text-primary)]">
                         {selectedItem?.title ?? "选择一条记录"}
                       </h2>
                       {selectedItem?.isPinned ? (
@@ -1578,17 +1589,21 @@ function App() {
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-2 text-xs text-[var(--text-tertiary)]">
+                    <p className="mt-1.5 text-[11px] text-[var(--text-tertiary)]">
                       {selectedItem ? `${selectedItem.sourceApp} · ${selectedItem.timeLabel}` : "无选中项"}
                     </p>
-                    <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                      {selectedItem?.meta ?? "左侧选择后预览"}
-                    </p>
+                    {isLargeWindow ? (
+                      <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                        {selectedItem?.meta ?? "左侧选择后预览"}
+                      </p>
+                    ) : null}
                   </div>
-                  <StatusPill tone="neutral" label={selectedKindLabel} icon={SelectedKindIcon} />
+                  {isLargeWindow ? (
+                    <StatusPill tone="neutral" label={selectedKindLabel} icon={SelectedKindIcon} />
+                  ) : null}
                 </div>
 
-                <div className="mt-4 rounded-[18px] border border-[var(--border)] bg-[var(--surface-2)] p-3">
+                <div className={previewShellClass}>
                   {selectedItem?.kind === "image" ? (
                     <div className="flex aspect-[16/10] items-center justify-center rounded-[16px] border border-dashed border-[var(--border-strong)] bg-[var(--surface)]">
                       <div className="text-center">
@@ -1598,16 +1613,16 @@ function App() {
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-[16px] border border-transparent bg-[var(--surface)] px-4 py-4 text-sm text-[var(--text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+                    <div className="rounded-[13px] border border-transparent bg-[var(--surface)] px-2.5 py-2 text-[13px] text-[var(--text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
                       <div className="flex items-start justify-between gap-3">
                         <p
-                          className={`min-w-0 flex-1 whitespace-pre-wrap leading-6 ${
-                            isPreviewExpanded ? "" : "line-clamp-2"
+                          className={`min-w-0 flex-1 whitespace-pre-wrap leading-5 ${
+                            isPreviewExpanded || isLargeWindow ? "" : "line-clamp-2"
                           }`}
                         >
                           {selectedItem?.preview ?? "暂无预览。"}
                         </p>
-                        {selectedItem ? (
+                        {selectedItem && isLargeWindow ? (
                           <Button
                             size="sm"
                             variant="ghost"
@@ -1622,17 +1637,19 @@ function App() {
                     </div>
                   )}
 
-                  <div className="mt-3 rounded-[14px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text-secondary)]">
-                    {!selectedItem
-                      ? "选择记录后显示动作边界。"
-                      : selectedItem.kind === "file"
-                      ? "文件固定仅复制。"
-                      : selectedItem.kind === "image"
-                        ? "图片粘贴失败会回退复制。"
-                        : selectedItem.kind === "html" || selectedItem.kind === "rtf"
-                          ? "富文本可退化为纯文本。"
-                          : "文本优先直接粘贴。"}
-                  </div>
+                  {isLargeWindow ? (
+                    <div className="mt-2.5 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[11px] text-[var(--text-secondary)]">
+                      {!selectedItem
+                        ? "选择记录后显示动作边界。"
+                        : selectedItem.kind === "file"
+                        ? "文件固定仅复制。"
+                        : selectedItem.kind === "image"
+                          ? "图片粘贴失败会回退复制。"
+                          : selectedItem.kind === "html" || selectedItem.kind === "rtf"
+                            ? "富文本可退化为纯文本。"
+                            : "文本优先直接粘贴。"}
+                    </div>
+                  ) : null}
                 </div>
 
                 {isRecoveryMode ? (
@@ -1641,15 +1658,16 @@ function App() {
                   </div>
                 ) : null}
 
-                <div className="mt-4 grid gap-2">
-                  <Button className="h-11 w-full" onClick={handlePrimaryAction} disabled={!selectedItem || isMigrationBlocking}>
+                <div className="mt-2 grid gap-1.5">
+                  <Button className="h-8 w-full" onClick={handlePrimaryAction} disabled={!selectedItem || isMigrationBlocking}>
                     {isRecoveryMode ? <Copy className="h-4 w-4" /> : <ArrowUpRight className="h-4 w-4" />}
                     {primaryActionLabel}
                   </Button>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-1.5">
                     <Button
                       variant="secondary"
                       size="sm"
+                      className="h-8 px-2 text-[11px]"
                       onClick={isRecoveryMode ? () => void handleDiagnosticsAction() : handleCopyAction}
                       disabled={isMigrationBlocking || (!selectedItem && !isRecoveryMode)}
                     >
@@ -1659,6 +1677,7 @@ function App() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="h-8 px-2 text-[11px]"
                       onClick={handlePinToggle}
                       disabled={!selectedItem || isRecoveryMode || isMigrationBlocking}
                     >
@@ -1668,6 +1687,7 @@ function App() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="h-8 px-2 text-[11px]"
                       onClick={handleDeleteAction}
                       disabled={!selectedItem || isRecoveryMode || isMigrationBlocking}
                     >
@@ -1679,56 +1699,80 @@ function App() {
               </div>
 
               <div className={functionPanelClass}>
-                <div className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div>
-                    <h2 className="text-sm font-semibold text-[var(--text-primary)]">工具</h2>
-                    <p className="mt-1 text-xs text-[var(--text-secondary)]">设置、诊断、权限</p>
-                  </div>
-                  <div className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5">
-                    <Switch
-                      checked={isMonitoring}
-                      disabled={isRecoveryMode || isMigrationBlocking}
-                      onCheckedChange={handleMonitorToggle}
-                    />
-                    <span className="text-xs font-medium text-[var(--text-secondary)]">
-                      {isMonitoring ? "监听中" : "已暂停"}
-                    </span>
-                  </div>
-                </div>
+                {isLargeWindow ? (
+                  <>
+                    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                      <div>
+                        <h2 className="text-sm font-semibold text-[var(--text-primary)]">工具</h2>
+                        <p className="mt-1 text-xs text-[var(--text-secondary)]">设置、诊断、权限</p>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5">
+                        <Switch
+                          checked={isMonitoring}
+                          disabled={isRecoveryMode || isMigrationBlocking}
+                          onCheckedChange={handleMonitorToggle}
+                        />
+                        <span className="text-xs font-medium text-[var(--text-secondary)]">
+                          {isMonitoring ? "监听中" : "已暂停"}
+                        </span>
+                      </div>
+                    </div>
 
-                <ScrollArea className="min-h-0 flex-1 px-2">
-                  <div className="grid grid-cols-2 gap-2 p-2">
+                    <ScrollArea className="min-h-0 flex-1 px-2">
+                      <div className="grid grid-cols-2 gap-1.5 p-1.5">
+                        {functionItems.map((item) => (
+                          <button
+                            key={item.title}
+                            type="button"
+                            onClick={() => handleUtilityAction(item.key)}
+                            disabled={item.disabled}
+                            className={`flex w-full items-center gap-2 rounded-[12px] border border-transparent bg-transparent px-2.5 py-2 text-left transition-colors ${
+                              item.disabled
+                                ? "cursor-not-allowed opacity-60"
+                                : "hover:border-[var(--border)] hover:bg-[var(--surface-2)]"
+                            }`}
+                          >
+                            <div
+                              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border ${
+                                item.tone === "danger"
+                                  ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-text)]"
+                                  : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--accent)]"
+                              }`}
+                            >
+                              <item.icon className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-medium text-[var(--text-primary)]">{item.title}</p>
+                              <p className="truncate text-[11px] text-[var(--text-secondary)]">
+                                {item.description}
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </>
+                ) : (
+                  <div className="grid h-full grid-cols-4 gap-1 p-1.5">
                     {functionItems.map((item) => (
                       <button
                         key={item.title}
                         type="button"
                         onClick={() => handleUtilityAction(item.key)}
                         disabled={item.disabled}
-                        className={`flex w-full items-center gap-2 rounded-[14px] border border-transparent bg-transparent px-3 py-2.5 text-left transition-colors ${
+                        className={`grid min-w-0 place-items-center rounded-[12px] border text-[10px] font-medium transition-colors ${
                           item.disabled
-                            ? "cursor-not-allowed opacity-60"
-                            : "hover:border-[var(--border)] hover:bg-[var(--surface-2)]"
+                            ? "cursor-not-allowed border-transparent opacity-50"
+                            : "border-transparent text-[var(--text-secondary)] hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]"
                         }`}
+                        title={item.title}
                       >
-                        <div
-                          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border ${
-                            item.tone === "danger"
-                              ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-text)]"
-                              : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--accent)]"
-                          }`}
-                        >
-                          <item.icon className="h-4 w-4" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-medium text-[var(--text-primary)]">{item.title}</p>
-                          <p className="truncate text-[11px] text-[var(--text-secondary)]">
-                            {item.description}
-                          </p>
-                        </div>
+                        <item.icon className="h-4 w-4" />
+                        <span className="max-w-full truncate">{item.title}</span>
                       </button>
                     ))}
                   </div>
-                </ScrollArea>
+                )}
 
                 {isClearConfirming ? (
                   <div className="border-t border-[var(--border)] px-5 py-4">
@@ -1762,8 +1806,8 @@ function App() {
             </div>
           ) : null}
 
-          <footer className="flex flex-col gap-3 border-t border-[var(--border)] px-5 py-4 sm:px-6 min-[980px]:flex-row min-[980px]:items-center min-[980px]:justify-between">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
+          <footer className="flex items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface-raised)] px-4 py-2.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
               <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1">
                 <Keyboard className="h-3.5 w-3.5" />
                 ↑↓ 切换
@@ -1781,7 +1825,7 @@ function App() {
                 Esc 关闭
               </span>
             </div>
-            <div className="text-xs leading-5 text-[var(--text-secondary)]">
+            <div className="shrink-0 text-[11px] leading-5 text-[var(--text-secondary)]">
               本地运行，不上传内容。
             </div>
           </footer>

@@ -24,6 +24,17 @@ const TEXT_PAYLOAD_LIMIT_BYTES: usize = 2 * 1024 * 1024;
 const IMAGE_PAYLOAD_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 const MONITOR_POLL_MS: u64 = 900;
 const DEFAULT_HISTORY_LIMIT: usize = 1000;
+const WINDOW_MODE_SMALL: &str = "small_window";
+const WINDOW_MODE_LARGE: &str = "large_window";
+const WINDOW_MODE_FALLBACK: &str = "fallback_window";
+const WINDOW_SMALL_WIDTH: f64 = 760.0;
+const WINDOW_SMALL_HEIGHT: f64 = 560.0;
+const WINDOW_LARGE_WIDTH: f64 = 980.0;
+const WINDOW_LARGE_HEIGHT: f64 = 680.0;
+const WINDOW_SAFE_AREA_MARGIN_X: f64 = 32.0;
+const WINDOW_SAFE_AREA_MARGIN_Y: f64 = 48.0;
+const WINDOW_SIZE_TOLERANCE: f64 = 40.0;
+const WINDOW_RESIZE_SUPPRESSION_MS: u64 = 350;
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -203,6 +214,44 @@ struct WindowPlacementDecision {
     safe_area_snapshot: SafeAreaSnapshot,
     width: f64,
     height: f64,
+    position: Option<(f64, f64)>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum WindowSizeMode {
+    Small,
+    Large,
+}
+
+impl WindowSizeMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            WindowSizeMode::Small => WINDOW_MODE_SMALL,
+            WindowSizeMode::Large => WINDOW_MODE_LARGE,
+        }
+    }
+
+    fn dimensions(self) -> (f64, f64) {
+        match self {
+            WindowSizeMode::Small => (WINDOW_SMALL_WIDTH, WINDOW_SMALL_HEIGHT),
+            WindowSizeMode::Large => (WINDOW_LARGE_WIDTH, WINDOW_LARGE_HEIGHT),
+        }
+    }
+
+    fn toggled(self) -> Self {
+        match self {
+            WindowSizeMode::Small => WindowSizeMode::Large,
+            WindowSizeMode::Large => WindowSizeMode::Small,
+        }
+    }
+
+    fn from_window_mode(value: &str) -> Self {
+        if value == WINDOW_MODE_LARGE {
+            WindowSizeMode::Large
+        } else {
+            WindowSizeMode::Small
+        }
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -331,6 +380,52 @@ struct ClipboardMonitorState {
     self_write_hash: Option<String>,
 }
 
+struct WindowPlacementCoordinator {
+    is_applying: bool,
+    suppress_resize_until: Option<Instant>,
+}
+
+impl WindowPlacementCoordinator {
+    fn new() -> Self {
+        Self {
+            is_applying: false,
+            suppress_resize_until: None,
+        }
+    }
+
+    fn begin_apply(&mut self) -> bool {
+        if self.is_applying {
+            return false;
+        }
+
+        self.is_applying = true;
+        true
+    }
+
+    fn finish_apply(&mut self, now: Instant) {
+        self.is_applying = false;
+        self.suppress_resize_until =
+            Some(now + Duration::from_millis(WINDOW_RESIZE_SUPPRESSION_MS));
+    }
+
+    fn should_ignore_resize(&mut self, now: Instant) -> bool {
+        if self.is_applying {
+            return true;
+        }
+
+        let Some(suppress_resize_until) = self.suppress_resize_until else {
+            return false;
+        };
+
+        if now < suppress_resize_until {
+            return true;
+        }
+
+        self.suppress_resize_until = None;
+        false
+    }
+}
+
 struct AppState {
     db: Mutex<Connection>,
     database_path: PathBuf,
@@ -344,6 +439,7 @@ struct AppState {
     runtime_state: Mutex<RuntimeStateResponse>,
     recent_errors: Mutex<Vec<RecentErrorRecord>>,
     window_fallback_records: Mutex<Vec<WindowFallbackRecord>>,
+    window_placement: Mutex<WindowPlacementCoordinator>,
     tray_icon: Mutex<Option<TrayIcon<tauri::Wry>>>,
 }
 
@@ -398,7 +494,7 @@ impl AppState {
                 scroll_anchor: None,
                 presentation_reason: "manual_open".into(),
                 last_display_id: "main".into(),
-                last_window_mode: "tray_popover".into(),
+                last_window_mode: WINDOW_MODE_SMALL.into(),
                 restored_from_session: false,
                 updated_at: "2026-04-25T20:10:00+08:00".into(),
             }),
@@ -409,7 +505,7 @@ impl AppState {
                     "manual_open".into()
                 },
                 last_display_id: "main".into(),
-                last_window_mode: "tray_popover".into(),
+                last_window_mode: WINDOW_MODE_SMALL.into(),
                 fallback_reason: None,
                 migration_phase: if is_recovery_mode {
                     "recovery_mode".into()
@@ -422,6 +518,7 @@ impl AppState {
             }),
             recent_errors: Mutex::new(startup_recent_errors),
             window_fallback_records: Mutex::new(Vec::new()),
+            window_placement: Mutex::new(WindowPlacementCoordinator::new()),
             tray_icon: Mutex::new(None),
         }
     }
@@ -1988,8 +2085,6 @@ fn sync_runtime_state_from_session(
     session_ui_state: &SessionUiStateResponse,
 ) {
     runtime_state.presentation_reason = session_ui_state.presentation_reason.clone();
-    runtime_state.last_display_id = session_ui_state.last_display_id.clone();
-    runtime_state.last_window_mode = session_ui_state.last_window_mode.clone();
     runtime_state.restored_from_session = session_ui_state.restored_from_session;
     runtime_state.updated_at = session_ui_state.updated_at.clone();
 }
@@ -2173,8 +2268,57 @@ fn build_safe_area_snapshot(monitor: &tauri::Monitor) -> SafeAreaSnapshot {
     }
 }
 
+fn safe_area_logical_bounds(snapshot: &SafeAreaSnapshot) -> (f64, f64, f64, f64) {
+    let scale_factor = snapshot.scale_factor.max(1.0);
+
+    (
+        snapshot.origin_x as f64 / scale_factor,
+        snapshot.origin_y as f64 / scale_factor,
+        snapshot.width as f64 / scale_factor,
+        snapshot.height as f64 / scale_factor,
+    )
+}
+
+fn clamp_window_position(
+    safe_area_snapshot: &SafeAreaSnapshot,
+    width: f64,
+    height: f64,
+    preferred_position: Option<(f64, f64)>,
+) -> Option<(f64, f64)> {
+    let (safe_x, safe_y, safe_width, safe_height) = safe_area_logical_bounds(safe_area_snapshot);
+
+    if safe_width <= 0.0 || safe_height <= 0.0 {
+        return preferred_position;
+    }
+
+    let max_x = (safe_x + safe_width - width).max(safe_x);
+    let max_y = (safe_y + safe_height - height).max(safe_y);
+    let (preferred_x, preferred_y) = preferred_position.unwrap_or((
+        safe_x + (safe_width - width).max(0.0) / 2.0,
+        safe_y + (safe_height - height).max(0.0) / 2.0,
+    ));
+
+    Some((
+        preferred_x.clamp(safe_x, max_x),
+        preferred_y.clamp(safe_y, max_y),
+    ))
+}
+
+fn current_window_center(window: &tauri::WebviewWindow, scale_factor: f64) -> Option<(f64, f64)> {
+    let position = window.outer_position().ok()?;
+    let size = window.outer_size().ok()?;
+    let scale_factor = scale_factor.max(1.0);
+
+    Some((
+        position.x as f64 / scale_factor + size.width as f64 / scale_factor / 2.0,
+        position.y as f64 / scale_factor + size.height as f64 / scale_factor / 2.0,
+    ))
+}
+
 fn resolve_window_placement(
     window: &tauri::WebviewWindow,
+    requested_mode: WindowSizeMode,
+    preserve_center: bool,
 ) -> Result<WindowPlacementDecision, String> {
     let current_monitor = window
         .current_monitor()
@@ -2186,28 +2330,37 @@ fn resolve_window_placement(
         .or(primary_monitor)
         .ok_or_else(|| "WINDOW_POSITION_UNAVAILABLE".to_string())?;
     let safe_area_snapshot = build_safe_area_snapshot(&monitor);
-    let scale_factor = safe_area_snapshot.scale_factor.max(1.0);
-    let logical_width = safe_area_snapshot.width as f64 / scale_factor;
-    let logical_height = safe_area_snapshot.height as f64 / scale_factor;
+    let (_, _, logical_width, logical_height) = safe_area_logical_bounds(&safe_area_snapshot);
+    let (requested_width, requested_height) = requested_mode.dimensions();
 
     let (window_mode, fallback_reason, width, height) =
-        if logical_width >= 960.0 && logical_height >= 680.0 {
-            ("tray_popover".to_string(), None, 880.0, 640.0)
-        } else if logical_width >= 800.0 && logical_height >= 620.0 {
+        if logical_width >= requested_width && logical_height >= requested_height {
             (
-                "compact_popover".to_string(),
-                Some("safe_area_compact".to_string()),
-                760.0,
-                620.0,
+                requested_mode.as_str().to_string(),
+                None,
+                requested_width,
+                requested_height,
             )
         } else {
             (
-                "fallback_window".to_string(),
+                WINDOW_MODE_FALLBACK.to_string(),
                 Some("safe_area_fallback".to_string()),
-                (logical_width - 32.0).max(520.0).min(960.0),
-                (logical_height - 48.0).max(520.0).min(720.0),
+                (logical_width - WINDOW_SAFE_AREA_MARGIN_X)
+                    .max(520.0)
+                    .min(requested_width),
+                (logical_height - WINDOW_SAFE_AREA_MARGIN_Y)
+                    .max(480.0)
+                    .min(requested_height),
             )
         };
+
+    let preferred_position = if preserve_center {
+        current_window_center(window, safe_area_snapshot.scale_factor)
+            .map(|(center_x, center_y)| (center_x - width / 2.0, center_y - height / 2.0))
+    } else {
+        None
+    };
+    let position = clamp_window_position(&safe_area_snapshot, width, height, preferred_position);
 
     Ok(WindowPlacementDecision {
         display_id: build_display_id(&monitor),
@@ -2216,21 +2369,78 @@ fn resolve_window_placement(
         safe_area_snapshot,
         width,
         height,
+        position,
     })
+}
+
+struct WindowPlacementApplyGuard<'a> {
+    coordinator: &'a Mutex<WindowPlacementCoordinator>,
+}
+
+impl Drop for WindowPlacementApplyGuard<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut coordinator) = self.coordinator.lock() {
+            coordinator.finish_apply(Instant::now());
+        }
+    }
+}
+
+fn begin_window_placement<'a, 'r>(
+    state: &'a State<'r, AppState>,
+) -> Result<Option<WindowPlacementApplyGuard<'a>>, String> {
+    let mut coordinator = state
+        .window_placement
+        .lock()
+        .map_err(|_| "window placement coordinator unavailable".to_string())?;
+
+    if !coordinator.begin_apply() {
+        return Ok(None);
+    }
+
+    Ok(Some(WindowPlacementApplyGuard {
+        coordinator: &state.window_placement,
+    }))
+}
+
+fn runtime_state_snapshot(state: &State<'_, AppState>) -> Result<RuntimeStateResponse, String> {
+    state
+        .runtime_state
+        .lock()
+        .map(|runtime_state| runtime_state.clone())
+        .map_err(|_| "runtime state unavailable".to_string())
+}
+
+fn should_ignore_programmatic_resize(state: &State<'_, AppState>) -> bool {
+    state
+        .window_placement
+        .lock()
+        .map(|mut coordinator| coordinator.should_ignore_resize(Instant::now()))
+        .unwrap_or(false)
 }
 
 fn apply_window_placement(
     window: &tauri::WebviewWindow,
     state: &State<'_, AppState>,
+    requested_mode: WindowSizeMode,
+    preserve_center: bool,
 ) -> Result<RuntimeStateResponse, String> {
-    let decision = resolve_window_placement(window)?;
+    let Some(_placement_guard) = begin_window_placement(state)? else {
+        return runtime_state_snapshot(state);
+    };
+    let decision = resolve_window_placement(window, requested_mode, preserve_center)?;
     let updated_at = build_runtime_timestamp()?;
 
+    let _ = window.set_fullscreen(false);
+    let _ = window.unmaximize();
     window
         .set_size(tauri::LogicalSize::new(decision.width, decision.height))
         .map_err(|_| "WINDOW_POSITION_UNAVAILABLE".to_string())?;
 
-    if decision.window_mode != "tray_popover" {
+    if let Some((x, y)) = decision.position {
+        window
+            .set_position(tauri::LogicalPosition::new(x, y))
+            .map_err(|_| "WINDOW_POSITION_UNAVAILABLE".to_string())?;
+    } else if decision.window_mode == WINDOW_MODE_FALLBACK {
         window
             .center()
             .map_err(|_| "WINDOW_POSITION_UNAVAILABLE".to_string())?;
@@ -2269,6 +2479,55 @@ fn apply_window_placement(
     }
 
     Ok(next_state)
+}
+
+fn size_matches_mode(width: f64, height: f64, mode: WindowSizeMode) -> bool {
+    let (target_width, target_height) = mode.dimensions();
+
+    (width - target_width).abs() <= WINDOW_SIZE_TOLERANCE
+        && (height - target_height).abs() <= WINDOW_SIZE_TOLERANCE
+}
+
+fn handle_main_window_resized(app: &tauri::AppHandle, physical_size: tauri::PhysicalSize<u32>) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let state: State<'_, AppState> = app.state();
+
+    if should_ignore_programmatic_resize(&state) {
+        return;
+    }
+
+    let current_mode = state
+        .runtime_state
+        .lock()
+        .map(|runtime_state| WindowSizeMode::from_window_mode(&runtime_state.last_window_mode))
+        .unwrap_or(WindowSizeMode::Small);
+    let scale_factor = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .map(|monitor| monitor.scale_factor().max(1.0))
+        .unwrap_or(1.0);
+    let logical_width = physical_size.width as f64 / scale_factor;
+    let logical_height = physical_size.height as f64 / scale_factor;
+
+    if size_matches_mode(logical_width, logical_height, current_mode) {
+        return;
+    }
+
+    let target_mode = current_mode.toggled();
+    match apply_window_placement(&window, &state, target_mode, true) {
+        Ok(runtime_state) => emit_superclip_event(
+            app,
+            "window-size-mode-changed",
+            json!({
+                "window_mode": runtime_state.last_window_mode,
+                "source": "native_resize"
+            }),
+        ),
+        Err(_) => record_window_position_error(&state, "window-fallback-used/native_resize"),
+    }
 }
 
 fn record_shortcut_runtime_error(
@@ -2357,7 +2616,7 @@ fn show_main_window(
     let _ = window.unminimize();
 
     let state: State<'_, AppState> = app.state();
-    match apply_window_placement(&window, &state) {
+    match apply_window_placement(&window, &state, WindowSizeMode::Small, false) {
         Ok(runtime_state) => emit_window_fallback_used(app, &runtime_state, presentation_reason),
         Err(_) => record_window_position_error(
             &state,
@@ -3078,7 +3337,13 @@ fn window_placement_refresh(
         "WINDOW_POSITION_UNAVAILABLE".to_string()
     })?;
 
-    match apply_window_placement(&window, &state) {
+    let requested_mode = state
+        .runtime_state
+        .lock()
+        .map(|runtime_state| WindowSizeMode::from_window_mode(&runtime_state.last_window_mode))
+        .unwrap_or(WindowSizeMode::Small);
+
+    match apply_window_placement(&window, &state, requested_mode, true) {
         Ok(runtime_state) => {
             emit_window_fallback_used(&app, &runtime_state, "placement_refresh");
             Ok(runtime_state)
@@ -4099,14 +4364,14 @@ mod tests {
                 scroll_anchor: None,
                 presentation_reason: "manual_open".into(),
                 last_display_id: "main".into(),
-                last_window_mode: "tray_popover".into(),
+                last_window_mode: WINDOW_MODE_SMALL.into(),
                 restored_from_session: false,
                 updated_at: "test".into(),
             }),
             runtime_state: Mutex::new(RuntimeStateResponse {
                 presentation_reason: "manual_open".into(),
                 last_display_id: "main".into(),
-                last_window_mode: "tray_popover".into(),
+                last_window_mode: WINDOW_MODE_SMALL.into(),
                 fallback_reason: None,
                 migration_phase: "ready".into(),
                 is_recovery_mode: false,
@@ -4115,6 +4380,7 @@ mod tests {
             }),
             recent_errors: Mutex::new(Vec::new()),
             window_fallback_records: Mutex::new(Vec::new()),
+            window_placement: Mutex::new(WindowPlacementCoordinator::new()),
             tray_icon: Mutex::new(None),
         }
     }
@@ -4133,6 +4399,27 @@ mod tests {
             matched_fields: Vec::new(),
             highlight_ranges: Vec::new(),
         }
+    }
+
+    #[test]
+    fn window_placement_coordinator_suppresses_programmatic_resize_echoes() {
+        let mut coordinator = WindowPlacementCoordinator::new();
+        let started_at = Instant::now();
+
+        assert!(coordinator.begin_apply());
+        assert!(!coordinator.begin_apply());
+        assert!(coordinator.should_ignore_resize(started_at));
+
+        coordinator.finish_apply(started_at);
+        assert!(coordinator.should_ignore_resize(
+            started_at + Duration::from_millis(WINDOW_RESIZE_SUPPRESSION_MS - 1)
+        ));
+        assert!(!coordinator.should_ignore_resize(
+            started_at + Duration::from_millis(WINDOW_RESIZE_SUPPRESSION_MS + 1)
+        ));
+        assert!(!coordinator.should_ignore_resize(
+            started_at + Duration::from_millis(WINDOW_RESIZE_SUPPRESSION_MS + 2)
+        ));
     }
 
     #[test]
@@ -4410,6 +4697,13 @@ pub fn run() {
             if let Some(window) = app_handle.get_webview_window("main") {
                 let _ = window.hide();
             }
+        }
+        tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::Resized(size),
+            ..
+        } if label == "main" => {
+            handle_main_window_resized(app_handle, size);
         }
         _ => {}
     });

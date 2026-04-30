@@ -1,17 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #f4f7f3;
+  --bg: #f7f6f2;
   --bg-accent: rgba(23, 53, 34, 0.06);
-  --surface: rgba(255, 255, 255, 0.88);
-  --surface-raised: rgba(248, 250, 247, 0.92);
-  --surface-2: rgba(236, 242, 237, 0.94);
-  --border: rgba(26, 35, 30, 0.12);
-  --border-strong: rgba(26, 35, 30, 0.2);
+  --surface: rgba(255, 255, 255, 0.82);
+  --surface-raised: rgba(255, 255, 255, 0.58);
+  --surface-2: rgba(238, 240, 235, 0.94);
+  --border: rgba(27, 31, 36, 0.12);
+  --border-strong: rgba(27, 31, 36, 0.2);
   --text-primary: #16191d;
-  --text-secondary: #55606b;
-  --text-tertiary: #78838d;
+  --text-secondary: #606772;
+  --text-tertiary: #7a8088;
   --accent: #173522;
+  --accent-soft: #dfe8e2;
   --success-bg: rgba(224, 238, 228, 0.9);
   --success-text: #29563a;
   --warning-bg: rgba(245, 237, 220, 0.95);
@@ -34,6 +35,7 @@
   --text-secondary: #b1bbc5;
   --text-tertiary: #88939c;
   --accent: #edf2f5;
+  --accent-soft: rgba(89, 111, 98, 0.32);
   --success-bg: rgba(27, 56, 41, 0.72);
   --success-text: #b9e5ca;
   --warning-bg: rgba(67, 52, 23, 0.76);
@@ -57,6 +59,7 @@
     --text-secondary: #b1bbc6;
     --text-tertiary: #87929e;
     --accent: #edf1f5;
+    --accent-soft: rgba(91, 111, 101, 0.32);
     --success-bg: rgba(27, 56, 41, 0.72);
     --success-text: #b9e5ca;
     --warning-bg: rgba(67, 52, 23, 0.76);
@@ -75,6 +78,7 @@
 html,
 body,
 #root {
+  height: 100%;
   min-height: 100%;
 }
 
@@ -82,7 +86,7 @@ body {
   margin: 0;
   background:
     radial-gradient(circle at top left, var(--bg-accent), transparent 24%),
-    linear-gradient(180deg, color-mix(in srgb, var(--bg) 88%, white) 0%, var(--bg) 100%);
+    linear-gradient(180deg, #fbfaf7 0%, var(--bg) 100%);
   color: var(--text-primary);
   font-family:
     "Inter",
@@ -103,11 +107,7 @@ body::before {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
-  mask-image: radial-gradient(circle at center, black, transparent 82%);
+  background: transparent;
 }
 
 button,
