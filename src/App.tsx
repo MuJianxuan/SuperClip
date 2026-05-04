@@ -9,7 +9,6 @@ import {
   Info,
   Keyboard,
   LockKeyhole,
-  LogOut,
   MonitorCog,
   Pause,
   Pin,
@@ -257,6 +256,7 @@ function App() {
   const [undoCountdown, setUndoCountdown] = useState(0);
   const [isClearConfirming, setIsClearConfirming] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isShortcutHintsOpen, setIsShortcutHintsOpen] = useState(false);
   const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
   const [scrollAnchor, setScrollAnchor] = useState<string | null>(null);
   const [isSessionHydrated, setIsSessionHydrated] = useState(false);
@@ -396,6 +396,18 @@ function App() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    if (!isShortcutHintsOpen) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setIsShortcutHintsOpen(false);
+    }, 3000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isShortcutHintsOpen]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -611,17 +623,14 @@ function App() {
       ? getKindActionLabel(selectedItem.kind, settings.defaultAction)
       : "直接粘贴";
   const workspaceGridClass = isLargeWindow
-    ? "grid min-h-0 flex-1 grid-cols-[minmax(0,1.2fr)_312px] overflow-hidden"
-    : "grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_278px] overflow-hidden";
-  const functionPanelClass = isLargeWindow
-    ? "mt-2.5 flex min-h-0 flex-1 flex-col rounded-[12px] border border-[var(--border)] bg-[var(--surface)]"
-    : "mt-2 flex min-h-[150px] flex-none flex-col rounded-[12px] border border-[var(--border)] bg-[var(--surface)]";
+    ? "grid min-h-0 flex-1 grid-cols-[minmax(220px,2fr)_minmax(0,5fr)] overflow-hidden"
+    : "grid min-h-0 flex-1 grid-cols-[minmax(190px,2fr)_minmax(0,5fr)] overflow-hidden";
   const detailCardClass = isLargeWindow
-    ? "rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-2.5"
-    : "rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-2";
+    ? "flex min-h-0 flex-1 flex-col rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-2.5"
+    : "flex min-h-0 flex-1 flex-col rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-2";
   const previewShellClass = isLargeWindow
-    ? "mt-2.5 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-2"
-    : "mt-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-2";
+    ? "mt-2.5 flex min-h-0 flex-1 flex-col rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-2"
+    : "mt-2 flex min-h-0 flex-1 flex-col rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-2";
 
   const functionItems = [
     {
@@ -662,12 +671,6 @@ function App() {
       title: "关于",
       description: "0.1.0",
       icon: Info,
-    },
-    {
-      key: "exit",
-      title: "退出",
-      description: "隐藏面板",
-      icon: LogOut,
     },
   ];
 
@@ -1259,11 +1262,6 @@ function App() {
       return;
     }
 
-    if (key === "exit") {
-      void handleShellDismiss();
-      return;
-    }
-
     if (key === "diagnostics") {
       void handleDiagnosticsAction();
       return;
@@ -1372,13 +1370,69 @@ function App() {
                 </div>
               </div>
 
-              <div className="flex min-w-0 items-center justify-end gap-1.5">
-                <Button variant="secondary" size="sm" onClick={() => setIsSettingsOpen(true)}>
-                  <Settings2 className="h-4 w-4" />
-                  设置
-                </Button>
+              <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+                {functionItems.map((item) => (
+                  <Tooltip key={item.key}>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => handleUtilityAction(item.key)}
+                        disabled={item.disabled}
+                        className={`inline-flex h-8 items-center gap-1.5 rounded-[9px] border px-2.5 text-xs font-medium shadow-[0_6px_16px_rgba(18,23,30,0.08)] transition-all ${
+                          item.disabled
+                            ? "cursor-not-allowed border-[var(--border)] bg-[var(--surface-2)] text-[var(--text-tertiary)] opacity-55"
+                            : item.tone === "danger"
+                              ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-text)] hover:-translate-y-0.5 hover:shadow-[0_10px_20px_rgba(18,23,30,0.10)]"
+                              : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:bg-[var(--surface-2)] hover:shadow-[0_10px_20px_rgba(18,23,30,0.10)]"
+                        }`}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span>{item.title}</span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {item.title} · {item.description}
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setIsShortcutHintsOpen(true)}
+                      aria-expanded={isShortcutHintsOpen}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-[9px] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] shadow-[0_6px_16px_rgba(18,23,30,0.08)] transition-all hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)] hover:shadow-[0_10px_20px_rgba(18,23,30,0.10)]"
+                    >
+                      <Keyboard className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    快捷键提示
+                  </TooltipContent>
+                </Tooltip>
               </div>
             </div>
+
+            {isShortcutHintsOpen ? (
+              <div className="flex min-h-8 flex-wrap items-center gap-1 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[11px] text-[var(--text-secondary)] shadow-[var(--shadow-soft)]">
+                <span className="inline-flex items-center gap-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5">
+                  <Keyboard className="h-3.5 w-3.5" />
+                  ↑↓ 切换
+                </span>
+                <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5">
+                  Enter 默认动作
+                </span>
+                <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5">
+                  Cmd+Enter 相反动作
+                </span>
+                <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5">
+                  Space 展开
+                </span>
+                <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5">
+                  Esc 关闭
+                </span>
+              </div>
+            ) : null}
 
             <label className="flex h-10 items-center gap-2.5 rounded-[10px] border border-[var(--border-strong)] bg-[var(--surface)] px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors focus-within:bg-[var(--surface-2)]">
               <Search className="h-4 w-4 text-[var(--text-tertiary)]" />
@@ -1537,7 +1591,7 @@ function App() {
 
                 <div className={previewShellClass}>
                   {selectedItem?.kind === "image" ? (
-                    <div className="flex aspect-[16/10] items-center justify-center rounded-[10px] border border-dashed border-[var(--border-strong)] bg-[var(--surface)]">
+                    <div className="flex min-h-[180px] flex-1 items-center justify-center rounded-[10px] border border-dashed border-[var(--border-strong)] bg-[var(--surface)]">
                       <div className="text-center">
                         <FileImage className="mx-auto h-8 w-8 text-[var(--text-secondary)]" />
                         <p className="mt-3 text-sm font-medium text-[var(--text-primary)]">图片预览</p>
@@ -1545,7 +1599,7 @@ function App() {
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-[10px] border border-transparent bg-[var(--surface)] px-2.5 py-2 text-[13px] text-[var(--text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
+                    <div className="min-h-0 flex-1 overflow-auto rounded-[10px] border border-transparent bg-[var(--surface)] px-2.5 py-2 text-[13px] text-[var(--text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
                       <div className="flex items-start justify-between gap-3">
                         <p
                           className={`min-w-0 flex-1 whitespace-pre-wrap leading-5 ${
@@ -1630,93 +1684,20 @@ function App() {
                 </div>
               </div>
 
-              <div className={functionPanelClass}>
-                {isLargeWindow ? (
-                  <>
-                    <div className="flex items-center justify-between gap-3 px-2.5 py-2">
-                      <div>
-                        <h2 className="text-sm font-semibold text-[var(--text-primary)]">工具</h2>
-                      </div>
-                      <span className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)]">
-                        {isMonitoring ? "监听中" : "已暂停"}
-                      </span>
-                    </div>
-
-                    <ScrollArea className="min-h-0 flex-1 px-1.5">
-                      <div className="grid grid-cols-2 gap-1 p-1">
-                        {functionItems.map((item) => (
-                          <button
-                            key={item.title}
-                            type="button"
-                            onClick={() => handleUtilityAction(item.key)}
-                            disabled={item.disabled}
-                            className={`flex w-full items-center gap-2 rounded-[10px] border border-transparent bg-transparent px-2 py-1.5 text-left transition-colors ${
-                              item.disabled
-                                ? "cursor-not-allowed opacity-60"
-                                : "hover:border-[var(--border)] hover:bg-[var(--surface-2)]"
-                            }`}
-                          >
-                            <div
-                              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] border ${
-                                item.tone === "danger"
-                                  ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-text)]"
-                                  : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--accent)]"
-                              }`}
-                            >
-                              <item.icon className="h-4 w-4" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="truncate text-xs font-medium text-[var(--text-primary)]">{item.title}</p>
-                              <p className="truncate text-[11px] text-[var(--text-secondary)]">
-                                {item.description}
-                              </p>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  </>
-                ) : (
-                  <ScrollArea className="min-h-0 flex-1 px-1.5">
-                    <div className="grid grid-cols-2 gap-1 p-1">
-                      {functionItems.map((item) => (
-                        <button
-                          key={item.title}
-                          type="button"
-                          onClick={() => handleUtilityAction(item.key)}
-                          disabled={item.disabled}
-                          className={`flex min-w-0 items-center gap-2 rounded-[10px] border px-2 py-1.5 text-left transition-colors ${
-                            item.disabled
-                              ? "cursor-not-allowed border-transparent opacity-50"
-                              : "border-transparent text-[var(--text-secondary)] hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]"
-                          }`}
-                          title={item.title}
-                        >
-                          <item.icon className="h-4 w-4 shrink-0" />
-                          <span className="truncate text-[11px] font-medium">{item.title}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                )}
-
-                {isClearConfirming ? (
-                  <div className="border-t border-[var(--border)] px-3 py-3">
-                    <div className="rounded-[10px] border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-3">
-                      <p className="text-sm font-medium text-[var(--danger-text)]">确认清空全部历史？</p>
-                      <p className="mt-2 text-sm text-[var(--warning-text)]">不会改动系统当前剪贴板。</p>
-                      <div className="mt-4 flex items-center gap-3">
-                        <Button size="sm" onClick={handleClearHistory}>
-                          确认清空
-                        </Button>
-                        <Button size="sm" variant="secondary" onClick={() => setIsClearConfirming(false)}>
-                          取消
-                        </Button>
-                      </div>
-                    </div>
+              {isClearConfirming ? (
+                <div className="mt-2.5 rounded-[10px] border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-3">
+                  <p className="text-sm font-medium text-[var(--danger-text)]">确认清空全部历史？</p>
+                  <p className="mt-2 text-sm text-[var(--warning-text)]">不会改动系统当前剪贴板。</p>
+                  <div className="mt-4 flex items-center gap-3">
+                    <Button size="sm" onClick={handleClearHistory}>
+                      确认清空
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => setIsClearConfirming(false)}>
+                      取消
+                    </Button>
                   </div>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
             </section>
           </div>
 
@@ -1732,29 +1713,6 @@ function App() {
             </div>
           ) : null}
 
-          <footer className="flex items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface-raised)] px-3.5 py-2">
-            <div className="flex min-w-0 flex-wrap items-center gap-1 text-[11px] text-[var(--text-secondary)]">
-              <span className="inline-flex items-center gap-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5">
-                <Keyboard className="h-3.5 w-3.5" />
-                ↑↓ 切换
-              </span>
-              <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5">
-                Enter
-              </span>
-              <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5">
-                Cmd+Enter
-              </span>
-              <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5">
-                Space
-              </span>
-              <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5">
-                Esc 关闭
-              </span>
-            </div>
-            <div className="shrink-0 text-[11px] leading-5 text-[var(--text-secondary)]">
-              本地运行
-            </div>
-          </footer>
         </section>
 
         {isSettingsOpen ? (
