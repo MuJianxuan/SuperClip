@@ -27,10 +27,10 @@ const DEFAULT_HISTORY_LIMIT: usize = 1000;
 const WINDOW_MODE_SMALL: &str = "small_window";
 const WINDOW_MODE_LARGE: &str = "large_window";
 const WINDOW_MODE_FALLBACK: &str = "fallback_window";
-const WINDOW_SMALL_WIDTH: f64 = 760.0;
-const WINDOW_SMALL_HEIGHT: f64 = 560.0;
-const WINDOW_LARGE_WIDTH: f64 = 980.0;
-const WINDOW_LARGE_HEIGHT: f64 = 680.0;
+const WINDOW_SMALL_WIDTH: f64 = 960.0;
+const WINDOW_SMALL_HEIGHT: f64 = 680.0;
+const WINDOW_LARGE_WIDTH: f64 = 1120.0;
+const WINDOW_LARGE_HEIGHT: f64 = 760.0;
 const WINDOW_SAFE_AREA_MARGIN_X: f64 = 32.0;
 const WINDOW_SAFE_AREA_MARGIN_Y: f64 = 48.0;
 const WINDOW_SIZE_TOLERANCE: f64 = 40.0;
@@ -2268,6 +2268,29 @@ fn build_safe_area_snapshot(monitor: &tauri::Monitor) -> SafeAreaSnapshot {
     }
 }
 
+fn monitor_contains_physical_point(monitor: &tauri::Monitor, x: f64, y: f64) -> bool {
+    let position = monitor.position();
+    let size = monitor.size();
+    let min_x = position.x as f64;
+    let min_y = position.y as f64;
+    let max_x = min_x + size.width as f64;
+    let max_y = min_y + size.height as f64;
+
+    x >= min_x && x < max_x && y >= min_y && y < max_y
+}
+
+fn find_monitor_for_physical_point(
+    window: &tauri::WebviewWindow,
+    x: f64,
+    y: f64,
+) -> Option<tauri::Monitor> {
+    window
+        .available_monitors()
+        .ok()?
+        .into_iter()
+        .find(|monitor| monitor_contains_physical_point(monitor, x, y))
+}
+
 fn safe_area_logical_bounds(snapshot: &SafeAreaSnapshot) -> (f64, f64, f64, f64) {
     let scale_factor = snapshot.scale_factor.max(1.0);
 
@@ -2319,6 +2342,7 @@ fn resolve_window_placement(
     window: &tauri::WebviewWindow,
     requested_mode: WindowSizeMode,
     preserve_center: bool,
+    target_monitor: Option<tauri::Monitor>,
 ) -> Result<WindowPlacementDecision, String> {
     let current_monitor = window
         .current_monitor()
@@ -2326,7 +2350,8 @@ fn resolve_window_placement(
     let primary_monitor = window
         .primary_monitor()
         .map_err(|_| "WINDOW_POSITION_UNAVAILABLE".to_string())?;
-    let monitor = current_monitor
+    let monitor = target_monitor
+        .or(current_monitor)
         .or(primary_monitor)
         .ok_or_else(|| "WINDOW_POSITION_UNAVAILABLE".to_string())?;
     let safe_area_snapshot = build_safe_area_snapshot(&monitor);
@@ -2423,11 +2448,13 @@ fn apply_window_placement(
     state: &State<'_, AppState>,
     requested_mode: WindowSizeMode,
     preserve_center: bool,
+    target_monitor: Option<tauri::Monitor>,
 ) -> Result<RuntimeStateResponse, String> {
     let Some(_placement_guard) = begin_window_placement(state)? else {
         return runtime_state_snapshot(state);
     };
-    let decision = resolve_window_placement(window, requested_mode, preserve_center)?;
+    let decision =
+        resolve_window_placement(window, requested_mode, preserve_center, target_monitor)?;
     let updated_at = build_runtime_timestamp()?;
 
     let _ = window.set_fullscreen(false);
@@ -2517,7 +2544,7 @@ fn handle_main_window_resized(app: &tauri::AppHandle, physical_size: tauri::Phys
     }
 
     let target_mode = current_mode.toggled();
-    match apply_window_placement(&window, &state, target_mode, true) {
+    match apply_window_placement(&window, &state, target_mode, true, None) {
         Ok(runtime_state) => emit_superclip_event(
             app,
             "window-size-mode-changed",
@@ -2602,6 +2629,7 @@ fn show_main_window(
     app: &tauri::AppHandle,
     presentation_reason: &str,
     fallback_reason: Option<&str>,
+    target_point: Option<tauri::PhysicalPosition<f64>>,
 ) -> Result<(), String> {
     let Some(window) = app.get_webview_window("main") else {
         let state: State<'_, AppState> = app.state();
@@ -2616,19 +2644,21 @@ fn show_main_window(
     let _ = window.unminimize();
 
     let state: State<'_, AppState> = app.state();
-    match apply_window_placement(&window, &state, WindowSizeMode::Small, false) {
+    let target_monitor =
+        target_point.and_then(|point| find_monitor_for_physical_point(&window, point.x, point.y));
+
+    match apply_window_placement(
+        &window,
+        &state,
+        WindowSizeMode::Small,
+        false,
+        target_monitor,
+    ) {
         Ok(runtime_state) => emit_window_fallback_used(app, &runtime_state, presentation_reason),
         Err(_) => record_window_position_error(
             &state,
             &format!("window-fallback-used/{presentation_reason}/placement_refresh"),
         ),
-    }
-
-    #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    if presentation_reason.starts_with("tray_") {
-        use tauri_plugin_positioner::{Position, WindowExt};
-
-        let _ = window.move_window_constrained(Position::TrayCenter);
     }
 
     if let Ok(mut runtime_state) = state.runtime_state.lock() {
@@ -2688,7 +2718,7 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app_handle, _shortcut, event| {
                     if event.state == ShortcutState::Pressed {
-                        let _ = show_main_window(app_handle, "global_shortcut", None);
+                        let _ = show_main_window(app_handle, "global_shortcut", None, None);
                     }
                 })
                 .build(),
@@ -2746,13 +2776,18 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
                                 .show_menu_on_left_click(false)
                                 .on_menu_event(|app_handle, event| match event.id().as_ref() {
                                     "tray_open" => {
-                                        let _ =
-                                            show_main_window(app_handle, "tray_menu_open", None);
+                                        let _ = show_main_window(
+                                            app_handle,
+                                            "tray_menu_open",
+                                            None,
+                                            None,
+                                        );
                                     }
                                     "tray_settings" => {
                                         let _ = show_main_window(
                                             app_handle,
                                             "tray_menu_settings",
+                                            None,
                                             None,
                                         );
                                         emit_settings_request(app_handle, "tray_menu");
@@ -2768,13 +2803,18 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
                                         &event,
                                     );
                                     if let TrayIconEvent::Click {
+                                        position,
                                         button: MouseButton::Left,
                                         button_state: MouseButtonState::Up,
                                         ..
                                     } = event
                                     {
-                                        let _ =
-                                            show_main_window(tray.app_handle(), "tray_click", None);
+                                        let _ = show_main_window(
+                                            tray.app_handle(),
+                                            "tray_click",
+                                            None,
+                                            Some(position),
+                                        );
                                     }
                                 })
                                 .build(app);
@@ -2860,7 +2900,7 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
 
 #[cfg(target_os = "macos")]
 fn handle_dock_reopen(app: &tauri::AppHandle, has_visible_windows: bool) {
-    if show_main_window(app, "dock_reopen", Some("dock_reopen")).is_ok() {
+    if show_main_window(app, "dock_reopen", Some("dock_reopen"), None).is_ok() {
         let state: State<'_, AppState> = app.state();
         if let Ok(mut runtime_state) = state.runtime_state.lock() {
             runtime_state.presentation_reason = "manual_open".into();
@@ -3343,7 +3383,7 @@ fn window_placement_refresh(
         .map(|runtime_state| WindowSizeMode::from_window_mode(&runtime_state.last_window_mode))
         .unwrap_or(WindowSizeMode::Small);
 
-    match apply_window_placement(&window, &state, requested_mode, true) {
+    match apply_window_placement(&window, &state, requested_mode, true, None) {
         Ok(runtime_state) => {
             emit_window_fallback_used(&app, &runtime_state, "placement_refresh");
             Ok(runtime_state)

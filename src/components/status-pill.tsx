@@ -19,7 +19,7 @@ export function StatusPill({ icon: Icon, label, tone = "neutral" }: StatusPillPr
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-[12px] border px-2.5 py-1.5 text-[11px] font-medium",
+        "inline-flex items-center gap-1.5 rounded-[10px] border px-2.5 py-1 text-[11px] font-medium",
         toneClasses[tone],
       )}
     >

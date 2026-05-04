@@ -6,10 +6,14 @@ import {
   ChevronUp,
   Copy,
   FileImage,
+  Info,
   Keyboard,
   LockKeyhole,
+  LogOut,
   MonitorCog,
+  Pause,
   Pin,
+  Play,
   RotateCcw,
   Search,
   Settings2,
@@ -24,7 +28,6 @@ import { SettingsShell } from "./components/settings-shell";
 import type { ClipboardItem } from "./components/history-row";
 import { Button } from "./components/ui/button";
 import { ScrollArea } from "./components/ui/scroll-area";
-import { Switch } from "./components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
@@ -238,43 +241,6 @@ function isTauriRuntime() {
   return "__TAURI_INTERNALS__" in window;
 }
 
-function normalizeShortcutToken(token: string) {
-  if (token === "Cmd") {
-    return "Meta";
-  }
-
-  if (token === "Ctrl") {
-    return "Control";
-  }
-
-  if (token === "Option") {
-    return "Alt";
-  }
-
-  if (token === "Shift") {
-    return "Shift";
-  }
-
-  if (token === "Space") {
-    return " ";
-  }
-
-  return token.length === 1 ? token.toLowerCase() : token;
-}
-
-function matchesShortcutBinding(event: KeyboardEvent, binding: string) {
-  const parts = binding.split("+").map(normalizeShortcutToken);
-  const key = parts[parts.length - 1];
-
-  return (
-    event.metaKey === parts.includes("Meta") &&
-    event.ctrlKey === parts.includes("Control") &&
-    event.altKey === parts.includes("Alt") &&
-    event.shiftKey === parts.includes("Shift") &&
-    event.key.toLowerCase() === key.toLowerCase()
-  );
-}
-
 function App() {
   const [query, setQuery] = useState("");
   const [clipboardItems, setClipboardItems] = useState<ClipboardItem[]>([]);
@@ -291,11 +257,10 @@ function App() {
   const [undoCountdown, setUndoCountdown] = useState(0);
   const [isClearConfirming, setIsClearConfirming] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isShellDismissed, setIsShellDismissed] = useState(false);
   const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
   const [scrollAnchor, setScrollAnchor] = useState<string | null>(null);
   const [isSessionHydrated, setIsSessionHydrated] = useState(false);
-  const [isWideLayout, setIsWideLayout] = useState(() => typeof window !== "undefined" && window.innerWidth >= 900);
+  const [isWideLayout, setIsWideLayout] = useState(() => typeof window !== "undefined" && window.innerWidth >= 840);
   const listViewportRef = useRef<HTMLDivElement | null>(null);
   const pendingSessionRestoreRef = useRef<Pick<
     SessionUiStateResponse,
@@ -424,7 +389,7 @@ function App() {
 
   useEffect(() => {
     const handleResize = () => {
-      setIsWideLayout(window.innerWidth >= 900);
+      setIsWideLayout(window.innerWidth >= 840);
     };
 
     handleResize();
@@ -646,17 +611,17 @@ function App() {
       ? getKindActionLabel(selectedItem.kind, settings.defaultAction)
       : "直接粘贴";
   const workspaceGridClass = isLargeWindow
-    ? "grid min-h-0 flex-1 grid-cols-[minmax(0,1.15fr)_330px] overflow-hidden"
+    ? "grid min-h-0 flex-1 grid-cols-[minmax(0,1.2fr)_312px] overflow-hidden"
     : "grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_278px] overflow-hidden";
   const functionPanelClass = isLargeWindow
-    ? "mt-3 flex min-h-0 flex-1 flex-col rounded-[18px] border border-[var(--border)] bg-[var(--surface)]"
-    : "mt-2 flex h-[58px] flex-none rounded-[16px] border border-[var(--border)] bg-[var(--surface)]";
+    ? "mt-2.5 flex min-h-0 flex-1 flex-col rounded-[12px] border border-[var(--border)] bg-[var(--surface)]"
+    : "mt-2 flex min-h-[150px] flex-none flex-col rounded-[12px] border border-[var(--border)] bg-[var(--surface)]";
   const detailCardClass = isLargeWindow
-    ? "rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-3"
-    : "rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-2.5";
+    ? "rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-2.5"
+    : "rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-2";
   const previewShellClass = isLargeWindow
-    ? "mt-3 rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] p-2.5"
-    : "mt-2 rounded-[14px] border border-[var(--border)] bg-[var(--surface-2)] p-2";
+    ? "mt-2.5 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-2"
+    : "mt-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-2";
 
   const functionItems = [
     {
@@ -664,6 +629,13 @@ function App() {
       title: "设置",
       description: settings.themeMode,
       icon: Settings2,
+    },
+    {
+      key: "monitor",
+      title: isMonitoring ? "暂停监听" : "恢复监听",
+      description: isMonitoring ? "监听中" : "已暂停",
+      icon: isMonitoring ? Pause : Play,
+      disabled: isRecoveryMode || isMigrationBlocking,
     },
     {
       key: "diagnostics",
@@ -684,6 +656,18 @@ function App() {
       icon: Trash2,
       tone: "danger" as const,
       disabled: isRecoveryMode || isMigrationBlocking,
+    },
+    {
+      key: "about",
+      title: "关于",
+      description: "0.1.0",
+      icon: Info,
+    },
+    {
+      key: "exit",
+      title: "退出",
+      description: "隐藏面板",
+      icon: LogOut,
     },
   ];
 
@@ -807,19 +791,22 @@ function App() {
       } catch {
         setFeedback({
           createdAtMs: Date.now(),
-          title: "宿主关闭失败",
-          message: "当前窗口未能隐藏，已退化为预览内的模拟关闭。",
+          title: "宿主隐藏失败",
+          message: "当前窗口未能隐藏，可使用 macOS 红灯关闭窗口。",
           tone: "warning",
           timeoutMs: 4000,
         });
       }
+      return;
     }
 
-    setIsShellDismissed(true);
-  }
-
-  function handleShellRestore() {
-    setIsShellDismissed(false);
+    setFeedback({
+      createdAtMs: Date.now(),
+      title: "当前为预览环境",
+      message: "浏览器预览没有宿主窗口可隐藏。",
+      tone: "warning",
+      timeoutMs: 3000,
+    });
   }
 
   async function handlePrimaryAction() {
@@ -1248,6 +1235,11 @@ function App() {
   }
 
   function handleUtilityAction(key: string) {
+    if (key === "monitor") {
+      void handleMonitorToggle(!isMonitoring);
+      return;
+    }
+
     if (key === "clear") {
       if (blockMutatingAction("清空历史")) {
         return;
@@ -1259,6 +1251,16 @@ function App() {
 
     if (key === "settings") {
       setIsSettingsOpen(true);
+      return;
+    }
+
+    if (key === "about") {
+      setIsSettingsOpen(true);
+      return;
+    }
+
+    if (key === "exit") {
+      void handleShellDismiss();
       return;
     }
 
@@ -1282,30 +1284,8 @@ function App() {
   }
 
   useEffect(() => {
-    if (!isShellDismissed) {
-      return;
-    }
-
-    function handleDismissedShortcut(event: KeyboardEvent) {
-      if (event.isComposing) {
-        return;
-      }
-
-      if (!matchesShortcutBinding(event, shortcut.binding)) {
-        return;
-      }
-
-      event.preventDefault();
-      setIsShellDismissed(false);
-    }
-
-    window.addEventListener("keydown", handleDismissedShortcut);
-    return () => window.removeEventListener("keydown", handleDismissedShortcut);
-  }, [isShellDismissed, shortcut.binding]);
-
-  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.isComposing || isSettingsOpen || isShellDismissed || !clipboardItems.length) {
+      if (event.isComposing || isSettingsOpen || !clipboardItems.length) {
         return;
       }
 
@@ -1366,7 +1346,6 @@ function App() {
     isMigrationBlocking,
     isPreviewExpanded,
     isRecoveryMode,
-    isShellDismissed,
     isSettingsOpen,
     query,
     selectedItem,
@@ -1376,36 +1355,17 @@ function App() {
   return (
     <TooltipProvider delayDuration={180}>
       <main className="h-screen overflow-hidden text-[var(--text-primary)]">
-        {isShellDismissed ? (
-          <section className="mx-auto flex h-full w-full max-w-[420px] items-center justify-center">
-            <div className="w-full rounded-[24px] border border-[var(--border)] bg-[var(--surface)] px-6 py-7 text-center shadow-[0_18px_48px_rgba(25,31,38,0.12)]">
-              <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] text-[var(--accent)]">
-                <AppWindow className="h-5 w-5" />
-              </div>
-              <h1 className="mt-4 text-xl font-semibold text-[var(--text-primary)]">
-                面板已隐藏
-              </h1>
-              <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                按 {shortcut.binding} 或点击按钮恢复。
-              </p>
-              <Button className="mt-5 w-full" onClick={handleShellRestore} autoFocus>
-                <ArrowUpRight className="h-4 w-4" />
-                打开面板
-              </Button>
-            </div>
-          </section>
-        ) : (
         <section
           className="relative flex h-full w-full flex-col overflow-hidden border border-[var(--border)] bg-[var(--surface)] backdrop-blur-xl"
         >
-          <header className="flex flex-col gap-2.5 border-b border-[var(--border)] bg-[var(--surface-raised)] px-4 py-3">
+          <header className="flex flex-col gap-2 border-b border-[var(--border)] bg-[var(--surface-raised)] px-3.5 py-2.5">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border border-[var(--border-strong)] bg-[var(--accent-soft)] text-[var(--accent)] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-[var(--border-strong)] bg-[var(--accent-soft)] text-[var(--accent)]">
                   <AppWindow className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <h1 className="truncate text-[18px] font-semibold leading-none text-[var(--text-primary)]">
+                  <h1 className="truncate text-[16px] font-semibold leading-none text-[var(--text-primary)]">
                     SuperClip
                   </h1>
                   <p className="mt-1 text-[11px] text-[var(--text-secondary)]">本地剪贴板</p>
@@ -1417,13 +1377,10 @@ function App() {
                   <Settings2 className="h-4 w-4" />
                   设置
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => void handleShellDismiss()}>
-                  关闭
-                </Button>
               </div>
             </div>
 
-            <label className="flex h-11 items-center gap-3 rounded-[16px] border border-[var(--border-strong)] bg-white px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] transition-colors focus-within:bg-[var(--surface)]">
+            <label className="flex h-10 items-center gap-2.5 rounded-[10px] border border-[var(--border-strong)] bg-[var(--surface)] px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors focus-within:bg-[var(--surface-2)]">
               <Search className="h-4 w-4 text-[var(--text-tertiary)]" />
               <input
                 autoFocus
@@ -1444,7 +1401,7 @@ function App() {
           </header>
 
           {!permission.accessibilityTrusted || isRecoveryMode || isFallbackWindow ? (
-            <div className="space-y-2 border-b border-[var(--border)] bg-[var(--surface-raised)] px-4 py-3">
+            <div className="space-y-2 border-b border-[var(--border)] bg-[var(--surface-raised)] px-3.5 py-2.5">
               {!permission.accessibilityTrusted ? (
                 <div className="flex items-center justify-between gap-3 rounded-[12px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2">
                   <p className="truncate text-xs font-medium text-[var(--warning-text)]">仅复制模式</p>
@@ -1456,7 +1413,7 @@ function App() {
               ) : null}
 
               {isRecoveryMode ? (
-                <div className="flex flex-col gap-3 rounded-[18px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 min-[920px]:flex-row min-[920px]:items-center min-[920px]:justify-between">
+                <div className="flex flex-col gap-3 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2.5 min-[920px]:flex-row min-[920px]:items-center min-[920px]:justify-between">
                   <div>
                     <p className="text-sm font-medium text-[var(--warning-text)]">恢复模式</p>
                     <p className="mt-1 text-sm text-[var(--warning-text)]">只开放浏览、搜索、复制和诊断。</p>
@@ -1474,7 +1431,7 @@ function App() {
               ) : null}
 
               {isFallbackWindow ? (
-                <div className="rounded-[16px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+                <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-secondary)]">
                   已切换为居中窗口。
                   {runtimeState.fallbackReason ? ` ${runtimeState.fallbackReason}` : null}
                 </div>
@@ -1483,8 +1440,8 @@ function App() {
           ) : null}
 
           <div className={workspaceGridClass}>
-            <section className="flex min-h-0 flex-col px-3.5 py-3.5">
-              <div className="mb-2.5 flex items-center justify-between gap-3">
+            <section className="flex min-h-0 flex-col px-3 py-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-sm font-semibold text-[var(--text-primary)]">历史</h2>
                   <p className="mt-1 text-xs text-[var(--text-secondary)]">
@@ -1497,7 +1454,7 @@ function App() {
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      className="inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)]"
+                      className="inline-flex items-center gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)]"
                     >
                       <Pin className="h-3.5 w-3.5" />
                       {pinnedCount}
@@ -1510,7 +1467,7 @@ function App() {
               </div>
 
               <ScrollArea className="min-h-0 flex-1 pr-1" viewportRef={listViewportRef}>
-                <div className="space-y-2 pb-2 pr-2">
+                <div className="space-y-1.5 pb-2 pr-2">
                   {clipboardItems.length ? (
                     clipboardItems.map((item) => (
                       <HistoryRow
@@ -1522,7 +1479,7 @@ function App() {
                       />
                     ))
                   ) : isRecoveryMode ? (
-                    <div className="rounded-[20px] border border-dashed border-[var(--warning-border)] bg-[var(--warning-bg)] px-5 py-10 text-center">
+                    <div className="rounded-[12px] border border-dashed border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-8 text-center">
                       <p className="text-base font-semibold text-[var(--warning-text)]">恢复模式</p>
                       <p className="mt-2 text-sm text-[var(--warning-text)]">只开放浏览、搜索、复制和诊断。</p>
                       <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
@@ -1535,12 +1492,12 @@ function App() {
                       </div>
                     </div>
                   ) : runtimeState.presentationReason === "no_history" ? (
-                    <div className="rounded-[20px] border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-10 text-center">
+                    <div className="rounded-[12px] border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-8 text-center">
                       <p className="text-base font-semibold text-[var(--text-primary)]">还没有记录</p>
                       <p className="mt-2 text-sm text-[var(--text-secondary)]">复制内容后会出现在这里。</p>
                     </div>
                   ) : (
-                    <div className="rounded-[20px] border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-10 text-center">
+                    <div className="rounded-[12px] border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-8 text-center">
                       <p className="text-base font-semibold text-[var(--text-primary)]">没找到匹配项</p>
                       <p className="mt-2 text-sm text-[var(--text-secondary)]">试试更短的关键词。</p>
                       <Button
@@ -1557,7 +1514,7 @@ function App() {
               </ScrollArea>
             </section>
 
-            <section className="flex min-h-0 flex-col overflow-hidden border-l border-[var(--border)] bg-[var(--surface-raised)] px-3.5 py-3.5">
+            <section className="flex min-h-0 flex-col overflow-hidden border-l border-[var(--border)] bg-[var(--surface-raised)] px-3 py-3">
               <div className={detailCardClass}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -1566,7 +1523,7 @@ function App() {
                         {selectedItem?.title ?? "选择一条记录"}
                       </h2>
                       {selectedItem?.isPinned ? (
-                        <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)]">
+                        <span className="inline-flex items-center gap-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)]">
                           <Pin className="h-3 w-3" />
                           置顶
                         </span>
@@ -1580,7 +1537,7 @@ function App() {
 
                 <div className={previewShellClass}>
                   {selectedItem?.kind === "image" ? (
-                    <div className="flex aspect-[16/10] items-center justify-center rounded-[16px] border border-dashed border-[var(--border-strong)] bg-[var(--surface)]">
+                    <div className="flex aspect-[16/10] items-center justify-center rounded-[10px] border border-dashed border-[var(--border-strong)] bg-[var(--surface)]">
                       <div className="text-center">
                         <FileImage className="mx-auto h-8 w-8 text-[var(--text-secondary)]" />
                         <p className="mt-3 text-sm font-medium text-[var(--text-primary)]">图片预览</p>
@@ -1588,7 +1545,7 @@ function App() {
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-[13px] border border-transparent bg-[var(--surface)] px-2.5 py-2 text-[13px] text-[var(--text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+                    <div className="rounded-[10px] border border-transparent bg-[var(--surface)] px-2.5 py-2 text-[13px] text-[var(--text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
                       <div className="flex items-start justify-between gap-3">
                         <p
                           className={`min-w-0 flex-1 whitespace-pre-wrap leading-5 ${
@@ -1613,7 +1570,7 @@ function App() {
                   )}
 
                   {isLargeWindow ? (
-                    <div className="mt-2.5 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[11px] text-[var(--text-secondary)]">
+                    <div className="mt-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-[11px] text-[var(--text-secondary)]">
                       {!selectedItem
                         ? "选择记录后显示动作边界。"
                         : selectedItem.kind === "file"
@@ -1628,7 +1585,7 @@ function App() {
                 </div>
 
                 {isRecoveryMode ? (
-                  <div className="mt-3 rounded-[16px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 text-sm text-[var(--warning-text)]">
+                  <div className="mt-2.5 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm text-[var(--warning-text)]">
                     只读模式：写操作已禁用。
                   </div>
                 ) : null}
@@ -1676,38 +1633,31 @@ function App() {
               <div className={functionPanelClass}>
                 {isLargeWindow ? (
                   <>
-                    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <div className="flex items-center justify-between gap-3 px-2.5 py-2">
                       <div>
                         <h2 className="text-sm font-semibold text-[var(--text-primary)]">工具</h2>
                       </div>
-                      <div className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5">
-                        <Switch
-                          checked={isMonitoring}
-                          disabled={isRecoveryMode || isMigrationBlocking}
-                          onCheckedChange={handleMonitorToggle}
-                        />
-                        <span className="text-xs font-medium text-[var(--text-secondary)]">
-                          {isMonitoring ? "监听中" : "已暂停"}
-                        </span>
-                      </div>
+                      <span className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-1 text-xs font-medium text-[var(--text-secondary)]">
+                        {isMonitoring ? "监听中" : "已暂停"}
+                      </span>
                     </div>
 
-                    <ScrollArea className="min-h-0 flex-1 px-2">
-                      <div className="grid grid-cols-2 gap-1.5 p-1.5">
+                    <ScrollArea className="min-h-0 flex-1 px-1.5">
+                      <div className="grid grid-cols-2 gap-1 p-1">
                         {functionItems.map((item) => (
                           <button
                             key={item.title}
                             type="button"
                             onClick={() => handleUtilityAction(item.key)}
                             disabled={item.disabled}
-                            className={`flex w-full items-center gap-2 rounded-[12px] border border-transparent bg-transparent px-2.5 py-2 text-left transition-colors ${
+                            className={`flex w-full items-center gap-2 rounded-[10px] border border-transparent bg-transparent px-2 py-1.5 text-left transition-colors ${
                               item.disabled
                                 ? "cursor-not-allowed opacity-60"
                                 : "hover:border-[var(--border)] hover:bg-[var(--surface-2)]"
                             }`}
                           >
                             <div
-                              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] border ${
+                              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] border ${
                                 item.tone === "danger"
                                   ? "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-text)]"
                                   : "border-[var(--border)] bg-[var(--surface-2)] text-[var(--accent)]"
@@ -1727,30 +1677,32 @@ function App() {
                     </ScrollArea>
                   </>
                 ) : (
-                  <div className="grid h-full grid-cols-4 gap-1 p-1.5">
-                    {functionItems.map((item) => (
-                      <button
-                        key={item.title}
-                        type="button"
-                        onClick={() => handleUtilityAction(item.key)}
-                        disabled={item.disabled}
-                        aria-label={item.title}
-                        className={`grid min-w-0 place-items-center rounded-[12px] border text-[10px] font-medium transition-colors ${
-                          item.disabled
-                            ? "cursor-not-allowed border-transparent opacity-50"
-                            : "border-transparent text-[var(--text-secondary)] hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]"
-                        }`}
-                        title={item.title}
-                      >
-                        <item.icon className="h-4 w-4" />
-                      </button>
-                    ))}
-                  </div>
+                  <ScrollArea className="min-h-0 flex-1 px-1.5">
+                    <div className="grid grid-cols-2 gap-1 p-1">
+                      {functionItems.map((item) => (
+                        <button
+                          key={item.title}
+                          type="button"
+                          onClick={() => handleUtilityAction(item.key)}
+                          disabled={item.disabled}
+                          className={`flex min-w-0 items-center gap-2 rounded-[10px] border px-2 py-1.5 text-left transition-colors ${
+                            item.disabled
+                              ? "cursor-not-allowed border-transparent opacity-50"
+                              : "border-transparent text-[var(--text-secondary)] hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]"
+                          }`}
+                          title={item.title}
+                        >
+                          <item.icon className="h-4 w-4 shrink-0" />
+                          <span className="truncate text-[11px] font-medium">{item.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
                 )}
 
                 {isClearConfirming ? (
-                  <div className="border-t border-[var(--border)] px-5 py-4">
-                    <div className="rounded-[16px] border border-[var(--danger-border)] bg-[var(--danger-bg)] px-4 py-4">
+                  <div className="border-t border-[var(--border)] px-3 py-3">
+                    <div className="rounded-[10px] border border-[var(--danger-border)] bg-[var(--danger-bg)] px-3 py-3">
                       <p className="text-sm font-medium text-[var(--danger-text)]">确认清空全部历史？</p>
                       <p className="mt-2 text-sm text-[var(--warning-text)]">不会改动系统当前剪贴板。</p>
                       <div className="mt-4 flex items-center gap-3">
@@ -1771,7 +1723,7 @@ function App() {
           {isMigrationBlocking ? (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-[rgba(17,22,30,0.42)] px-6 backdrop-blur-sm">
               <div className="w-full max-w-[420px] rounded-[24px] border border-[var(--border)] bg-[var(--surface)] px-6 py-6 text-center shadow-[0_24px_80px_rgba(17,22,30,0.22)]">
-                <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] text-[var(--accent)]">
+                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] text-[var(--accent)]">
                   <MonitorCog className="h-5 w-5" />
                 </div>
                 <h2 className="mt-4 text-lg font-semibold text-[var(--text-primary)]">正在完成本地迁移</h2>
@@ -1780,22 +1732,22 @@ function App() {
             </div>
           ) : null}
 
-          <footer className="flex items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface-raised)] px-4 py-2.5">
-            <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
-              <span className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1">
+          <footer className="flex items-center justify-between gap-3 border-t border-[var(--border)] bg-[var(--surface-raised)] px-3.5 py-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-1 text-[11px] text-[var(--text-secondary)]">
+              <span className="inline-flex items-center gap-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5">
                 <Keyboard className="h-3.5 w-3.5" />
                 ↑↓ 切换
               </span>
-              <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1">
+              <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5">
                 Enter
               </span>
-              <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1">
+              <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5">
                 Cmd+Enter
               </span>
-              <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1">
+              <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5">
                 Space
               </span>
-              <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1">
+              <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface)] px-2 py-0.5">
                 Esc 关闭
               </span>
             </div>
@@ -1804,7 +1756,6 @@ function App() {
             </div>
           </footer>
         </section>
-        )}
 
         {isSettingsOpen ? (
           <SettingsShell
@@ -1830,7 +1781,7 @@ function App() {
         ) : null}
 
         {feedback ? (
-          <div className="fixed bottom-5 left-1/2 z-50 w-[min(92vw,560px)] -translate-x-1/2 rounded-[20px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 shadow-[0_18px_50px_rgba(19,24,30,0.18)] backdrop-blur-xl">
+          <div className="fixed bottom-5 left-1/2 z-50 w-[min(92vw,560px)] -translate-x-1/2 rounded-[12px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 shadow-[var(--shadow-soft)] backdrop-blur-xl">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 rounded-full bg-[var(--surface-2)] p-2 text-[var(--accent)]">
                 {feedback.tone === "copy" ? (

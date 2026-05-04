@@ -1,11 +1,13 @@
 import * as React from "react";
 import {
+  ClipboardPaste,
   Download,
   Info,
   Keyboard,
   Palette,
   PencilLine,
   Plus,
+  Rocket,
   Settings2,
   Shield,
   Trash2,
@@ -29,8 +31,10 @@ import type {
 type SettingsSectionKey =
   | "general"
   | "shortcuts"
+  | "pasteBehavior"
   | "privacy"
   | "appearance"
+  | "startup"
   | "about";
 
 interface SettingsShellProps {
@@ -61,8 +65,10 @@ const sections: Array<{
 }> = [
   { key: "general", label: "通用", icon: Settings2 },
   { key: "shortcuts", label: "快捷键", icon: Keyboard },
-  { key: "privacy", label: "隐私", icon: Shield },
+  { key: "pasteBehavior", label: "粘贴行为", icon: ClipboardPaste },
+  { key: "privacy", label: "隐私规则", icon: Shield },
   { key: "appearance", label: "外观", icon: Palette },
+  { key: "startup", label: "启动更新", icon: Rocket },
   { key: "about", label: "关于", icon: Info },
 ];
 
@@ -90,14 +96,14 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-3.5">
+    <section className="rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-3">
       <div>
         <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">{title}</h3>
         <p className="mt-1 max-w-[38rem] text-[12px] leading-5 text-[var(--text-secondary)]">
           {description}
         </p>
       </div>
-      <div className="mt-3 space-y-2.5">{children}</div>
+      <div className="mt-3 space-y-2">{children}</div>
     </section>
   );
 }
@@ -112,7 +118,7 @@ function Row({
   action: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2.5 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3.5 py-3 min-[820px]:flex-row min-[820px]:items-center min-[820px]:justify-between">
+    <div className="flex flex-col gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 min-[820px]:flex-row min-[820px]:items-center min-[820px]:justify-between">
       <div className="min-w-0">
         <p className="text-[13px] font-medium text-[var(--text-primary)]">{label}</p>
         <p className="mt-1 text-[12px] leading-5 text-[var(--text-secondary)]">{hint}</p>
@@ -421,19 +427,19 @@ export function SettingsShell({
   return (
     <div className="fixed inset-0 z-40 bg-[var(--bg)]">
       <div className="flex h-full w-full overflow-hidden border border-[var(--border)] bg-[var(--bg)]">
-        <aside className="hidden w-[86px] shrink-0 border-r border-[var(--border)] bg-[var(--surface-raised)] p-2.5 min-[900px]:flex min-[900px]:flex-col">
-          <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-[12px] border border-[var(--border-strong)] bg-[var(--accent-soft)] text-[var(--accent)]">
+        <aside className="hidden w-[92px] shrink-0 border-r border-[var(--border)] bg-[var(--surface-raised)] p-2 min-[840px]:flex min-[840px]:flex-col">
+          <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-[10px] border border-[var(--border-strong)] bg-[var(--accent-soft)] text-[var(--accent)]">
             <Settings2 className="h-4 w-4" />
           </div>
 
-          <nav className="mt-4 space-y-1">
+          <nav className="mt-3 space-y-1">
             {sections.map((section) => (
               <button
                 key={section.key}
                 type="button"
                 onClick={() => setActiveSection(section.key)}
                 className={cn(
-                  "flex w-full flex-col items-center gap-1 rounded-[10px] border px-1.5 py-2 text-center transition-colors",
+                  "flex w-full flex-col items-center gap-1 rounded-[8px] border px-1.5 py-1.5 text-center transition-colors",
                   activeSection === section.key
                     ? "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-primary)]"
                     : "border-transparent bg-transparent text-[var(--text-secondary)] hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]",
@@ -445,17 +451,17 @@ export function SettingsShell({
             ))}
           </nav>
 
-          <div className="mt-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-2 py-3 text-center">
+          <div className="mt-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-2 py-2.5 text-center">
             <p className="text-[10px] font-medium text-[var(--text-tertiary)]">SuperClip</p>
             <p className="mt-1 text-[11px] font-semibold text-[var(--text-primary)]">0.1.0</p>
           </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="border-b border-[var(--border)] bg-[var(--surface-raised)] px-4 py-3">
+          <header className="border-b border-[var(--border)] bg-[var(--surface-raised)] px-3.5 py-2.5">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-[18px] font-semibold text-[var(--text-primary)]">
+                <h2 className="text-[16px] font-semibold text-[var(--text-primary)]">
                   {activeSectionMeta.label}
                 </h2>
               </div>
@@ -475,7 +481,7 @@ export function SettingsShell({
               </div>
             </div>
 
-            <div className="mt-3 flex gap-2 overflow-x-auto min-[900px]:hidden">
+            <div className="mt-2.5 flex gap-2 overflow-x-auto min-[840px]:hidden">
               {sections.map((section) => (
                 <button
                   key={section.key}
@@ -495,9 +501,9 @@ export function SettingsShell({
           </header>
 
           <ScrollArea className="min-h-0 flex-1">
-            <div className="space-y-3 px-4 py-3.5">
+            <div className="space-y-2.5 px-3.5 py-3">
               {readOnlyMode ? (
-                <div className="rounded-[16px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 text-sm text-[var(--warning-text)]">
+                <div className="rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm text-[var(--warning-text)]">
                   只读模式：修改类操作已禁用。
                 </div>
               ) : null}
@@ -505,13 +511,13 @@ export function SettingsShell({
               {activeSection === "general" ? (
                 <SectionCard
                   title="通用"
-                  description="历史数量、默认动作、启动行为和置顶提醒。"
+                  description="历史数量和置顶提醒。"
                 >
                   <Row
                     label="历史保留数量"
                     hint="建议 100 到 5000。"
                     action={
-                      <label className="inline-flex items-center gap-3 rounded-[16px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+                      <label className="inline-flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
                         <input
                           type="number"
                           min={100}
@@ -536,91 +542,8 @@ export function SettingsShell({
                     }
                   />
 
-                  <Row
-                    label="默认动作"
-                    hint="Enter 执行默认动作，Cmd+Enter 执行相反动作。"
-                    action={
-                      <div className="flex rounded-[16px] border border-[var(--border)] bg-[var(--surface)] p-1">
-                        {[
-                          { value: "direct_paste", label: "直接粘贴优先" },
-                          { value: "copy_only", label: "仅复制优先" },
-                        ].map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            disabled={readOnlyMode}
-                            onClick={() =>
-                              void onUpdate({
-                                defaultAction: option.value as SettingsResponse["defaultAction"],
-                              })
-                            }
-                            className={cn(
-                              "rounded-[12px] px-3 py-2 text-xs font-medium transition-colors",
-                              settings.defaultAction === option.value
-                                ? "bg-[var(--accent)] text-white"
-                                : "text-[var(--text-secondary)]",
-                              readOnlyMode && "cursor-not-allowed opacity-60",
-                            )}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-                    }
-                  />
-
-                  <Row
-                    label="登录时启动"
-                    hint="失败时在本行提示并可重试。"
-                    action={
-                      <div className="flex items-center gap-3 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
-                        <Switch
-                          checked={settings.launchAtLogin}
-                          disabled={readOnlyMode}
-                          onCheckedChange={(checked) => void handleStartupUpdate({ launchAtLogin: checked })}
-                        />
-                        <span className="text-xs font-medium text-[var(--text-secondary)]">
-                          {settings.launchAtLogin ? "已开启" : "已关闭"}
-                        </span>
-                      </div>
-                    }
-                  />
-
-                  <Row
-                    label="启动时自动显示"
-                    hint="开启后仍以空搜索打开。"
-                    action={
-                      <div className="flex items-center gap-3 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
-                        <Switch
-                          checked={settings.showOnStartup}
-                          disabled={readOnlyMode}
-                          onCheckedChange={(checked) => void handleStartupUpdate({ showOnStartup: checked })}
-                        />
-                        <span className="text-xs font-medium text-[var(--text-secondary)]">
-                          {settings.showOnStartup ? "已开启" : "已关闭"}
-                        </span>
-                      </div>
-                    }
-                  />
-
-                  {startupError ? (
-                    <div className="flex flex-col gap-3 rounded-[20px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-4 text-sm text-[var(--warning-text)] min-[820px]:flex-row min-[820px]:items-center min-[820px]:justify-between">
-                      <p>{startupError}</p>
-                      {startupRetryPatch ? (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={readOnlyMode}
-                          onClick={() => void handleStartupUpdate(startupRetryPatch)}
-                        >
-                          重试
-                        </Button>
-                      ) : null}
-                    </div>
-                  ) : null}
-
                   {pinnedCount > 50 ? (
-                    <div className="rounded-[18px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 text-sm leading-6 text-[var(--warning-text)]">
+                    <div className="rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm leading-6 text-[var(--warning-text)]">
                       置顶项较多，可能影响首屏检索效率。建议进入历史整理路径收敛置顶数量。
                     </div>
                   ) : null}
@@ -636,14 +559,14 @@ export function SettingsShell({
                     label="当前全局快捷键"
                     hint="重新录入后按下新的组合键。"
                     action={
-                      <div className="flex items-center gap-2 rounded-[16px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+                      <div className="flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
                         <Keyboard className="h-4 w-4 text-[var(--text-secondary)]" />
                         <span className="text-sm font-medium text-[var(--text-primary)]">{shortcut.binding}</span>
                       </div>
                     }
                   />
 
-                  <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-4">
+                  <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)]">
                         来源：{shortcut.source === "default" ? "默认" : "用户"}
@@ -699,7 +622,7 @@ export function SettingsShell({
                       </Button>
                     </div>
 
-                    <div className="mt-4 rounded-[18px] border border-[var(--border)] bg-[var(--surface)] px-4 py-3">
+                    <div className="mt-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
                       <p className="text-xs font-semibold uppercase text-[var(--text-tertiary)]">
                         录入
                       </p>
@@ -716,11 +639,122 @@ export function SettingsShell({
                     </div>
 
                     {shortcutError ? (
-                      <div className="mt-4 rounded-[18px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 text-sm leading-6 text-[var(--warning-text)]">
+                      <div className="mt-3 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm leading-6 text-[var(--warning-text)]">
                         {shortcutError}
                       </div>
                     ) : null}
                   </div>
+                </SectionCard>
+              ) : null}
+
+              {activeSection === "pasteBehavior" ? (
+                <SectionCard
+                  title="粘贴行为"
+                  description="设置 Enter 默认执行直接粘贴还是仅复制。"
+                >
+                  <Row
+                    label="默认动作"
+                    hint="Enter 执行默认动作，Cmd+Enter 执行相反动作。"
+                    action={
+                      <div className="flex rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-1">
+                        {[
+                          { value: "direct_paste", label: "直接粘贴优先" },
+                          { value: "copy_only", label: "仅复制优先" },
+                        ].map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            disabled={readOnlyMode}
+                            onClick={() =>
+                              void onUpdate({
+                                defaultAction: option.value as SettingsResponse["defaultAction"],
+                              })
+                            }
+                            className={cn(
+                              "rounded-[8px] px-3 py-1.5 text-xs font-medium transition-colors",
+                              settings.defaultAction === option.value
+                                ? "bg-[var(--accent)] text-[var(--accent-contrast)]"
+                                : "text-[var(--text-secondary)] hover:bg-[var(--surface-2)]",
+                              readOnlyMode && "cursor-not-allowed opacity-60",
+                            )}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+                    }
+                  />
+
+                  <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-[12px] leading-5 text-[var(--text-secondary)]">
+                    失败回退始终开启；文件类型固定为仅复制，富文本和图片在目标应用不支持时会降级。
+                  </div>
+                </SectionCard>
+              ) : null}
+
+              {activeSection === "startup" ? (
+                <SectionCard
+                  title="启动与更新"
+                  description="管理登录启动、启动展示和本地版本状态。"
+                >
+                  <Row
+                    label="登录时启动"
+                    hint="失败时在本行提示并可重试。"
+                    action={
+                      <div className="flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
+                        <Switch
+                          checked={settings.launchAtLogin}
+                          disabled={readOnlyMode}
+                          onCheckedChange={(checked) => void handleStartupUpdate({ launchAtLogin: checked })}
+                        />
+                        <span className="text-xs font-medium text-[var(--text-secondary)]">
+                          {settings.launchAtLogin ? "已开启" : "已关闭"}
+                        </span>
+                      </div>
+                    }
+                  />
+
+                  <Row
+                    label="启动时自动显示"
+                    hint="开启后仍以空搜索打开。"
+                    action={
+                      <div className="flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
+                        <Switch
+                          checked={settings.showOnStartup}
+                          disabled={readOnlyMode}
+                          onCheckedChange={(checked) => void handleStartupUpdate({ showOnStartup: checked })}
+                        />
+                        <span className="text-xs font-medium text-[var(--text-secondary)]">
+                          {settings.showOnStartup ? "已开启" : "已关闭"}
+                        </span>
+                      </div>
+                    }
+                  />
+
+                  {startupError ? (
+                    <div className="flex flex-col gap-3 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm text-[var(--warning-text)] min-[820px]:flex-row min-[820px]:items-center min-[820px]:justify-between">
+                      <p>{startupError}</p>
+                      {startupRetryPatch ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={readOnlyMode}
+                          onClick={() => void handleStartupUpdate(startupRetryPatch)}
+                        >
+                          重试
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  <Row
+                    label="版本状态"
+                    hint="当前本地客户端版本。"
+                    action={
+                      <div className="inline-flex items-center rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)]">
+                        0.1.0
+                      </div>
+                    }
+                  />
                 </SectionCard>
               ) : null}
 
@@ -739,7 +773,7 @@ export function SettingsShell({
                     </span>
                   </div>
 
-                  <form onSubmit={handleRuleSubmit} className="rounded-[20px] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-4">
+                  <form onSubmit={handleRuleSubmit} className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3">
                     <div className="grid grid-cols-1 gap-3 min-[760px]:grid-cols-[160px_minmax(0,1fr)_120px]">
                       <label className="space-y-2">
                         <span className="text-xs font-medium text-[var(--text-secondary)]">规则类型</span>
@@ -752,7 +786,7 @@ export function SettingsShell({
                             setRuleValue(nextKind === "content_kind" ? "text" : "");
                             setRuleError(null);
                           }}
-                          className="w-full rounded-[16px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none"
+                          className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text-primary)] outline-none"
                         >
                           {Object.entries(ruleKindLabels).map(([value, label]) => (
                             <option key={value} value={value}>
@@ -772,7 +806,7 @@ export function SettingsShell({
                               setRuleValue(event.currentTarget.value);
                               setRuleError(null);
                             }}
-                            className="w-full rounded-[16px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none"
+                            className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text-primary)] outline-none"
                           >
                             {contentKindOptions.map((option) => (
                               <option key={option.value} value={option.value}>
@@ -789,14 +823,14 @@ export function SettingsShell({
                               setRuleError(null);
                             }}
                             placeholder={ruleKind === "bundle_id" ? "如 com.apple.KeychainAccess" : "如 验证码"}
-                            className="w-full rounded-[16px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none"
+                            className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text-primary)] outline-none"
                           />
                         )}
                       </label>
 
                       <label className="space-y-2">
                         <span className="text-xs font-medium text-[var(--text-secondary)]">启用状态</span>
-                        <div className="flex items-center justify-between rounded-[16px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+                        <div className="flex items-center justify-between rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
                           <span className="text-sm text-[var(--text-secondary)]">{ruleEnabled ? "启用" : "停用"}</span>
                           <Switch
                             checked={ruleEnabled}
@@ -808,7 +842,7 @@ export function SettingsShell({
                     </div>
 
                     {ruleError ? (
-                      <div className="mt-4 rounded-[16px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm text-[var(--warning-text)]">
+                      <div className="mt-3 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm text-[var(--warning-text)]">
                         {ruleError}
                       </div>
                     ) : null}
@@ -840,7 +874,7 @@ export function SettingsShell({
                       rules.map((rule) => (
                         <div
                           key={rule.id}
-                          className="flex flex-col gap-3 rounded-[20px] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-4 min-[860px]:flex-row min-[860px]:items-center min-[860px]:justify-between"
+                          className="flex flex-col gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3 min-[860px]:flex-row min-[860px]:items-center min-[860px]:justify-between"
                         >
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
@@ -893,7 +927,7 @@ export function SettingsShell({
                         </div>
                       ))
                     ) : (
-                      <div className="rounded-[20px] border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-8 text-center">
+                      <div className="rounded-[10px] border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-7 text-center">
                         <p className="text-sm font-medium text-[var(--text-primary)]">还没有排除规则</p>
                         <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
                           先从最敏感的来源应用、关键词或内容类型开始，逐步收紧入库范围。
@@ -925,7 +959,7 @@ export function SettingsShell({
                           })
                         }
                         className={cn(
-                          "rounded-[20px] border px-4 py-4 text-left transition-colors",
+                          "rounded-[10px] border px-3 py-3 text-left transition-colors",
                           settings.themeMode === option.value
                             ? "border-[var(--border-strong)] bg-[var(--surface)]"
                             : "border-[var(--border)] bg-[var(--surface-2)]",

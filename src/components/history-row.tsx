@@ -79,15 +79,15 @@ export function HistoryRow({ item, selected, onSelect, rowId }: HistoryRowProps)
       onClick={() => onSelect(item.id)}
       data-clipboard-row-id={rowId}
       className={cn(
-        "group relative flex w-full items-start gap-3 rounded-[15px] border px-3 py-2.5 text-left transition-all",
+        "group relative flex w-full items-start gap-2.5 rounded-[10px] border px-2.5 py-2 text-left transition-all",
         selected
-          ? "border-[var(--border-strong)] bg-white shadow-[0_8px_18px_rgba(20,24,30,0.06)] before:absolute before:bottom-3 before:left-0 before:top-3 before:w-[3px] before:rounded-r-full before:bg-[var(--accent)]"
+          ? "border-[var(--border-strong)] bg-[var(--surface)] shadow-[var(--shadow-soft)] before:absolute before:bottom-2.5 before:left-0 before:top-2.5 before:w-[3px] before:rounded-r-full before:bg-[var(--accent)]"
           : "border-transparent bg-transparent hover:border-[var(--border)] hover:bg-[var(--surface-2)]",
       )}
     >
       <div
         className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border bg-[var(--surface-2)] text-[var(--accent)]",
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border bg-[var(--surface-2)] text-[var(--accent)]",
           selected ? "border-[var(--border-strong)]" : "border-[var(--border)]",
         )}
       >
@@ -105,18 +105,18 @@ export function HistoryRow({ item, selected, onSelect, rowId }: HistoryRowProps)
                 {labelMap[item.kind]}
               </span>
             </div>
-            <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-[var(--text-secondary)]">
+            <p className="mt-0.5 line-clamp-1 text-[12px] leading-5 text-[var(--text-secondary)]">
               {renderHighlightedText(item.preview, item.highlightRanges, "preview_text")}
             </p>
           </div>
           {item.isPinned ? (
-            <div className="rounded-full border border-[var(--border)] bg-[var(--surface)] p-1.5 text-[var(--text-secondary)]">
+            <div className="rounded-[8px] border border-[var(--border)] bg-[var(--surface)] p-1 text-[var(--text-secondary)]">
               <Pin className="h-3 w-3" />
             </div>
           ) : null}
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-[var(--text-tertiary)]">
+        <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-[var(--text-tertiary)]">
           <span>{item.sourceApp}</span>
           <span>{item.timeLabel}</span>
         </div>
