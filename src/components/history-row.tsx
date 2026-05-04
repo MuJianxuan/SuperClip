@@ -118,7 +118,6 @@ export function HistoryRow({ item, selected, onSelect, rowId }: HistoryRowProps)
 
         <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-[var(--text-tertiary)]">
           <span>{item.sourceApp}</span>
-          <span>{item.meta}</span>
           <span>{item.timeLabel}</span>
         </div>
       </div>

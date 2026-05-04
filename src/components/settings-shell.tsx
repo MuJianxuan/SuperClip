@@ -1,13 +1,11 @@
 import * as React from "react";
 import {
-  ArrowUpRight,
   Download,
   Info,
   Keyboard,
   Palette,
   PencilLine,
   Plus,
-  Rocket,
   Settings2,
   Shield,
   Trash2,
@@ -31,10 +29,8 @@ import type {
 type SettingsSectionKey =
   | "general"
   | "shortcuts"
-  | "paste"
   | "privacy"
   | "appearance"
-  | "startup"
   | "about";
 
 interface SettingsShellProps {
@@ -64,11 +60,9 @@ const sections: Array<{
   icon: typeof Settings2;
 }> = [
   { key: "general", label: "通用", icon: Settings2 },
-  { key: "shortcuts", label: "快捷", icon: Keyboard },
-  { key: "paste", label: "粘贴", icon: ArrowUpRight },
+  { key: "shortcuts", label: "快捷键", icon: Keyboard },
   { key: "privacy", label: "隐私", icon: Shield },
   { key: "appearance", label: "外观", icon: Palette },
-  { key: "startup", label: "启动", icon: Rocket },
   { key: "about", label: "关于", icon: Info },
 ];
 
@@ -96,7 +90,7 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[18px] border border-[var(--border)] bg-[var(--surface)] p-3.5">
+    <section className="rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-3.5">
       <div>
         <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">{title}</h3>
         <p className="mt-1 max-w-[38rem] text-[12px] leading-5 text-[var(--text-secondary)]">
@@ -118,7 +112,7 @@ function Row({
   action: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2.5 rounded-[14px] border border-[var(--border)] bg-[var(--surface-2)] px-3.5 py-3 min-[820px]:flex-row min-[820px]:items-center min-[820px]:justify-between">
+    <div className="flex flex-col gap-2.5 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3.5 py-3 min-[820px]:flex-row min-[820px]:items-center min-[820px]:justify-between">
       <div className="min-w-0">
         <p className="text-[13px] font-medium text-[var(--text-primary)]">{label}</p>
         <p className="mt-1 text-[12px] leading-5 text-[var(--text-secondary)]">{hint}</p>
@@ -425,22 +419,24 @@ export function SettingsShell({
   }, [activeSection, isShortcutRecording, onShortcutCancel]);
 
   return (
-    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[rgba(15,19,26,0.24)] p-3 backdrop-blur-md">
-      <div className="flex h-[calc(100vh-1.5rem)] w-full max-w-[980px] overflow-hidden rounded-[22px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_28px_80px_rgba(13,18,24,0.18)]">
-        <aside className="hidden w-[86px] shrink-0 border-r border-[var(--border)] bg-[#14181a] p-3 text-white min-[840px]:flex min-[840px]:flex-col">
-          <div className="mx-auto h-9 w-9 rounded-[13px] bg-[#edf261]" />
+    <div className="fixed inset-0 z-40 bg-[var(--bg)]">
+      <div className="flex h-full w-full overflow-hidden border border-[var(--border)] bg-[var(--bg)]">
+        <aside className="hidden w-[86px] shrink-0 border-r border-[var(--border)] bg-[var(--surface-raised)] p-2.5 min-[900px]:flex min-[900px]:flex-col">
+          <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-[12px] border border-[var(--border-strong)] bg-[var(--accent-soft)] text-[var(--accent)]">
+            <Settings2 className="h-4 w-4" />
+          </div>
 
-          <nav className="mt-5 space-y-1.5">
+          <nav className="mt-4 space-y-1">
             {sections.map((section) => (
               <button
                 key={section.key}
                 type="button"
                 onClick={() => setActiveSection(section.key)}
                 className={cn(
-                  "flex w-full flex-col items-center gap-1 rounded-[13px] border px-1.5 py-2 text-center transition-colors",
+                  "flex w-full flex-col items-center gap-1 rounded-[10px] border px-1.5 py-2 text-center transition-colors",
                   activeSection === section.key
-                    ? "border-white bg-white text-[#14181a]"
-                    : "border-transparent bg-transparent text-white/70 hover:bg-white/10 hover:text-white",
+                    ? "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-primary)]"
+                    : "border-transparent bg-transparent text-[var(--text-secondary)] hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]",
                 )}
               >
                 <section.icon className="h-4 w-4" />
@@ -449,25 +445,19 @@ export function SettingsShell({
             ))}
           </nav>
 
-          <div className="mt-auto rounded-[13px] border border-white/10 bg-white/10 px-2 py-3 text-center">
-            <p className="text-[10px] font-medium text-white/60">SuperClip</p>
-            <p className="mt-1 text-[11px] font-semibold">0.1.0</p>
+          <div className="mt-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-2 py-3 text-center">
+            <p className="text-[10px] font-medium text-[var(--text-tertiary)]">SuperClip</p>
+            <p className="mt-1 text-[11px] font-semibold text-[var(--text-primary)]">0.1.0</p>
           </div>
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="border-b border-[var(--border)] bg-[var(--surface-raised)] px-4 py-3">
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-[11px] font-semibold uppercase text-[var(--text-tertiary)]">
-                  Settings
-                </p>
-                <h2 className="mt-1 text-[20px] font-semibold text-[var(--text-primary)]">
+                <h2 className="text-[18px] font-semibold text-[var(--text-primary)]">
                   {activeSectionMeta.label}
                 </h2>
-                <p className="mt-1 max-w-[34rem] text-[12px] leading-5 text-[var(--text-secondary)]">
-                  常用控制靠前，说明文字只保留必要上下文。
-                </p>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
                 <Button variant="secondary" size="sm" onClick={onDiagnosticsClick}>
@@ -485,14 +475,14 @@ export function SettingsShell({
               </div>
             </div>
 
-            <div className="mt-3 flex gap-2 overflow-x-auto min-[840px]:hidden">
+            <div className="mt-3 flex gap-2 overflow-x-auto min-[900px]:hidden">
               {sections.map((section) => (
                 <button
                   key={section.key}
                   type="button"
                   onClick={() => setActiveSection(section.key)}
                   className={cn(
-                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                    "shrink-0 rounded-[10px] border px-3 py-1.5 text-xs font-medium transition-colors",
                     activeSection === section.key
                       ? "border-[var(--border-strong)] bg-[var(--surface-2)] text-[var(--text-primary)]"
                       : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]",
@@ -505,7 +495,7 @@ export function SettingsShell({
           </header>
 
           <ScrollArea className="min-h-0 flex-1">
-            <div className="space-y-3.5 px-4 py-4">
+            <div className="space-y-3 px-4 py-3.5">
               {readOnlyMode ? (
                 <div className="rounded-[16px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 text-sm text-[var(--warning-text)]">
                   只读模式：修改类操作已禁用。
@@ -515,7 +505,7 @@ export function SettingsShell({
               {activeSection === "general" ? (
                 <SectionCard
                   title="通用"
-                  description="历史数量、默认动作和置顶提醒。"
+                  description="历史数量、默认动作、启动行为和置顶提醒。"
                 >
                   <Row
                     label="历史保留数量"
@@ -578,6 +568,56 @@ export function SettingsShell({
                       </div>
                     }
                   />
+
+                  <Row
+                    label="登录时启动"
+                    hint="失败时在本行提示并可重试。"
+                    action={
+                      <div className="flex items-center gap-3 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+                        <Switch
+                          checked={settings.launchAtLogin}
+                          disabled={readOnlyMode}
+                          onCheckedChange={(checked) => void handleStartupUpdate({ launchAtLogin: checked })}
+                        />
+                        <span className="text-xs font-medium text-[var(--text-secondary)]">
+                          {settings.launchAtLogin ? "已开启" : "已关闭"}
+                        </span>
+                      </div>
+                    }
+                  />
+
+                  <Row
+                    label="启动时自动显示"
+                    hint="开启后仍以空搜索打开。"
+                    action={
+                      <div className="flex items-center gap-3 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
+                        <Switch
+                          checked={settings.showOnStartup}
+                          disabled={readOnlyMode}
+                          onCheckedChange={(checked) => void handleStartupUpdate({ showOnStartup: checked })}
+                        />
+                        <span className="text-xs font-medium text-[var(--text-secondary)]">
+                          {settings.showOnStartup ? "已开启" : "已关闭"}
+                        </span>
+                      </div>
+                    }
+                  />
+
+                  {startupError ? (
+                    <div className="flex flex-col gap-3 rounded-[20px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-4 text-sm text-[var(--warning-text)] min-[820px]:flex-row min-[820px]:items-center min-[820px]:justify-between">
+                      <p>{startupError}</p>
+                      {startupRetryPatch ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={readOnlyMode}
+                          onClick={() => void handleStartupUpdate(startupRetryPatch)}
+                        >
+                          重试
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {pinnedCount > 50 ? (
                     <div className="rounded-[18px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 text-sm leading-6 text-[var(--warning-text)]">
@@ -684,57 +724,6 @@ export function SettingsShell({
                 </SectionCard>
               ) : null}
 
-              {activeSection === "paste" ? (
-                <SectionCard
-                  title="粘贴行为"
-                  description="选择默认动作，失败时自动回退。"
-                >
-                  <Row
-                    label="默认策略"
-                    hint="文件始终仅复制；富文本和图片按目标应用能力回退。"
-                    action={
-                      <div className="grid grid-cols-1 gap-2 min-[760px]:grid-cols-2">
-                        {[
-                          {
-                            value: "direct_paste",
-                            title: "直接粘贴优先",
-                            hint: "失败时回退复制",
-                          },
-                          {
-                            value: "copy_only",
-                            title: "仅复制优先",
-                            hint: "更稳，需要手动粘贴",
-                          },
-                        ].map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            disabled={readOnlyMode}
-                            onClick={() =>
-                              void onUpdate({
-                                defaultAction: option.value as SettingsResponse["defaultAction"],
-                              })
-                            }
-                            className={cn(
-                              "rounded-[18px] border px-4 py-3 text-left transition-colors",
-                              settings.defaultAction === option.value
-                                ? "border-[var(--border-strong)] bg-[var(--surface)]"
-                                : "border-[var(--border)] bg-[var(--surface-2)]",
-                              readOnlyMode && "cursor-not-allowed opacity-60",
-                            )}
-                          >
-                            <p className="text-sm font-medium text-[var(--text-primary)]">{option.title}</p>
-                            <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{option.hint}</p>
-                          </button>
-                        ))}
-                      </div>
-                    }
-                  />
-                  <div className="rounded-[16px] border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 text-sm text-[var(--text-secondary)]">
-                    内部延迟不在设置页展示。
-                  </div>
-                </SectionCard>
-              ) : null}
 
               {activeSection === "privacy" ? (
                 <SectionCard
@@ -948,63 +937,6 @@ export function SettingsShell({
                       </button>
                     ))}
                   </div>
-                </SectionCard>
-              ) : null}
-
-              {activeSection === "startup" ? (
-                <SectionCard
-                  title="启动与更新"
-                  description="控制登录启动和冷启动展示。"
-                >
-                  <Row
-                    label="登录时启动"
-                    hint="失败时在本行提示并可重试。"
-                    action={
-                      <div className="flex items-center gap-3 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
-                        <Switch
-                          checked={settings.launchAtLogin}
-                          disabled={readOnlyMode}
-                          onCheckedChange={(checked) => void handleStartupUpdate({ launchAtLogin: checked })}
-                        />
-                        <span className="text-xs font-medium text-[var(--text-secondary)]">
-                          {settings.launchAtLogin ? "已开启" : "已关闭"}
-                        </span>
-                      </div>
-                    }
-                  />
-
-                  <Row
-                    label="启动时自动显示"
-                    hint="开启后仍以空搜索打开。"
-                    action={
-                      <div className="flex items-center gap-3 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
-                        <Switch
-                          checked={settings.showOnStartup}
-                          disabled={readOnlyMode}
-                          onCheckedChange={(checked) => void handleStartupUpdate({ showOnStartup: checked })}
-                        />
-                        <span className="text-xs font-medium text-[var(--text-secondary)]">
-                          {settings.showOnStartup ? "已开启" : "已关闭"}
-                        </span>
-                      </div>
-                    }
-                  />
-
-                  {startupError ? (
-                    <div className="flex flex-col gap-3 rounded-[20px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-4 text-sm text-[var(--warning-text)] min-[820px]:flex-row min-[820px]:items-center min-[820px]:justify-between">
-                      <p>{startupError}</p>
-                      {startupRetryPatch ? (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={readOnlyMode}
-                          onClick={() => void handleStartupUpdate(startupRetryPatch)}
-                        >
-                          重试
-                        </Button>
-                      ) : null}
-                    </div>
-                  ) : null}
                 </SectionCard>
               ) : null}
 

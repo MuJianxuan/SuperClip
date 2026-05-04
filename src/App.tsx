@@ -14,18 +14,14 @@ import {
   Search,
   Settings2,
   ShieldCheck,
-  Sparkle,
   Trash2,
   TriangleAlert,
 } from "lucide-react";
 import {
-  getClipboardIcon,
-  getClipboardKindLabel,
   HistoryRow,
 } from "./components/history-row";
 import { SettingsShell } from "./components/settings-shell";
 import type { ClipboardItem } from "./components/history-row";
-import { StatusPill } from "./components/status-pill";
 import { Button } from "./components/ui/button";
 import { ScrollArea } from "./components/ui/scroll-area";
 import { Switch } from "./components/ui/switch";
@@ -299,6 +295,7 @@ function App() {
   const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
   const [scrollAnchor, setScrollAnchor] = useState<string | null>(null);
   const [isSessionHydrated, setIsSessionHydrated] = useState(false);
+  const [isWideLayout, setIsWideLayout] = useState(() => typeof window !== "undefined" && window.innerWidth >= 900);
   const listViewportRef = useRef<HTMLDivElement | null>(null);
   const pendingSessionRestoreRef = useRef<Pick<
     SessionUiStateResponse,
@@ -424,6 +421,16 @@ function App() {
 
     root.dataset.themeMode = settings.themeMode;
   }, [settings.themeMode]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsWideLayout(window.innerWidth >= 900);
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -631,23 +638,13 @@ function App() {
   const pinnedCount = clipboardItems.filter((item) => item.isPinned).length;
   const isRecoveryMode = runtimeState.isRecoveryMode;
   const isMigrationBlocking = runtimeState.migrationPhase === "migration_in_progress";
-  const isLargeWindow = runtimeState.lastWindowMode === "large_window";
+  const isLargeWindow = isWideLayout;
   const isFallbackWindow = runtimeState.lastWindowMode === "fallback_window";
-  const SelectedKindIcon = selectedItem ? getClipboardIcon(selectedItem.kind) : FileImage;
-  const selectedKindLabel = selectedItem ? getClipboardKindLabel(selectedItem.kind) : "Item";
   const primaryActionLabel = isRecoveryMode
     ? "仅复制"
     : selectedItem
       ? getKindActionLabel(selectedItem.kind, settings.defaultAction)
       : "直接粘贴";
-  const permissionLabel = permission.accessibilityTrusted
-    ? "Accessibility 已授权"
-    : "Accessibility 未授权";
-  const shellMaxWidthClass = isLargeWindow
-    ? "max-w-[980px]"
-    : isFallbackWindow
-      ? "max-w-[960px]"
-      : "max-w-[760px]";
   const workspaceGridClass = isLargeWindow
     ? "grid min-h-0 flex-1 grid-cols-[minmax(0,1.15fr)_330px] overflow-hidden"
     : "grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_278px] overflow-hidden";
@@ -665,26 +662,24 @@ function App() {
     {
       key: "settings",
       title: "设置",
-      description: `${settings.themeMode} · ${settings.historyLimit} 条`,
+      description: settings.themeMode,
       icon: Settings2,
     },
     {
       key: "diagnostics",
-      title: "导出诊断",
-      description: "日志与状态",
+      title: "诊断",
+      description: "导出",
       icon: MonitorCog,
     },
     {
       key: "permission",
-      title: "权限状态",
-      description: permission.accessibilityTrusted
-        ? "可直接粘贴"
-        : "仅复制",
+      title: "权限",
+      description: permission.accessibilityTrusted ? "已授权" : "仅复制",
       icon: permission.accessibilityTrusted ? ShieldCheck : TriangleAlert,
     },
     {
       key: "clear",
-      title: "清空历史",
+      title: "清空",
       description: isRecoveryMode ? "已禁用" : "需确认",
       icon: Trash2,
       tone: "danger" as const,
@@ -1380,7 +1375,7 @@ function App() {
 
   return (
     <TooltipProvider delayDuration={180}>
-      <main className="h-screen overflow-hidden p-3 text-[var(--text-primary)]">
+      <main className="h-screen overflow-hidden text-[var(--text-primary)]">
         {isShellDismissed ? (
           <section className="mx-auto flex h-full w-full max-w-[420px] items-center justify-center">
             <div className="w-full rounded-[24px] border border-[var(--border)] bg-[var(--surface)] px-6 py-7 text-center shadow-[0_18px_48px_rgba(25,31,38,0.12)]">
@@ -1401,9 +1396,9 @@ function App() {
           </section>
         ) : (
         <section
-          className={`relative mx-auto flex h-full w-full ${shellMaxWidthClass} flex-col overflow-hidden rounded-[22px] border border-[var(--border)] bg-[var(--surface)] shadow-[0_20px_54px_rgba(25,31,38,0.12)] backdrop-blur-xl`}
+          className="relative flex h-full w-full flex-col overflow-hidden border border-[var(--border)] bg-[var(--surface)] backdrop-blur-xl"
         >
-          <header className="flex flex-col gap-3 border-b border-[var(--border)] bg-[var(--surface-raised)] px-4 py-3">
+          <header className="flex flex-col gap-2.5 border-b border-[var(--border)] bg-[var(--surface-raised)] px-4 py-3">
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border border-[var(--border-strong)] bg-[var(--accent-soft)] text-[var(--accent)] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
@@ -1413,22 +1408,15 @@ function App() {
                   <h1 className="truncate text-[18px] font-semibold leading-none text-[var(--text-primary)]">
                     SuperClip
                   </h1>
-                  <p className="mt-1 text-[11px] text-[var(--text-secondary)]">本地 · 快捷 · 固定窗口</p>
+                  <p className="mt-1 text-[11px] text-[var(--text-secondary)]">本地剪贴板</p>
                 </div>
               </div>
 
-              <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
-                <StatusPill
-                  tone={isMonitoring ? "success" : "warning"}
-                  label={isMonitoring ? "正在监听" : "已暂停监听"}
-                  icon={Sparkle}
-                />
-                <StatusPill tone="neutral" label={permissionLabel} icon={LockKeyhole} />
-                <StatusPill
-                  tone="neutral"
-                  label={settings.defaultAction === "copy_only" ? "默认复制" : "默认粘贴"}
-                  icon={ArrowUpRight}
-                />
+              <div className="flex min-w-0 items-center justify-end gap-1.5">
+                <Button variant="secondary" size="sm" onClick={() => setIsSettingsOpen(true)}>
+                  <Settings2 className="h-4 w-4" />
+                  设置
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => void handleShellDismiss()}>
                   关闭
                 </Button>
@@ -1446,7 +1434,7 @@ function App() {
                     setQuery(nextValue);
                   });
                 }}
-                placeholder="搜索剪贴板、来源应用、文件名"
+                placeholder="搜索剪贴板"
                 className="w-full bg-transparent text-[14px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
               />
               <span className="hidden rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] sm:inline-flex">
@@ -1458,16 +1446,11 @@ function App() {
           {!permission.accessibilityTrusted || isRecoveryMode || isFallbackWindow ? (
             <div className="space-y-2 border-b border-[var(--border)] bg-[var(--surface-raised)] px-4 py-3">
               {!permission.accessibilityTrusted ? (
-                <div className="flex flex-col gap-3 rounded-[18px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-4 py-3 min-[920px]:flex-row min-[920px]:items-center min-[920px]:justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-[var(--warning-text)]">
-                      需要 Accessibility 才能直接粘贴
-                    </p>
-                    <p className="mt-1 text-sm text-[var(--warning-text)]">当前仍可搜索和复制。</p>
-                  </div>
+                <div className="flex items-center justify-between gap-3 rounded-[12px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2">
+                  <p className="truncate text-xs font-medium text-[var(--warning-text)]">仅复制模式</p>
                   <Button variant="secondary" size="sm" onClick={() => void handlePermissionGuide()}>
                     <LockKeyhole className="h-4 w-4" />
-                    打开系统设置
+                    授权
                   </Button>
                 </div>
               ) : null}
@@ -1507,7 +1490,7 @@ function App() {
                   <p className="mt-1 text-xs text-[var(--text-secondary)]">
                     {isBootstrapping
                       ? "加载中"
-                      : `${clipboardItems.length} 条 · 置顶优先`}
+                      : `${clipboardItems.length} 条`}
                   </p>
                 </div>
                 <Tooltip>
@@ -1592,15 +1575,7 @@ function App() {
                     <p className="mt-1.5 text-[11px] text-[var(--text-tertiary)]">
                       {selectedItem ? `${selectedItem.sourceApp} · ${selectedItem.timeLabel}` : "无选中项"}
                     </p>
-                    {isLargeWindow ? (
-                      <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                        {selectedItem?.meta ?? "左侧选择后预览"}
-                      </p>
-                    ) : null}
                   </div>
-                  {isLargeWindow ? (
-                    <StatusPill tone="neutral" label={selectedKindLabel} icon={SelectedKindIcon} />
-                  ) : null}
                 </div>
 
                 <div className={previewShellClass}>
@@ -1704,7 +1679,6 @@ function App() {
                     <div className="flex items-center justify-between gap-3 px-3 py-2.5">
                       <div>
                         <h2 className="text-sm font-semibold text-[var(--text-primary)]">工具</h2>
-                        <p className="mt-1 text-xs text-[var(--text-secondary)]">设置、诊断、权限</p>
                       </div>
                       <div className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5">
                         <Switch
@@ -1760,6 +1734,7 @@ function App() {
                         type="button"
                         onClick={() => handleUtilityAction(item.key)}
                         disabled={item.disabled}
+                        aria-label={item.title}
                         className={`grid min-w-0 place-items-center rounded-[12px] border text-[10px] font-medium transition-colors ${
                           item.disabled
                             ? "cursor-not-allowed border-transparent opacity-50"
@@ -1768,7 +1743,6 @@ function App() {
                         title={item.title}
                       >
                         <item.icon className="h-4 w-4" />
-                        <span className="max-w-full truncate">{item.title}</span>
                       </button>
                     ))}
                   </div>
@@ -1813,20 +1787,20 @@ function App() {
                 ↑↓ 切换
               </span>
               <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1">
-                Enter 默认动作
+                Enter
               </span>
               <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1">
-                Cmd+Enter 相反动作
+                Cmd+Enter
               </span>
               <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1">
-                Space 摘要展开
+                Space
               </span>
               <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1">
                 Esc 关闭
               </span>
             </div>
             <div className="shrink-0 text-[11px] leading-5 text-[var(--text-secondary)]">
-              本地运行，不上传内容。
+              本地运行
             </div>
           </footer>
         </section>

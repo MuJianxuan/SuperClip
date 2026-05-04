@@ -122,3 +122,27 @@ input::placeholder {
 ::selection {
   background: rgba(113, 127, 140, 0.22);
 }
+
+/* 响应式断点 */
+:root {
+  --breakpoint-sm: 900px;
+  --breakpoint-lg: 1200px;
+}
+
+@media (max-width: 899px) {
+  :root {
+    --layout-mode: compact;
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1199px) {
+  :root {
+    --layout-mode: standard;
+  }
+}
+
+@media (min-width: 1200px) {
+  :root {
+    --layout-mode: spacious;
+  }
+}
