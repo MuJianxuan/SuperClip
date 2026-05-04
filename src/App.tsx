@@ -37,6 +37,7 @@ import {
   clipboardClear,
   clipboardCopy,
   clipboardDelete,
+  clipboardGet,
   diagnosticsExport,
   clipboardPaste,
   clipboardPin,
@@ -64,6 +65,8 @@ import {
   settingsGet,
   settingsUpdate,
   type ClipboardActionResult,
+  type ClipboardItemDetail,
+  type ClipboardPayloadSnapshot,
   type DiagnosticsExportResponse,
   type ExclusionRule,
   type PermissionStatus,
@@ -220,6 +223,92 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function getPayloadPreviewText(payload: ClipboardPayloadSnapshot | null | undefined, fallback: string | undefined) {
+  return payload?.textPlain?.trim() || fallback || "暂无预览。";
+}
+
+function getVisibleFilePaths(payload: ClipboardPayloadSnapshot | null | undefined) {
+  return payload?.fileUrls?.filter((path) => path.trim().length > 0) ?? [];
+}
+
+function getFileNameFromPath(path: string) {
+  const normalized = path.replace(/\\/g, "/");
+  return normalized.split("/").filter(Boolean).pop() ?? normalized;
+}
+
+function getPreviewImagePayload(payload: ClipboardPayloadSnapshot | null | undefined) {
+  if (!payload?.extraJson || typeof payload.extraJson !== "object") {
+    return null;
+  }
+
+  const previewImage = (payload.extraJson as { previewImage?: unknown }).previewImage;
+
+  if (!previewImage || typeof previewImage !== "object") {
+    return null;
+  }
+
+  const candidate = previewImage as {
+    bytes?: unknown;
+    width?: unknown;
+    height?: unknown;
+    format?: unknown;
+  };
+
+  if (
+    candidate.format !== "rgba8" ||
+    !Array.isArray(candidate.bytes) ||
+    typeof candidate.width !== "number" ||
+    typeof candidate.height !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    imageBytes: candidate.bytes.filter((value): value is number => typeof value === "number"),
+    imageWidth: candidate.width,
+    imageHeight: candidate.height,
+  };
+}
+
+function buildImageDataUrl(payload: ClipboardPayloadSnapshot | null | undefined) {
+  const imagePayload =
+    payload?.imageBytes && payload.imageWidth && payload.imageHeight
+      ? {
+          imageBytes: payload.imageBytes,
+          imageWidth: payload.imageWidth,
+          imageHeight: payload.imageHeight,
+        }
+      : getPreviewImagePayload(payload);
+
+  if (!imagePayload) {
+    return null;
+  }
+
+  const expectedByteLength = imagePayload.imageWidth * imagePayload.imageHeight * 4;
+
+  if (imagePayload.imageBytes.length < expectedByteLength) {
+    return null;
+  }
+
+  const canvas = document.createElement("canvas");
+  canvas.width = imagePayload.imageWidth;
+  canvas.height = imagePayload.imageHeight;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    return null;
+  }
+
+  const imageData = new ImageData(
+    new Uint8ClampedArray(imagePayload.imageBytes.slice(0, expectedByteLength)),
+    imagePayload.imageWidth,
+    imagePayload.imageHeight,
+  );
+  context.putImageData(imageData, 0, 0);
+
+  return canvas.toDataURL("image/png");
+}
+
 function findViewportScrollAnchor(viewport: HTMLDivElement) {
   const rows = Array.from(
     viewport.querySelectorAll<HTMLElement>("[data-clipboard-row-id]"),
@@ -258,6 +347,9 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isShortcutHintsOpen, setIsShortcutHintsOpen] = useState(false);
   const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
+  const [selectedDetail, setSelectedDetail] = useState<ClipboardItemDetail | null>(null);
+  const [detailLoadState, setDetailLoadState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [scrollAnchor, setScrollAnchor] = useState<string | null>(null);
   const [isSessionHydrated, setIsSessionHydrated] = useState(false);
   const [isWideLayout, setIsWideLayout] = useState(() => typeof window !== "undefined" && window.innerWidth >= 840);
@@ -440,6 +532,11 @@ function App() {
               setIsSettingsOpen(true);
             }
           }),
+          listen("history-updated", () => {
+            if (!disposed) {
+              setRefreshNonce((value) => value + 1);
+            }
+          }),
           listen("window-size-mode-changed", syncRuntimeState),
           listen("window-fallback-used", syncRuntimeState),
         ]),
@@ -505,6 +602,43 @@ function App() {
   useEffect(() => {
     setIsPreviewExpanded(false);
   }, [selectedId]);
+
+  const selectedItem =
+    clipboardItems.find((item) => item.id === selectedId) ?? clipboardItems[0] ?? null;
+
+  useEffect(() => {
+    if (!selectedItem) {
+      setSelectedDetail(null);
+      setDetailLoadState("idle");
+      return;
+    }
+
+    let active = true;
+    setSelectedDetail(null);
+    setDetailLoadState("loading");
+
+    void clipboardGet(selectedItem.id)
+      .then((detail) => {
+        if (!active) {
+          return;
+        }
+
+        setSelectedDetail(detail);
+        setDetailLoadState("ready");
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+
+        setSelectedDetail(null);
+        setDetailLoadState("error");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedItem]);
 
   useEffect(() => {
     if (!isSessionHydrated) {
@@ -609,8 +743,25 @@ function App() {
     };
   }, [isSessionHydrated, query, runtimeState.lastDisplayId, runtimeState.lastWindowMode, scrollAnchor, selectedId]);
 
-  const selectedItem =
-    clipboardItems.find((item) => item.id === selectedId) ?? clipboardItems[0] ?? null;
+  const selectedDetailItem = selectedDetail?.item ?? selectedItem;
+  const selectedPayload = selectedDetail?.payload;
+  const previewText = getPayloadPreviewText(selectedPayload, selectedDetailItem?.preview);
+  const filePaths = getVisibleFilePaths(selectedPayload);
+  const visibleFilePaths = filePaths.slice(0, 5);
+  const hiddenFileCount = Math.max(0, filePaths.length - visibleFilePaths.length);
+  const imageSizeLabel =
+    selectedPayload?.imageWidth && selectedPayload.imageHeight
+      ? `${selectedPayload.imageWidth}×${selectedPayload.imageHeight}`
+      : selectedDetailItem?.meta ?? "尺寸未知";
+
+  useEffect(() => {
+    if (selectedDetailItem?.kind !== "image") {
+      setImagePreviewUrl(null);
+      return;
+    }
+
+    setImagePreviewUrl(buildImageDataUrl(selectedPayload));
+  }, [selectedDetailItem?.kind, selectedPayload]);
 
   const pinnedCount = clipboardItems.filter((item) => item.isPinned).length;
   const isRecoveryMode = runtimeState.isRecoveryMode;
@@ -1302,6 +1453,10 @@ function App() {
       }
 
       if (event.key === "Enter") {
+        if (isTextInputElement(event.target)) {
+          return;
+        }
+
         event.preventDefault();
         void (event.metaKey ? handleAlternateAction() : handlePrimaryAction());
         return;
@@ -1574,9 +1729,9 @@ function App() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <h2 className="truncate text-[15px] font-semibold text-[var(--text-primary)]">
-                        {selectedItem?.title ?? "选择一条记录"}
+                        {selectedDetailItem?.title ?? "选择一条记录"}
                       </h2>
-                      {selectedItem?.isPinned ? (
+                      {selectedDetailItem?.isPinned ? (
                         <span className="inline-flex items-center gap-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)]">
                           <Pin className="h-3 w-3" />
                           置顶
@@ -1584,31 +1739,79 @@ function App() {
                       ) : null}
                     </div>
                     <p className="mt-1.5 text-[11px] text-[var(--text-tertiary)]">
-                      {selectedItem ? `${selectedItem.sourceApp} · ${selectedItem.timeLabel}` : "无选中项"}
+                      {selectedDetailItem ? `${selectedDetailItem.sourceApp} · ${selectedDetailItem.timeLabel}` : "无选中项"}
                     </p>
                   </div>
                 </div>
 
-                <div className={previewShellClass}>
-                  {selectedItem?.kind === "image" ? (
-                    <div className="flex min-h-[180px] flex-1 items-center justify-center rounded-[10px] border border-dashed border-[var(--border-strong)] bg-[var(--surface)]">
-                      <div className="text-center">
-                        <FileImage className="mx-auto h-8 w-8 text-[var(--text-secondary)]" />
-                        <p className="mt-3 text-sm font-medium text-[var(--text-primary)]">图片预览</p>
-                        <p className="mt-1 text-xs text-[var(--text-secondary)]">支持时直接粘贴</p>
-                      </div>
+                <div className={previewShellClass} data-testid="detail-preview">
+                  <div className="flex items-center justify-between gap-3 text-[11px] text-[var(--text-tertiary)]">
+                    <span>
+                      {detailLoadState === "loading"
+                        ? "正在读取详情"
+                        : detailLoadState === "error"
+                          ? "详情读取失败，显示摘要"
+                          : selectedDetailItem
+                            ? `${selectedDetailItem.kind.toUpperCase()} 详情`
+                            : "未选择记录"}
+                    </span>
+                    {selectedDetailItem?.kind === "image" ? <span>{imageSizeLabel}</span> : null}
+                    {selectedDetailItem?.kind === "file" ? <span>{filePaths.length} 个文件</span> : null}
+                  </div>
+
+                  {selectedDetailItem?.kind === "image" ? (
+                    <div className="mt-2 flex min-h-[180px] flex-1 items-center justify-center overflow-hidden rounded-[10px] border border-dashed border-[var(--border-strong)] bg-[var(--surface)]">
+                      {imagePreviewUrl ? (
+                        <img
+                          src={imagePreviewUrl}
+                          alt={selectedDetailItem.title}
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      ) : (
+                        <div className="text-center">
+                          <FileImage className="mx-auto h-8 w-8 text-[var(--text-secondary)]" />
+                          <p className="mt-3 text-sm font-medium text-[var(--text-primary)]">图片预览</p>
+                          <p className="mt-1 text-xs text-[var(--text-secondary)]">
+                            {detailLoadState === "loading" ? "正在读取图片数据" : `${imageSizeLabel} · 无法生成缩略图`}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : selectedDetailItem?.kind === "file" ? (
+                    <div className="mt-2 min-h-0 flex-1 overflow-auto rounded-[10px] border border-transparent bg-[var(--surface)] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
+                      {visibleFilePaths.length ? (
+                        <div className="space-y-1.5">
+                          {visibleFilePaths.map((path) => (
+                            <div key={path} className="rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 py-2">
+                              <p className="truncate text-[13px] font-medium text-[var(--text-primary)]">
+                                {getFileNameFromPath(path)}
+                              </p>
+                              <p className="mt-1 break-all font-mono text-[11px] leading-4 text-[var(--text-tertiary)]">
+                                {path}
+                              </p>
+                            </div>
+                          ))}
+                          {hiddenFileCount ? (
+                            <p className="px-1 text-xs text-[var(--text-secondary)]">
+                              另有 {hiddenFileCount} 个文件已折叠。
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <p className="text-[13px] leading-5 text-[var(--text-primary)]">{previewText}</p>
+                      )}
                     </div>
                   ) : (
-                    <div className="min-h-0 flex-1 overflow-auto rounded-[10px] border border-transparent bg-[var(--surface)] px-2.5 py-2 text-[13px] text-[var(--text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
+                    <div className="mt-2 min-h-0 flex-1 overflow-auto rounded-[10px] border border-transparent bg-[var(--surface)] px-2.5 py-2 text-[13px] text-[var(--text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]">
                       <div className="flex items-start justify-between gap-3">
                         <p
                           className={`min-w-0 flex-1 whitespace-pre-wrap leading-5 ${
                             isPreviewExpanded || isLargeWindow ? "" : "line-clamp-2"
                           }`}
                         >
-                          {selectedItem?.preview ?? "暂无预览。"}
+                          {previewText}
                         </p>
-                        {selectedItem && isLargeWindow ? (
+                        {selectedDetailItem && isLargeWindow ? (
                           <Button
                             size="sm"
                             variant="ghost"
@@ -1627,12 +1830,12 @@ function App() {
                     <div className="mt-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1.5 text-[11px] text-[var(--text-secondary)]">
                       {!selectedItem
                         ? "选择记录后显示动作边界。"
-                        : selectedItem.kind === "file"
+                        : selectedDetailItem?.kind === "file"
                         ? "文件固定仅复制。"
-                        : selectedItem.kind === "image"
+                        : selectedDetailItem?.kind === "image"
                           ? "图片粘贴失败会回退复制。"
-                          : selectedItem.kind === "html" || selectedItem.kind === "rtf"
-                            ? "富文本可退化为纯文本。"
+                          : selectedDetailItem?.kind === "html" || selectedDetailItem?.kind === "rtf"
+                            ? "富文本仅显示可信纯文本摘要。"
                             : "文本优先直接粘贴。"}
                     </div>
                   ) : null}

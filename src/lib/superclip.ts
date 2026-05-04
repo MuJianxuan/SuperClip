@@ -271,7 +271,7 @@ export interface ShortcutValidationResponse extends ShortcutStateResponse {
   conflictTarget: string | null;
 }
 
-let fallbackItems: ClipboardItem[] = [
+const initialFallbackItems: ClipboardItem[] = [
   {
     id: "clip-1",
     kind: "text",
@@ -329,12 +329,84 @@ let fallbackItems: ClipboardItem[] = [
   },
 ];
 
+let fallbackItems: ClipboardItem[] = initialFallbackItems.map((item) => ({ ...item }));
+
+const fallbackPayloads: Record<string, ClipboardPayloadSnapshot> = {
+  "clip-1": {
+    textPlain:
+      "npm run tauri dev -- --no-watch\nnpm run build\ncargo test --manifest-path src-tauri/Cargo.toml\n\n这条文本用于验证右侧详情能够显示完整多行内容，而不是只显示列表摘要。",
+    textHtml: null,
+    textRtf: null,
+    imageBytes: null,
+    imageWidth: null,
+    imageHeight: null,
+    fileUrls: null,
+    extraJson: null,
+  },
+  "clip-2": {
+    textPlain:
+      "本周只交付本地壳体、搜索路径与诊断导出，不开启云同步或 AI 功能。\n\nHTML 原文不会直接渲染，右侧详情只展示可信纯文本。",
+    textHtml:
+      "<p>本周只交付<strong>本地壳体</strong>、搜索路径与诊断导出，不开启云同步或 AI 功能。</p>",
+    textRtf: null,
+    imageBytes: null,
+    imageWidth: null,
+    imageHeight: null,
+    fileUrls: null,
+    extraJson: null,
+  },
+  "clip-3": {
+    textPlain: null,
+    textHtml: null,
+    textRtf: null,
+    imageBytes: [
+      23, 26, 31, 255, 229, 231, 235, 255, 229, 231, 235, 255, 23, 26, 31, 255,
+      229, 231, 235, 255, 125, 128, 136, 255, 125, 128, 136, 255, 229, 231, 235, 255,
+      229, 231, 235, 255, 125, 128, 136, 255, 125, 128, 136, 255, 229, 231, 235, 255,
+      23, 26, 31, 255, 229, 231, 235, 255, 229, 231, 235, 255, 23, 26, 31, 255,
+    ],
+    imageWidth: 4,
+    imageHeight: 4,
+    fileUrls: null,
+    extraJson: null,
+  },
+  "clip-4": {
+    textPlain:
+      "/Users/rao/Documents/SuperClip/交付清单.pdf\n/Users/rao/Documents/SuperClip/演示脚本.md\n/Users/rao/Documents/SuperClip/回归检查项.xlsx\n/Users/rao/Documents/SuperClip/录屏证据.mov\n/Users/rao/Documents/SuperClip/风险关闭门.md\n/Users/rao/Documents/SuperClip/质量报告.json",
+    textHtml: null,
+    textRtf: null,
+    imageBytes: null,
+    imageWidth: null,
+    imageHeight: null,
+    fileUrls: [
+      "/Users/rao/Documents/SuperClip/交付清单.pdf",
+      "/Users/rao/Documents/SuperClip/演示脚本.md",
+      "/Users/rao/Documents/SuperClip/回归检查项.xlsx",
+      "/Users/rao/Documents/SuperClip/录屏证据.mov",
+      "/Users/rao/Documents/SuperClip/风险关闭门.md",
+      "/Users/rao/Documents/SuperClip/质量报告.json",
+    ],
+    extraJson: null,
+  },
+  "clip-5": {
+    textPlain:
+      "多显示器回退、恢复模式只读与 diagnostics export 字段映射必须同时完成。\n\nRTF 内容在预览区按纯文本展示，复制/粘贴时仍保留后端可用 payload。",
+    textHtml: null,
+    textRtf: "{\\rtf1\\ansi 多显示器回退、恢复模式只读与 diagnostics export 字段映射必须同时完成。}",
+    imageBytes: null,
+    imageWidth: null,
+    imageHeight: null,
+    fileUrls: null,
+    extraJson: null,
+  },
+};
+
 let fallbackMonitoring = true;
 let fallbackPermissionTrusted = true;
 let fallbackUndoCounter = 0;
 let fallbackRuleCounter = 3;
 const fallbackTrash = new Map<string, ClipboardItem>();
-let fallbackRules: ExclusionRule[] = [
+const initialFallbackRules: ExclusionRule[] = [
   {
     id: "rule-1",
     kind: "bundle_id",
@@ -357,6 +429,8 @@ let fallbackRules: ExclusionRule[] = [
     version: 1,
   },
 ];
+
+let fallbackRules: ExclusionRule[] = initialFallbackRules.map((rule) => ({ ...rule }));
 const defaultShortcutBinding = "Cmd+Shift+V";
 let fallbackShortcutState: ShortcutStateResponse = {
   binding: defaultShortcutBinding,
@@ -445,6 +519,63 @@ const diagnosticsSections: DiagnosticsSection[] = [
   "settings_summary",
   "window_fallback_records",
 ];
+
+export function __resetSuperClipFallbackForTests() {
+  fallbackItems = initialFallbackItems.map((item) => ({ ...item }));
+  fallbackMonitoring = true;
+  fallbackPermissionTrusted = true;
+  fallbackUndoCounter = 0;
+  fallbackRuleCounter = 3;
+  fallbackTrash.clear();
+  fallbackRules = initialFallbackRules.map((rule) => ({ ...rule }));
+  fallbackShortcutState = buildShortcutState(defaultShortcutBinding);
+  fallbackShortcutRecording = false;
+  fallbackSettings = {
+    schemaVersion: 1,
+    exposedKeys: [
+      "global_shortcut",
+      "history_limit",
+      "default_action",
+      "theme_mode",
+      "launch_at_login",
+      "show_on_startup",
+    ],
+    reservedKeys: [
+      "restore_clipboard_delay_ms",
+      "density_mode",
+      "row_height_mode",
+      "hover_emphasis",
+      "thumbnail_density",
+    ],
+    defaultAction: "direct_paste",
+    themeMode: "system",
+    historyLimit: 1000,
+    launchAtLogin: false,
+    showOnStartup: false,
+  };
+  fallbackRuntimeState = {
+    presentationReason: "manual_open",
+    lastDisplayId: "main",
+    lastWindowMode: "small_window",
+    fallbackReason: null,
+    migrationPhase: "ready",
+    isRecoveryMode: false,
+    restoredFromSession: false,
+    updatedAt: "2026-04-25T20:10:00+08:00",
+  };
+  fallbackSessionUiState = {
+    query: "",
+    selectedItemId: null,
+    scrollAnchor: null,
+    presentationReason: "manual_open",
+    lastDisplayId: "main",
+    lastWindowMode: "small_window",
+    restoredFromSession: false,
+    updatedAt: "2026-04-25T20:10:00+08:00",
+  };
+  fallbackRecentErrors = [];
+  fallbackWindowFallbackRecords = [];
+}
 
 function isTauriRuntime() {
   return "__TAURI_INTERNALS__" in window;
@@ -714,7 +845,7 @@ export async function clipboardList() {
 export async function clipboardGet(id: string) {
   return invokeOrFallback<ClipboardItemDetail>("clipboardGet", { id }, () => ({
     item: getItem(id),
-    payload: {
+    payload: fallbackPayloads[id] ?? {
       textPlain: getItem(id).preview,
       textHtml: null,
       textRtf: null,

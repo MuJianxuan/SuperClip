@@ -22,6 +22,7 @@ const RECENT_ERROR_LIMIT: usize = 50;
 const WINDOW_FALLBACK_RECORD_LIMIT: usize = 20;
 const TEXT_PAYLOAD_LIMIT_BYTES: usize = 2 * 1024 * 1024;
 const IMAGE_PAYLOAD_LIMIT_BYTES: usize = 8 * 1024 * 1024;
+const IMAGE_PREVIEW_MAX_EDGE: usize = 360;
 const MONITOR_POLL_MS: u64 = 900;
 const DEFAULT_HISTORY_LIMIT: usize = 1000;
 const WINDOW_MODE_SMALL: &str = "small_window";
@@ -1177,6 +1178,50 @@ fn normalize_file_snapshot(file_urls: Vec<String>, source_app: &str) -> Option<C
     })
 }
 
+fn build_image_preview_extra_json(
+    bytes: &[u8],
+    width: usize,
+    height: usize,
+) -> Option<serde_json::Value> {
+    if width == 0 || height == 0 || bytes.len() < width.saturating_mul(height).saturating_mul(4) {
+        return None;
+    }
+
+    let max_edge = width.max(height);
+    if max_edge <= IMAGE_PREVIEW_MAX_EDGE {
+        return Some(json!({
+            "previewImage": {
+                "bytes": bytes,
+                "width": width,
+                "height": height,
+                "format": "rgba8"
+            }
+        }));
+    }
+
+    let preview_width = (width * IMAGE_PREVIEW_MAX_EDGE / max_edge).max(1);
+    let preview_height = (height * IMAGE_PREVIEW_MAX_EDGE / max_edge).max(1);
+    let mut preview_bytes = Vec::with_capacity(preview_width * preview_height * 4);
+
+    for y in 0..preview_height {
+        let source_y = (y * height / preview_height).min(height - 1);
+        for x in 0..preview_width {
+            let source_x = (x * width / preview_width).min(width - 1);
+            let source_index = (source_y * width + source_x) * 4;
+            preview_bytes.extend_from_slice(&bytes[source_index..source_index + 4]);
+        }
+    }
+
+    Some(json!({
+        "previewImage": {
+            "bytes": preview_bytes,
+            "width": preview_width,
+            "height": preview_height,
+            "format": "rgba8"
+        }
+    }))
+}
+
 fn normalize_image_snapshot(image: ImageData<'_>, source_app: &str) -> ClipboardSnapshot {
     let width = image.width;
     let height = image.height;
@@ -1205,7 +1250,11 @@ fn normalize_image_snapshot(image: ImageData<'_>, source_app: &str) -> Clipboard
             image_width: Some(width),
             image_height: Some(height),
             file_urls: None,
-            extra_json: None,
+            extra_json: if is_truncated {
+                build_image_preview_extra_json(&bytes, width, height)
+            } else {
+                None
+            },
         },
         payload_size_bytes: payload_size,
         is_truncated,
@@ -4286,89 +4335,101 @@ fn emit_superclip_event(app: &tauri::AppHandle, event: &str, payload: serde_json
     let _ = app.emit(event, serde_json::Value::Object(body));
 }
 
-fn start_clipboard_monitor(app: tauri::AppHandle) {
-    std::thread::spawn(move || loop {
-        {
-            let state: State<'_, AppState> = app.state();
-            let is_monitoring = state
-                .is_monitoring
-                .lock()
-                .map(|value| *value)
-                .unwrap_or(false);
-            let is_recovery_mode = state
-                .runtime_state
-                .lock()
-                .map(|runtime_state| runtime_state.is_recovery_mode)
-                .unwrap_or(true);
+fn process_clipboard_monitor_tick(app: &tauri::AppHandle) {
+    let state: State<'_, AppState> = app.state();
+    let is_monitoring = state
+        .is_monitoring
+        .lock()
+        .map(|value| *value)
+        .unwrap_or(false);
+    let is_recovery_mode = state
+        .runtime_state
+        .lock()
+        .map(|runtime_state| runtime_state.is_recovery_mode)
+        .unwrap_or(true);
 
-            if is_monitoring && !is_recovery_mode {
-                match read_clipboard_snapshot() {
-                    Ok(Some(snapshot)) => {
-                        let hash = snapshot.content_hash.clone();
-                        let should_skip = {
-                            let mut monitor_state = match state.monitor_state.lock() {
-                                Ok(monitor_state) => monitor_state,
-                                Err(_) => {
-                                    continue;
-                                }
-                            };
+    if !is_monitoring || is_recovery_mode {
+        return;
+    }
 
-                            if monitor_state.self_write_hash.as_deref() == Some(hash.as_str()) {
-                                monitor_state.last_seen_hash = Some(hash.clone());
-                                monitor_state.self_write_hash = None;
-                                true
-                            } else if monitor_state.last_seen_hash.as_deref() == Some(hash.as_str())
-                            {
-                                true
-                            } else {
-                                false
-                            }
-                        };
-
-                        if !should_skip {
-                            let inserted = {
-                                let db = state.db.lock();
-                                match db {
-                                    Ok(db) => match list_exclusion_rules(&db) {
-                                        Ok(rules) if snapshot_is_excluded(&snapshot, &rules) => {
-                                            Ok(false)
-                                        }
-                                        Ok(_) => upsert_clipboard_snapshot(&db, snapshot),
-                                        Err(error) => Err(error),
-                                    },
-                                    Err(_) => Err("DB_LOCKED".into()),
-                                }
-                            };
-
-                            match inserted {
-                                Ok(true) => {
-                                    if let Ok(mut monitor_state) = state.monitor_state.lock() {
-                                        monitor_state.last_seen_hash = Some(hash.clone());
-                                    }
-                                    emit_history_updated(&app, "monitor_insert");
-                                }
-                                Ok(false) => {
-                                    if let Ok(mut monitor_state) = state.monitor_state.lock() {
-                                        monitor_state.last_seen_hash = Some(hash.clone());
-                                    }
-                                    emit_history_updated(&app, "monitor_seen");
-                                }
-                                Err(error_code) => {
-                                    push_recent_error_code(
-                                        &state,
-                                        &error_code,
-                                        "clipboard-monitor/write",
-                                    );
-                                }
-                            }
-                        }
+    match read_clipboard_snapshot() {
+        Ok(Some(snapshot)) => {
+            let hash = snapshot.content_hash.clone();
+            let should_skip = {
+                let mut monitor_state = match state.monitor_state.lock() {
+                    Ok(monitor_state) => monitor_state,
+                    Err(_) => {
+                        push_recent_error_code(
+                            &state,
+                            "MONITOR_STATE_LOCKED",
+                            "clipboard-monitor/state",
+                        );
+                        return;
                     }
-                    Ok(None) => {}
-                    Err(error_code) => {
-                        push_recent_error_code(&state, &error_code, "clipboard-monitor/read");
+                };
+
+                if monitor_state.self_write_hash.as_deref() == Some(hash.as_str()) {
+                    monitor_state.last_seen_hash = Some(hash.clone());
+                    monitor_state.self_write_hash = None;
+                    true
+                } else {
+                    monitor_state.last_seen_hash.as_deref() == Some(hash.as_str())
+                }
+            };
+
+            if should_skip {
+                return;
+            }
+
+            let inserted = {
+                let db = state.db.lock();
+                match db {
+                    Ok(db) => match list_exclusion_rules(&db) {
+                        Ok(rules) if snapshot_is_excluded(&snapshot, &rules) => Ok(false),
+                        Ok(_) => upsert_clipboard_snapshot(&db, snapshot),
+                        Err(error) => Err(error),
+                    },
+                    Err(_) => Err("DB_LOCKED".into()),
+                }
+            };
+
+            match inserted {
+                Ok(true) => {
+                    if let Ok(mut monitor_state) = state.monitor_state.lock() {
+                        monitor_state.last_seen_hash = Some(hash.clone());
                     }
+                    emit_history_updated(app, "monitor_insert");
+                }
+                Ok(false) => {
+                    if let Ok(mut monitor_state) = state.monitor_state.lock() {
+                        monitor_state.last_seen_hash = Some(hash.clone());
+                    }
+                    emit_history_updated(app, "monitor_seen");
+                }
+                Err(error_code) => {
+                    push_recent_error_code(&state, &error_code, "clipboard-monitor/write");
                 }
             }
+        }
+        Ok(None) => {}
+        Err(error_code) => {
+            push_recent_error_code(&state, &error_code, "clipboard-monitor/read");
+        }
+    }
+}
+
+fn start_clipboard_monitor(app: tauri::AppHandle) {
+    std::thread::spawn(move || loop {
+        let app_for_tick = app.clone();
+        if let Err(error) = app.run_on_main_thread(move || {
+            process_clipboard_monitor_tick(&app_for_tick);
+        }) {
+            let state: State<'_, AppState> = app.state();
+            push_recent_error_code(
+                &state,
+                "MONITOR_MAIN_THREAD_DISPATCH_FAILED",
+                &format!("clipboard-monitor/dispatch/{error}"),
+            );
         }
 
         std::thread::sleep(Duration::from_millis(MONITOR_POLL_MS));
@@ -4482,6 +4543,49 @@ mod tests {
             .highlight_ranges
             .iter()
             .any(|range| range.field == "preview_text"));
+    }
+
+    #[test]
+    fn large_image_snapshot_keeps_preview_payload_when_full_blob_is_truncated() {
+        let width = 1_492;
+        let height = 1_410;
+        let bytes = vec![192; width * height * 4];
+        let snapshot = normalize_image_snapshot(
+            ImageData {
+                width,
+                height,
+                bytes: bytes.into(),
+            },
+            "Test",
+        );
+
+        assert!(snapshot.is_truncated);
+        assert!(snapshot.payload.image_bytes.is_none());
+        assert_eq!(snapshot.payload.image_width, Some(width));
+        assert_eq!(snapshot.payload.image_height, Some(height));
+
+        let preview = snapshot
+            .payload
+            .extra_json
+            .as_ref()
+            .and_then(|value| value.get("previewImage"))
+            .expect("large image should store a preview payload");
+        let preview_width = preview
+            .get("width")
+            .and_then(|value| value.as_u64())
+            .expect("preview width should exist") as usize;
+        let preview_height = preview
+            .get("height")
+            .and_then(|value| value.as_u64())
+            .expect("preview height should exist") as usize;
+        let preview_bytes = preview
+            .get("bytes")
+            .and_then(|value| value.as_array())
+            .expect("preview bytes should exist");
+
+        assert!(preview_width <= IMAGE_PREVIEW_MAX_EDGE);
+        assert!(preview_height <= IMAGE_PREVIEW_MAX_EDGE);
+        assert_eq!(preview_bytes.len(), preview_width * preview_height * 4);
     }
 
     #[test]
