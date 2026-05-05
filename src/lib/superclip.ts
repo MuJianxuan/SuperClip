@@ -138,6 +138,7 @@ export interface SessionUiStateResponse {
   query: string;
   selectedItemId: string | null;
   scrollAnchor: string | null;
+  layoutSidebarWidthPx: number | null;
   presentationReason: PresentationReason;
   lastDisplayId: string;
   lastWindowMode: WindowMode;
@@ -149,6 +150,7 @@ export interface SessionUiStateUpdatePayload {
   query: string;
   selectedItemId: string | null;
   scrollAnchor: string | null;
+  layoutSidebarWidthPx: number | null;
   lastDisplayId: string;
   lastWindowMode: WindowMode;
 }
@@ -476,6 +478,7 @@ let fallbackSessionUiState: SessionUiStateResponse = {
   query: "",
   selectedItemId: null,
   scrollAnchor: null,
+  layoutSidebarWidthPx: null,
   presentationReason: "manual_open",
   lastDisplayId: "main",
   lastWindowMode: "small_window",
@@ -567,6 +570,7 @@ export function __resetSuperClipFallbackForTests() {
     query: "",
     selectedItemId: null,
     scrollAnchor: null,
+    layoutSidebarWidthPx: null,
     presentationReason: "manual_open",
     lastDisplayId: "main",
     lastWindowMode: "small_window",
@@ -1015,6 +1019,7 @@ export async function sessionUiStateUpdate(payload: SessionUiStateUpdatePayload)
       query: payload.query,
       selectedItemId: payload.selectedItemId,
       scrollAnchor: payload.scrollAnchor,
+      layoutSidebarWidthPx: payload.layoutSidebarWidthPx,
       presentationReason: derivePresentationReason(payload.query),
       lastDisplayId: payload.lastDisplayId,
       lastWindowMode: payload.lastWindowMode,

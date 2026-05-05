@@ -317,6 +317,7 @@ struct SessionUiStateResponse {
     query: String,
     selected_item_id: Option<String>,
     scroll_anchor: Option<String>,
+    layout_sidebar_width_px: Option<u32>,
     presentation_reason: String,
     last_display_id: String,
     last_window_mode: String,
@@ -330,6 +331,7 @@ struct SessionUiStateUpdateRequest {
     query: String,
     selected_item_id: Option<String>,
     scroll_anchor: Option<String>,
+    layout_sidebar_width_px: Option<u32>,
     last_display_id: String,
     last_window_mode: String,
 }
@@ -493,6 +495,7 @@ impl AppState {
                 query: String::new(),
                 selected_item_id: None,
                 scroll_anchor: None,
+                layout_sidebar_width_px: None,
                 presentation_reason: "manual_open".into(),
                 last_display_id: "main".into(),
                 last_window_mode: WINDOW_MODE_SMALL.into(),
@@ -3391,6 +3394,7 @@ fn session_ui_state_update(
     session_ui_state.query = payload.query;
     session_ui_state.selected_item_id = payload.selected_item_id;
     session_ui_state.scroll_anchor = payload.scroll_anchor;
+    session_ui_state.layout_sidebar_width_px = payload.layout_sidebar_width_px;
     session_ui_state.last_display_id = payload.last_display_id;
     session_ui_state.last_window_mode = payload.last_window_mode;
     session_ui_state.presentation_reason = derive_presentation_reason(
@@ -4463,6 +4467,7 @@ mod tests {
                 query: String::new(),
                 selected_item_id: None,
                 scroll_anchor: None,
+                layout_sidebar_width_px: None,
                 presentation_reason: "manual_open".into(),
                 last_display_id: "main".into(),
                 last_window_mode: WINDOW_MODE_SMALL.into(),
@@ -4654,6 +4659,33 @@ mod tests {
         let results = search_clipboard_items(&connection, "copy-only").expect("search should pass");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].kind, "file");
+    }
+
+    #[test]
+    fn session_ui_state_carries_layout_sidebar_width() {
+        let update: SessionUiStateUpdateRequest = serde_json::from_value(serde_json::json!({
+            "query": "",
+            "selectedItemId": null,
+            "scrollAnchor": null,
+            "layoutSidebarWidthPx": 360,
+            "lastDisplayId": "main",
+            "lastWindowMode": "large_window"
+        }))
+        .expect("session update payload should deserialize");
+
+        assert_eq!(update.layout_sidebar_width_px, Some(360));
+
+        let state = test_app_state();
+        let mut session_ui_state = state
+            .session_ui_state
+            .lock()
+            .expect("session state should lock");
+        session_ui_state.layout_sidebar_width_px = update.layout_sidebar_width_px;
+
+        let serialized = serde_json::to_value(session_ui_state.clone())
+            .expect("session state should serialize");
+
+        assert_eq!(serialized["layoutSidebarWidthPx"], 360);
     }
 
     #[test]

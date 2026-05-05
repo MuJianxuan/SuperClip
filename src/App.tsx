@@ -1,4 +1,5 @@
 import { startTransition, useDeferredValue, useEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import {
   AppWindow,
   ArrowUpRight,
@@ -113,6 +114,28 @@ const initialRuntimeState: RuntimeStateResponse = {
   restoredFromSession: false,
   updatedAt: "",
 };
+
+const LAYOUT_SIDEBAR_DEFAULT_WIDTH_PX = 260;
+const LAYOUT_SIDEBAR_MIN_WIDTH_PX = 220;
+const LAYOUT_SIDEBAR_MAX_WIDTH_PX = 420;
+const LAYOUT_DETAIL_MIN_WIDTH_PX = 420;
+const LAYOUT_RESIZER_WIDTH_PX = 8;
+
+function clampSidebarWidth(width: number, containerWidthPx?: number | null) {
+  const availableMax = containerWidthPx
+    ? Math.max(
+        LAYOUT_SIDEBAR_MIN_WIDTH_PX,
+        containerWidthPx - LAYOUT_DETAIL_MIN_WIDTH_PX - LAYOUT_RESIZER_WIDTH_PX,
+      )
+    : LAYOUT_SIDEBAR_MAX_WIDTH_PX;
+  const maxWidth = Math.min(LAYOUT_SIDEBAR_MAX_WIDTH_PX, availableMax);
+
+  return Math.min(Math.max(Math.round(width), LAYOUT_SIDEBAR_MIN_WIDTH_PX), maxWidth);
+}
+
+function buildWorkspaceGridColumns(sidebarWidthPx: number) {
+  return `var(--sidebar-width, ${sidebarWidthPx}px) ${LAYOUT_RESIZER_WIDTH_PX}px minmax(${LAYOUT_DETAIL_MIN_WIDTH_PX}px, 1fr)`;
+}
 
 interface FeedbackToast {
   createdAtMs: number;
@@ -353,7 +376,14 @@ function App() {
   const [scrollAnchor, setScrollAnchor] = useState<string | null>(null);
   const [isSessionHydrated, setIsSessionHydrated] = useState(false);
   const [isWideLayout, setIsWideLayout] = useState(() => typeof window !== "undefined" && window.innerWidth >= 840);
+  const [layoutSidebarWidthPx, setLayoutSidebarWidthPx] = useState(LAYOUT_SIDEBAR_DEFAULT_WIDTH_PX);
+  const [workspaceWidthPx, setWorkspaceWidthPx] = useState<number | null>(null);
+  const [isResizingLayout, setIsResizingLayout] = useState(false);
   const listViewportRef = useRef<HTMLDivElement | null>(null);
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const layoutSidebarWidthRef = useRef(LAYOUT_SIDEBAR_DEFAULT_WIDTH_PX);
+  const layoutResizeFrameRef = useRef<number | null>(null);
+  const pendingLayoutWidthRef = useRef(LAYOUT_SIDEBAR_DEFAULT_WIDTH_PX);
   const pendingSessionRestoreRef = useRef<Pick<
     SessionUiStateResponse,
     "selectedItemId" | "scrollAnchor"
@@ -397,6 +427,9 @@ function App() {
         setQuery(nextSessionUiState.query);
         setSelectedId(nextSessionUiState.selectedItemId ?? "");
         setScrollAnchor(nextSessionUiState.scrollAnchor);
+        setLayoutSidebarWidthPx(clampSidebarWidth(
+          nextSessionUiState.layoutSidebarWidthPx ?? LAYOUT_SIDEBAR_DEFAULT_WIDTH_PX,
+        ));
         pendingSessionRestoreRef.current = {
           selectedItemId: nextSessionUiState.selectedItemId,
           scrollAnchor: nextSessionUiState.scrollAnchor,
@@ -413,6 +446,44 @@ function App() {
 
     return () => {
       active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    layoutSidebarWidthRef.current = layoutSidebarWidthPx;
+    workspaceRef.current?.style.setProperty("--sidebar-width", `${layoutSidebarWidthPx}px`);
+  }, [layoutSidebarWidthPx]);
+
+  useEffect(() => {
+    return () => {
+      if (layoutResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(layoutResizeFrameRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const syncWorkspaceWidth = () => {
+      const workspaceWidth = workspaceRef.current?.getBoundingClientRect().width;
+      setWorkspaceWidthPx(workspaceWidth && workspaceWidth > 0 ? workspaceWidth : window.innerWidth);
+    };
+
+    syncWorkspaceWidth();
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(syncWorkspaceWidth);
+
+    if (workspaceRef.current && resizeObserver) {
+      resizeObserver.observe(workspaceRef.current);
+    }
+
+    window.addEventListener("resize", syncWorkspaceWidth);
+
+    return () => {
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", syncWorkspaceWidth);
     };
   }, []);
 
@@ -721,6 +792,7 @@ function App() {
       query,
       selectedItemId: selectedId || null,
       scrollAnchor,
+      layoutSidebarWidthPx: layoutSidebarWidthRef.current,
       lastDisplayId: runtimeState.lastDisplayId,
       lastWindowMode: runtimeState.lastWindowMode,
     }).then((nextSessionUiState) => {
@@ -768,14 +840,17 @@ function App() {
   const isMigrationBlocking = runtimeState.migrationPhase === "migration_in_progress";
   const isLargeWindow = isWideLayout;
   const isFallbackWindow = runtimeState.lastWindowMode === "fallback_window";
+  const renderedSidebarWidthPx = clampSidebarWidth(layoutSidebarWidthPx, workspaceWidthPx);
   const primaryActionLabel = isRecoveryMode
     ? "仅复制"
     : selectedItem
       ? getKindActionLabel(selectedItem.kind, settings.defaultAction)
       : "直接粘贴";
-  const workspaceGridClass = isLargeWindow
-    ? "grid min-h-0 flex-1 grid-cols-[minmax(220px,2fr)_minmax(0,5fr)] overflow-hidden"
-    : "grid min-h-0 flex-1 grid-cols-[minmax(190px,2fr)_minmax(0,5fr)] overflow-hidden";
+  const workspaceGridClass = "grid min-h-0 flex-1 overflow-hidden";
+  const workspaceGridStyle = {
+    "--sidebar-width": `${renderedSidebarWidthPx}px`,
+    gridTemplateColumns: buildWorkspaceGridColumns(renderedSidebarWidthPx),
+  };
   const detailCardClass = isLargeWindow
     ? "flex min-h-0 flex-1 flex-col rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-2.5"
     : "flex min-h-0 flex-1 flex-col rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-2";
@@ -841,6 +916,102 @@ function App() {
     }
 
     return false;
+  }
+
+  function persistLayoutSidebarWidth(nextSidebarWidthPx: number) {
+    if (!isSessionHydrated) {
+      return;
+    }
+
+    void sessionUiStateUpdate({
+      query,
+      selectedItemId: selectedId || null,
+      scrollAnchor,
+      layoutSidebarWidthPx: nextSidebarWidthPx,
+      lastDisplayId: runtimeState.lastDisplayId,
+      lastWindowMode: runtimeState.lastWindowMode,
+    })
+      .then((nextSessionUiState) => {
+        setRuntimeState((current) => ({
+          ...current,
+          presentationReason: nextSessionUiState.presentationReason,
+          lastDisplayId: nextSessionUiState.lastDisplayId,
+          lastWindowMode: nextSessionUiState.lastWindowMode,
+          restoredFromSession: nextSessionUiState.restoredFromSession,
+          updatedAt: nextSessionUiState.updatedAt,
+        }));
+      })
+      .catch(() => {});
+  }
+
+  function handleLayoutResizeStart(event: ReactPointerEvent<HTMLButtonElement>) {
+    event.preventDefault();
+
+    const workspace = workspaceRef.current;
+
+    if (!workspace) {
+      return;
+    }
+
+    const target = event.currentTarget;
+    const pointerId = event.pointerId;
+    const startX = event.clientX;
+    const startWidth = renderedSidebarWidthPx;
+    const containerWidth = workspace.getBoundingClientRect().width || workspaceWidthPx;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+
+    target.setPointerCapture?.(pointerId);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    setIsResizingLayout(true);
+    pendingLayoutWidthRef.current = startWidth;
+
+    const syncNextWidth = (clientX: number) => {
+      const nextWidth = clampSidebarWidth(startWidth + clientX - startX, containerWidth);
+      pendingLayoutWidthRef.current = nextWidth;
+      layoutSidebarWidthRef.current = nextWidth;
+
+      if (layoutResizeFrameRef.current !== null) {
+        return;
+      }
+
+      layoutResizeFrameRef.current = window.requestAnimationFrame(() => {
+        workspace.style.setProperty("--sidebar-width", `${pendingLayoutWidthRef.current}px`);
+        layoutResizeFrameRef.current = null;
+      });
+    };
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      syncNextWidth(moveEvent.clientX);
+    };
+
+    const finishResize = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", finishResize);
+      window.removeEventListener("pointercancel", finishResize);
+
+      if (layoutResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(layoutResizeFrameRef.current);
+        layoutResizeFrameRef.current = null;
+      }
+
+      workspace.style.setProperty("--sidebar-width", `${layoutSidebarWidthRef.current}px`);
+
+      if (target.hasPointerCapture?.(pointerId)) {
+        target.releasePointerCapture?.(pointerId);
+      }
+
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      setIsResizingLayout(false);
+      setLayoutSidebarWidthPx(layoutSidebarWidthRef.current);
+      persistLayoutSidebarWidth(layoutSidebarWidthRef.current);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", finishResize);
+    window.addEventListener("pointercancel", finishResize);
   }
 
   function handleMutationError(error: unknown, actionLabel: string) {
@@ -1648,8 +1819,13 @@ function App() {
             </div>
           ) : null}
 
-          <div className={workspaceGridClass}>
-            <section className="flex min-h-0 flex-col px-3 py-3">
+          <div
+            ref={workspaceRef}
+            className={workspaceGridClass}
+            style={workspaceGridStyle}
+            data-layout-workspace
+          >
+            <section className="flex min-w-0 min-h-0 flex-col px-3 py-3 pr-4">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-sm font-semibold text-[var(--text-primary)]">历史</h2>
@@ -1675,7 +1851,7 @@ function App() {
                 </Tooltip>
               </div>
 
-              <ScrollArea className="min-h-0 flex-1 pr-1" viewportRef={listViewportRef}>
+              <ScrollArea className="min-h-0 flex-1" viewportRef={listViewportRef}>
                 <div className="space-y-1.5 pb-2 pr-2">
                   {clipboardItems.length ? (
                     clipboardItems.map((item) => (
@@ -1723,7 +1899,30 @@ function App() {
               </ScrollArea>
             </section>
 
-            <section className="flex min-h-0 flex-col overflow-hidden border-l border-[var(--border)] bg-[var(--surface-raised)] px-3 py-3">
+            <div className="relative flex min-h-0 items-stretch justify-center">
+              <button
+                type="button"
+                role="separator"
+                aria-label="调整历史列表宽度"
+                aria-orientation="vertical"
+                aria-valuemin={LAYOUT_SIDEBAR_MIN_WIDTH_PX}
+                aria-valuemax={LAYOUT_SIDEBAR_MAX_WIDTH_PX}
+                aria-valuenow={renderedSidebarWidthPx}
+                data-testid="layout-resizer"
+                onPointerDown={handleLayoutResizeStart}
+                className={`group flex h-full w-full cursor-col-resize items-stretch justify-center outline-none focus-visible:bg-[var(--surface-2)] ${
+                  isResizingLayout ? "bg-[var(--surface-2)]" : "bg-transparent"
+                }`}
+              >
+                <span
+                  className={`my-3 w-px rounded-full transition-colors ${
+                    isResizingLayout ? "bg-[var(--accent)]" : "bg-[var(--border-strong)] group-hover:bg-[var(--text-tertiary)]"
+                  }`}
+                />
+              </button>
+            </div>
+
+            <section className="flex min-w-0 min-h-0 flex-col overflow-hidden bg-[var(--surface-raised)] px-3 py-3 pl-4">
               <div className={detailCardClass}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">

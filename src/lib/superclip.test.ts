@@ -41,6 +41,7 @@ describe("superclip browser fallback", () => {
       query: "发布",
       selectedItemId: "clip-3",
       scrollAnchor: "clip-2",
+      layoutSidebarWidthPx: 320,
       lastDisplayId: "browser-test",
       lastWindowMode: "large_window",
     });
@@ -50,6 +51,7 @@ describe("superclip browser fallback", () => {
     expect(restored.restoredFromSession).toBe(true);
     expect(restored.presentationReason).toBe("manual_open");
     expect(restored.lastWindowMode).toBe("large_window");
+    expect(restored.layoutSidebarWidthPx).toBe(320);
   });
 
   it("derives fallback window mode from viewport size", async () => {

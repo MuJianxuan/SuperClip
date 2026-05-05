@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
-import { __resetSuperClipFallbackForTests } from "./lib/superclip";
+import {
+  __resetSuperClipFallbackForTests,
+  sessionUiStateGet,
+  sessionUiStateUpdate,
+} from "./lib/superclip";
 import type { ClipboardItem } from "./components/history-row";
 
 const tauriListeners = new Map<string, Array<(event: { payload: unknown }) => void>>();
@@ -51,6 +55,51 @@ describe("App detail preview", () => {
     expect(within(preview).queryByText(/先验证壳体与焦点行为/)).not.toBeInTheDocument();
   });
 
+  it("restores and persists the resizable home column width", async () => {
+    await sessionUiStateUpdate({
+      query: "",
+      selectedItemId: null,
+      scrollAnchor: null,
+      layoutSidebarWidthPx: 360,
+      lastDisplayId: "browser-test",
+      lastWindowMode: "large_window",
+    });
+
+    renderApp();
+
+    const resizer = await screen.findByTestId("layout-resizer");
+    const workspace = resizer.closest("[data-layout-workspace]");
+
+    expect(workspace).toHaveStyle({ "--sidebar-width": "360px" });
+    await waitFor(() => expect(resizer).toHaveAttribute("aria-valuenow", "360"));
+
+    fireEvent.pointerDown(resizer, { pointerId: 1, clientX: 360 });
+    fireEvent.pointerMove(window, { pointerId: 1, clientX: 460 });
+    fireEvent.pointerUp(window, { pointerId: 1, clientX: 460 });
+
+    await waitFor(async () => {
+      const restored = await sessionUiStateGet();
+      expect(restored.layoutSidebarWidthPx).toBe(420);
+    });
+    expect(workspace).toHaveStyle({ "--sidebar-width": "420px" });
+    expect(resizer).toHaveAttribute("aria-valuenow", "420");
+  });
+
+  it("clamps restored home column width to the safe minimum", async () => {
+    await sessionUiStateUpdate({
+      query: "",
+      selectedItemId: null,
+      scrollAnchor: null,
+      layoutSidebarWidthPx: 120,
+      lastDisplayId: "browser-test",
+      lastWindowMode: "large_window",
+    });
+
+    renderApp();
+
+    expect(await screen.findByTestId("layout-resizer")).toHaveAttribute("aria-valuenow", "220");
+  });
+
   it("renders file detail paths and folds files beyond the first five", async () => {
     const user = userEvent.setup();
     renderApp();
@@ -94,7 +143,6 @@ describe("App detail preview", () => {
       preview: "读取到 1492×1410 图片。",
       sourceApp: "System Clipboard",
       timeLabel: "刚刚",
-      sizeLabel: "8 MB",
       meta: "Image · 1492×1410",
       isPinned: false,
     };
@@ -148,6 +196,7 @@ describe("App detail preview", () => {
           query: "",
           selectedItemId: "clip-large-image",
           scrollAnchor: null,
+          layoutSidebarWidthPx: null,
           presentationReason: "manual_open",
           lastDisplayId: "main",
           lastWindowMode: "large_window",
@@ -253,7 +302,6 @@ describe("App detail preview", () => {
       preview: "初始剪贴板内容",
       sourceApp: "Safari",
       timeLabel: "刚刚",
-      sizeLabel: "8 B",
       meta: "text",
       isPinned: false,
     };
@@ -264,7 +312,6 @@ describe("App detail preview", () => {
       preview: "来自其他应用的新内容",
       sourceApp: "Notes",
       timeLabel: "刚刚",
-      sizeLabel: "12 B",
       meta: "text",
       isPinned: false,
     };
@@ -319,6 +366,7 @@ describe("App detail preview", () => {
           query: "",
           selectedItemId: null,
           scrollAnchor: null,
+          layoutSidebarWidthPx: null,
           presentationReason: "manual_open",
           lastDisplayId: "main",
           lastWindowMode: "large_window",
