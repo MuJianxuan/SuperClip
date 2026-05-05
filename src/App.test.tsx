@@ -7,7 +7,7 @@ import {
   sessionUiStateGet,
   sessionUiStateUpdate,
 } from "./lib/superclip";
-import type { ClipboardItem } from "./components/history-row";
+import { HistoryRow, type ClipboardItem } from "./components/history-row";
 
 const tauriListeners = new Map<string, Array<(event: { payload: unknown }) => void>>();
 
@@ -43,6 +43,76 @@ describe("App detail preview", () => {
     tauriListeners.clear();
     invokeMock.mockReset();
     Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
+  });
+
+  it("renders compact history rows and lets CSS truncate by available width", () => {
+    const item: ClipboardItem = {
+      id: "clip-long-title",
+      kind: "html",
+      title: "abcdefghijklmnopqrstuv",
+      preview: "这段摘要不应该出现在左侧列表",
+      sourceApp: "Safari",
+      meta: "HTML · 22 chars",
+      timeLabel: "刚刚",
+      isPinned: true,
+    };
+
+    render(<HistoryRow item={item} selected={false} onSelect={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: /HTML abcdefghijklmnopqrstuv 置顶/i })).toHaveAttribute(
+      "title",
+      item.title,
+    );
+    expect(screen.getByText(item.title)).toHaveClass("truncate");
+    expect(screen.queryByText(item.preview)).not.toBeInTheDocument();
+    expect(screen.queryByText(item.sourceApp)).not.toBeInTheDocument();
+    expect(screen.queryByText(item.timeLabel)).not.toBeInTheDocument();
+    expect(screen.queryByText("HTML")).not.toBeInTheDocument();
+  });
+
+  it("renders the selected history row as a lightweight short indicator", () => {
+    const item: ClipboardItem = {
+      id: "clip-selected",
+      kind: "text",
+      title: "轻量选中态",
+      preview: "不会作为左侧摘要展示",
+      sourceApp: "Notes",
+      meta: "Text · 5 chars",
+      timeLabel: "刚刚",
+      isPinned: false,
+    };
+
+    render(<HistoryRow item={item} selected={true} onSelect={vi.fn()} />);
+
+    const row = screen.getByRole("button", { name: /Text 轻量选中态/i });
+    expect(row).toHaveClass("before:h-5");
+    expect(row).not.toHaveClass("shadow-[var(--shadow-soft)]");
+    expect(row).not.toHaveClass("bg-[var(--surface)]");
+    expect(screen.getByText(item.title)).toHaveClass("truncate");
+  });
+
+  it("changes rendered history title length from the available sidebar width budget", () => {
+    const item: ClipboardItem = {
+      id: "clip-resizable-title",
+      kind: "text",
+      title: "abcdefghijklmnopqrstuvwxyz",
+      preview: "不会作为左侧摘要展示",
+      sourceApp: "Notes",
+      meta: "Text · 26 chars",
+      timeLabel: "刚刚",
+      isPinned: false,
+    };
+
+    const { rerender } = render(
+      <HistoryRow item={item} selected={false} onSelect={vi.fn()} titleMaxUnits={10} />,
+    );
+
+    expect(screen.getByText("abcdefg...")).toBeInTheDocument();
+    expect(screen.queryByText(item.title)).not.toBeInTheDocument();
+
+    rerender(<HistoryRow item={item} selected={false} onSelect={vi.fn()} titleMaxUnits={18} />);
+
+    expect(screen.getByText("abcdefghijklmno...")).toBeInTheDocument();
   });
 
   it("loads selected item detail instead of only rendering the list summary", async () => {

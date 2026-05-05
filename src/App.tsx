@@ -120,6 +120,8 @@ const LAYOUT_SIDEBAR_MIN_WIDTH_PX = 220;
 const LAYOUT_SIDEBAR_MAX_WIDTH_PX = 420;
 const LAYOUT_DETAIL_MIN_WIDTH_PX = 420;
 const LAYOUT_RESIZER_WIDTH_PX = 8;
+const HISTORY_TITLE_MIN_UNITS = 12;
+const HISTORY_TITLE_MAX_UNITS = 48;
 
 function clampSidebarWidth(width: number, containerWidthPx?: number | null) {
   const availableMax = containerWidthPx
@@ -135,6 +137,14 @@ function clampSidebarWidth(width: number, containerWidthPx?: number | null) {
 
 function buildWorkspaceGridColumns(sidebarWidthPx: number) {
   return `var(--sidebar-width, ${sidebarWidthPx}px) ${LAYOUT_RESIZER_WIDTH_PX}px minmax(${LAYOUT_DETAIL_MIN_WIDTH_PX}px, 1fr)`;
+}
+
+function getHistoryTitleMaxUnits(sidebarWidthPx: number) {
+  const titleWidthPx = sidebarWidthPx - 90;
+  return Math.min(
+    HISTORY_TITLE_MAX_UNITS,
+    Math.max(HISTORY_TITLE_MIN_UNITS, Math.floor(titleWidthPx / 7)),
+  );
 }
 
 interface FeedbackToast {
@@ -377,6 +387,7 @@ function App() {
   const [isSessionHydrated, setIsSessionHydrated] = useState(false);
   const [isWideLayout, setIsWideLayout] = useState(() => typeof window !== "undefined" && window.innerWidth >= 840);
   const [layoutSidebarWidthPx, setLayoutSidebarWidthPx] = useState(LAYOUT_SIDEBAR_DEFAULT_WIDTH_PX);
+  const [liveLayoutSidebarWidthPx, setLiveLayoutSidebarWidthPx] = useState<number | null>(null);
   const [workspaceWidthPx, setWorkspaceWidthPx] = useState<number | null>(null);
   const [isResizingLayout, setIsResizingLayout] = useState(false);
   const listViewportRef = useRef<HTMLDivElement | null>(null);
@@ -840,7 +851,8 @@ function App() {
   const isMigrationBlocking = runtimeState.migrationPhase === "migration_in_progress";
   const isLargeWindow = isWideLayout;
   const isFallbackWindow = runtimeState.lastWindowMode === "fallback_window";
-  const renderedSidebarWidthPx = clampSidebarWidth(layoutSidebarWidthPx, workspaceWidthPx);
+  const renderedSidebarWidthPx = clampSidebarWidth(liveLayoutSidebarWidthPx ?? layoutSidebarWidthPx, workspaceWidthPx);
+  const historyTitleMaxUnits = getHistoryTitleMaxUnits(renderedSidebarWidthPx);
   const primaryActionLabel = isRecoveryMode
     ? "仅复制"
     : selectedItem
@@ -965,6 +977,7 @@ function App() {
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
     setIsResizingLayout(true);
+    setLiveLayoutSidebarWidthPx(startWidth);
     pendingLayoutWidthRef.current = startWidth;
 
     const syncNextWidth = (clientX: number) => {
@@ -978,6 +991,7 @@ function App() {
 
       layoutResizeFrameRef.current = window.requestAnimationFrame(() => {
         workspace.style.setProperty("--sidebar-width", `${pendingLayoutWidthRef.current}px`);
+        setLiveLayoutSidebarWidthPx(pendingLayoutWidthRef.current);
         layoutResizeFrameRef.current = null;
       });
     };
@@ -1006,6 +1020,7 @@ function App() {
       document.body.style.userSelect = previousUserSelect;
       setIsResizingLayout(false);
       setLayoutSidebarWidthPx(layoutSidebarWidthRef.current);
+      setLiveLayoutSidebarWidthPx(null);
       persistLayoutSidebarWidth(layoutSidebarWidthRef.current);
     };
 
@@ -1825,7 +1840,7 @@ function App() {
             style={workspaceGridStyle}
             data-layout-workspace
           >
-            <section className="flex min-w-0 min-h-0 flex-col px-3 py-3 pr-4">
+            <section className="flex min-w-0 min-h-0 flex-col px-3 py-3 pr-2">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div>
                   <h2 className="text-sm font-semibold text-[var(--text-primary)]">历史</h2>
@@ -1851,8 +1866,8 @@ function App() {
                 </Tooltip>
               </div>
 
-              <ScrollArea className="min-h-0 flex-1" viewportRef={listViewportRef}>
-                <div className="space-y-1.5 pb-2 pr-2">
+              <ScrollArea className="min-h-0 w-full flex-1" viewportRef={listViewportRef}>
+                <div className="w-full min-w-0 space-y-1.5 pb-2 pr-2">
                   {clipboardItems.length ? (
                     clipboardItems.map((item) => (
                       <HistoryRow
@@ -1861,6 +1876,7 @@ function App() {
                         rowId={item.id}
                         selected={item.id === selectedItem?.id}
                         onSelect={setSelectedId}
+                        titleMaxUnits={historyTitleMaxUnits}
                       />
                     ))
                   ) : isRecoveryMode ? (
@@ -1910,19 +1926,22 @@ function App() {
                 aria-valuenow={renderedSidebarWidthPx}
                 data-testid="layout-resizer"
                 onPointerDown={handleLayoutResizeStart}
+                title="拖动调整历史列表宽度"
                 className={`group flex h-full w-full cursor-col-resize items-stretch justify-center outline-none focus-visible:bg-[var(--surface-2)] ${
                   isResizingLayout ? "bg-[var(--surface-2)]" : "bg-transparent"
                 }`}
               >
                 <span
-                  className={`my-3 w-px rounded-full transition-colors ${
-                    isResizingLayout ? "bg-[var(--accent)]" : "bg-[var(--border-strong)] group-hover:bg-[var(--text-tertiary)]"
+                  className={`my-3 w-0.5 rounded-full transition-all ${
+                    isResizingLayout
+                      ? "bg-[var(--accent)]"
+                      : "bg-[var(--border-strong)] group-hover:w-1 group-hover:bg-[var(--text-tertiary)] group-focus-visible:w-1 group-focus-visible:bg-[var(--accent)]"
                   }`}
                 />
               </button>
             </div>
 
-            <section className="flex min-w-0 min-h-0 flex-col overflow-hidden bg-[var(--surface-raised)] px-3 py-3 pl-4">
+            <section className="flex min-w-0 min-h-0 flex-col overflow-hidden bg-[var(--surface-raised)] px-3 py-3 pl-2">
               <div className={detailCardClass}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
