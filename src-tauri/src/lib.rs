@@ -28,13 +28,12 @@ const DEFAULT_HISTORY_LIMIT: usize = 1000;
 const WINDOW_MODE_SMALL: &str = "small_window";
 const WINDOW_MODE_LARGE: &str = "large_window";
 const WINDOW_MODE_FALLBACK: &str = "fallback_window";
-const WINDOW_SMALL_WIDTH: f64 = 960.0;
-const WINDOW_SMALL_HEIGHT: f64 = 680.0;
+const WINDOW_SMALL_WIDTH: f64 = 1120.0;
+const WINDOW_SMALL_HEIGHT: f64 = 760.0;
 const WINDOW_LARGE_WIDTH: f64 = 1120.0;
 const WINDOW_LARGE_HEIGHT: f64 = 760.0;
 const WINDOW_SAFE_AREA_MARGIN_X: f64 = 32.0;
 const WINDOW_SAFE_AREA_MARGIN_Y: f64 = 48.0;
-const WINDOW_SIZE_TOLERANCE: f64 = 40.0;
 const WINDOW_RESIZE_SUPPRESSION_MS: u64 = 350;
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -236,13 +235,6 @@ impl WindowSizeMode {
         match self {
             WindowSizeMode::Small => (WINDOW_SMALL_WIDTH, WINDOW_SMALL_HEIGHT),
             WindowSizeMode::Large => (WINDOW_LARGE_WIDTH, WINDOW_LARGE_HEIGHT),
-        }
-    }
-
-    fn toggled(self) -> Self {
-        match self {
-            WindowSizeMode::Small => WindowSizeMode::Large,
-            WindowSizeMode::Large => WindowSizeMode::Small,
         }
     }
 
@@ -2560,53 +2552,10 @@ fn apply_window_placement(
     Ok(next_state)
 }
 
-fn size_matches_mode(width: f64, height: f64, mode: WindowSizeMode) -> bool {
-    let (target_width, target_height) = mode.dimensions();
-
-    (width - target_width).abs() <= WINDOW_SIZE_TOLERANCE
-        && (height - target_height).abs() <= WINDOW_SIZE_TOLERANCE
-}
-
-fn handle_main_window_resized(app: &tauri::AppHandle, physical_size: tauri::PhysicalSize<u32>) {
-    let Some(window) = app.get_webview_window("main") else {
-        return;
-    };
+fn handle_main_window_resized(app: &tauri::AppHandle) {
     let state: State<'_, AppState> = app.state();
 
-    if should_ignore_programmatic_resize(&state) {
-        return;
-    }
-
-    let current_mode = state
-        .runtime_state
-        .lock()
-        .map(|runtime_state| WindowSizeMode::from_window_mode(&runtime_state.last_window_mode))
-        .unwrap_or(WindowSizeMode::Small);
-    let scale_factor = window
-        .current_monitor()
-        .ok()
-        .flatten()
-        .map(|monitor| monitor.scale_factor().max(1.0))
-        .unwrap_or(1.0);
-    let logical_width = physical_size.width as f64 / scale_factor;
-    let logical_height = physical_size.height as f64 / scale_factor;
-
-    if size_matches_mode(logical_width, logical_height, current_mode) {
-        return;
-    }
-
-    let target_mode = current_mode.toggled();
-    match apply_window_placement(&window, &state, target_mode, true, None) {
-        Ok(runtime_state) => emit_superclip_event(
-            app,
-            "window-size-mode-changed",
-            json!({
-                "window_mode": runtime_state.last_window_mode,
-                "source": "native_resize"
-            }),
-        ),
-        Err(_) => record_window_position_error(&state, "window-fallback-used/native_resize"),
-    }
+    let _ = should_ignore_programmatic_resize(&state);
 }
 
 fn record_shortcut_runtime_error(
@@ -4682,8 +4631,8 @@ mod tests {
             .expect("session state should lock");
         session_ui_state.layout_sidebar_width_px = update.layout_sidebar_width_px;
 
-        let serialized = serde_json::to_value(session_ui_state.clone())
-            .expect("session state should serialize");
+        let serialized =
+            serde_json::to_value(session_ui_state.clone()).expect("session state should serialize");
 
         assert_eq!(serialized["layoutSidebarWidthPx"], 360);
     }
@@ -4876,10 +4825,10 @@ pub fn run() {
         }
         tauri::RunEvent::WindowEvent {
             label,
-            event: tauri::WindowEvent::Resized(size),
+            event: tauri::WindowEvent::Resized(_),
             ..
         } if label == "main" => {
-            handle_main_window_resized(app_handle, size);
+            handle_main_window_resized(app_handle);
         }
         _ => {}
     });

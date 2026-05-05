@@ -7,7 +7,6 @@ import {
   ChevronUp,
   Copy,
   FileImage,
-  Info,
   Keyboard,
   LockKeyhole,
   MonitorCog,
@@ -872,30 +871,12 @@ function App() {
       disabled: isRecoveryMode || isMigrationBlocking,
     },
     {
-      key: "diagnostics",
-      title: "诊断",
-      description: "导出",
-      icon: MonitorCog,
-    },
-    {
-      key: "permission",
-      title: "权限",
-      description: permission.accessibilityTrusted ? "已授权" : "仅复制",
-      icon: permission.accessibilityTrusted ? ShieldCheck : TriangleAlert,
-    },
-    {
       key: "clear",
       title: "清空",
       description: isRecoveryMode ? "已禁用" : "需确认",
       icon: Trash2,
       tone: "danger" as const,
       disabled: isRecoveryMode || isMigrationBlocking,
-    },
-    {
-      key: "about",
-      title: "关于",
-      description: "0.1.0",
-      icon: Info,
     },
   ];
 
