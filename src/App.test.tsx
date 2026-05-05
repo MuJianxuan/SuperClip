@@ -358,6 +358,19 @@ describe("App detail preview", () => {
     });
   });
 
+  it("does not render shortcut hints as an inline header row on click", async () => {
+    const user = userEvent.setup();
+    renderApp();
+
+    const shortcutButton = await screen.findByRole("button", { name: "快捷键提示" });
+
+    await user.click(shortcutButton);
+
+    expect(shortcutButton).not.toHaveAttribute("aria-expanded");
+    expect(screen.queryByText("↑↓ 切换")).not.toBeInTheDocument();
+    expect(screen.queryByText("Cmd+Enter 相反动作")).not.toBeInTheDocument();
+  });
+
   it("refreshes the visible history when the backend reports a clipboard monitor insert", async () => {
     const user = userEvent.setup();
     Object.defineProperty(window, "__TAURI_INTERNALS__", {

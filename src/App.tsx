@@ -378,7 +378,6 @@ function App() {
   const [undoCountdown, setUndoCountdown] = useState(0);
   const [isClearConfirming, setIsClearConfirming] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isShortcutHintsOpen, setIsShortcutHintsOpen] = useState(false);
   const [isPreviewExpanded, setIsPreviewExpanded] = useState(false);
   const [selectedDetail, setSelectedDetail] = useState<ClipboardItemDetail | null>(null);
   const [detailLoadState, setDetailLoadState] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -570,18 +569,6 @@ function App() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
-
-  useEffect(() => {
-    if (!isShortcutHintsOpen) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setIsShortcutHintsOpen(false);
-    }, 3000);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [isShortcutHintsOpen]);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -1740,40 +1727,32 @@ function App() {
                   <TooltipTrigger asChild>
                     <button
                       type="button"
-                      onClick={() => setIsShortcutHintsOpen(true)}
-                      aria-expanded={isShortcutHintsOpen}
+                      aria-label="快捷键提示"
                       className="inline-flex h-8 w-8 items-center justify-center rounded-[9px] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] shadow-[0_6px_16px_rgba(18,23,30,0.08)] transition-all hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)] hover:shadow-[0_10px_20px_rgba(18,23,30,0.10)]"
                     >
                       <Keyboard className="h-4 w-4" />
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent>
-                    快捷键提示
+                  <TooltipContent className="w-48">
+                    <div className="space-y-1">
+                      <p className="font-medium text-[var(--text-primary)]">快捷键提示</p>
+                      <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px] text-[var(--text-secondary)]">
+                        <span className="font-medium text-[var(--text-primary)]">↑↓</span>
+                        <span>切换</span>
+                        <span className="font-medium text-[var(--text-primary)]">Enter</span>
+                        <span>默认动作</span>
+                        <span className="font-medium text-[var(--text-primary)]">Cmd+Enter</span>
+                        <span>相反动作</span>
+                        <span className="font-medium text-[var(--text-primary)]">Space</span>
+                        <span>展开</span>
+                        <span className="font-medium text-[var(--text-primary)]">Esc</span>
+                        <span>关闭</span>
+                      </div>
+                    </div>
                   </TooltipContent>
                 </Tooltip>
               </div>
             </div>
-
-            {isShortcutHintsOpen ? (
-              <div className="flex min-h-8 flex-wrap items-center gap-1 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-2 py-1 text-[11px] text-[var(--text-secondary)] shadow-[var(--shadow-soft)]">
-                <span className="inline-flex items-center gap-1 rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5">
-                  <Keyboard className="h-3.5 w-3.5" />
-                  ↑↓ 切换
-                </span>
-                <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5">
-                  Enter 默认动作
-                </span>
-                <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5">
-                  Cmd+Enter 相反动作
-                </span>
-                <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5">
-                  Space 展开
-                </span>
-                <span className="inline-flex rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-2 py-0.5">
-                  Esc 关闭
-                </span>
-              </div>
-            ) : null}
 
             <label className="flex h-10 items-center gap-2.5 rounded-[10px] border border-[var(--border-strong)] bg-[var(--surface)] px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors focus-within:bg-[var(--surface-2)]">
               <Search className="h-4 w-4 text-[var(--text-tertiary)]" />
