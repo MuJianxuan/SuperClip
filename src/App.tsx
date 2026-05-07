@@ -1,4 +1,4 @@
-import { startTransition, useDeferredValue, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import {
   AppWindow,
@@ -121,6 +121,9 @@ const LAYOUT_DETAIL_MIN_WIDTH_PX = 420;
 const LAYOUT_RESIZER_WIDTH_PX = 8;
 const HISTORY_TITLE_MIN_UNITS = 12;
 const HISTORY_TITLE_MAX_UNITS = 48;
+const WINDOW_RESIZE_SETTLE_MS = 140;
+const WIDE_LAYOUT_QUERY = "(min-width: 840px)";
+const SEARCH_DEBOUNCE_MS = 120;
 
 function clampSidebarWidth(width: number, containerWidthPx?: number | null) {
   const availableMax = containerWidthPx
@@ -134,8 +137,10 @@ function clampSidebarWidth(width: number, containerWidthPx?: number | null) {
   return Math.min(Math.max(Math.round(width), LAYOUT_SIDEBAR_MIN_WIDTH_PX), maxWidth);
 }
 
-function buildWorkspaceGridColumns(sidebarWidthPx: number) {
-  return `var(--sidebar-width, ${sidebarWidthPx}px) ${LAYOUT_RESIZER_WIDTH_PX}px minmax(${LAYOUT_DETAIL_MIN_WIDTH_PX}px, 1fr)`;
+function buildWorkspaceGridColumns() {
+  const maxSidebarWidth = `min(${LAYOUT_SIDEBAR_MAX_WIDTH_PX}px, calc(100% - ${LAYOUT_DETAIL_MIN_WIDTH_PX + LAYOUT_RESIZER_WIDTH_PX}px))`;
+
+  return `clamp(${LAYOUT_SIDEBAR_MIN_WIDTH_PX}px, var(--sidebar-width, ${LAYOUT_SIDEBAR_DEFAULT_WIDTH_PX}px), ${maxSidebarWidth}) ${LAYOUT_RESIZER_WIDTH_PX}px minmax(${LAYOUT_DETAIL_MIN_WIDTH_PX}px, 1fr)`;
 }
 
 function getHistoryTitleMaxUnits(sidebarWidthPx: number) {
@@ -361,6 +366,64 @@ function isTauriRuntime() {
   return "__TAURI_INTERNALS__" in window;
 }
 
+interface SearchFieldProps {
+  query: string;
+  shortcutBinding: string;
+  onQueryChange: (query: string) => void;
+}
+
+const SearchField = memo(function SearchField({
+  query,
+  shortcutBinding,
+  onQueryChange,
+}: SearchFieldProps) {
+  const [draftQuery, setDraftQuery] = useState(query);
+  const committedQueryRef = useRef(query);
+
+  useEffect(() => {
+    committedQueryRef.current = query;
+    setDraftQuery(query);
+  }, [query]);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      if (draftQuery !== committedQueryRef.current) {
+        onQueryChange(draftQuery);
+      }
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [draftQuery, onQueryChange]);
+
+  return (
+    <label className="flex h-10 items-center gap-2.5 rounded-[10px] border border-[var(--border-strong)] bg-[var(--surface)] px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors focus-within:bg-[var(--surface-2)]">
+      <Search className="h-4 w-4 text-[var(--text-tertiary)]" />
+      <input
+        autoFocus
+        value={draftQuery}
+        onChange={(event) => {
+          setDraftQuery(event.currentTarget.value);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape" || !draftQuery) {
+            return;
+          }
+
+          event.preventDefault();
+          event.stopPropagation();
+          setDraftQuery("");
+          onQueryChange("");
+        }}
+        placeholder="搜索剪贴板"
+        className="w-full bg-transparent text-[14px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
+      />
+      <span className="hidden rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] sm:inline-flex">
+        {shortcutBinding}
+      </span>
+    </label>
+  );
+});
+
 function App() {
   const [query, setQuery] = useState("");
   const [clipboardItems, setClipboardItems] = useState<ClipboardItem[]>([]);
@@ -386,18 +449,17 @@ function App() {
   const [isWideLayout, setIsWideLayout] = useState(() => typeof window !== "undefined" && window.innerWidth >= 840);
   const [layoutSidebarWidthPx, setLayoutSidebarWidthPx] = useState(LAYOUT_SIDEBAR_DEFAULT_WIDTH_PX);
   const [liveLayoutSidebarWidthPx, setLiveLayoutSidebarWidthPx] = useState<number | null>(null);
-  const [workspaceWidthPx, setWorkspaceWidthPx] = useState<number | null>(null);
   const [isResizingLayout, setIsResizingLayout] = useState(false);
   const listViewportRef = useRef<HTMLDivElement | null>(null);
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const layoutSidebarWidthRef = useRef(LAYOUT_SIDEBAR_DEFAULT_WIDTH_PX);
   const layoutResizeFrameRef = useRef<number | null>(null);
+  const windowResizeSettleTimerRef = useRef<number | null>(null);
   const pendingLayoutWidthRef = useRef(LAYOUT_SIDEBAR_DEFAULT_WIDTH_PX);
   const pendingSessionRestoreRef = useRef<Pick<
     SessionUiStateResponse,
     "selectedItemId" | "scrollAnchor"
   > | null>(null);
-  const deferredQuery = useDeferredValue(query);
 
   useEffect(() => {
     let active = true;
@@ -468,32 +530,53 @@ function App() {
       if (layoutResizeFrameRef.current !== null) {
         window.cancelAnimationFrame(layoutResizeFrameRef.current);
       }
+      if (windowResizeSettleTimerRef.current !== null) {
+        window.clearTimeout(windowResizeSettleTimerRef.current);
+      }
     };
   }, []);
 
   useEffect(() => {
-    const syncWorkspaceWidth = () => {
-      const workspaceWidth = workspaceRef.current?.getBoundingClientRect().width;
-      setWorkspaceWidthPx(workspaceWidth && workspaceWidth > 0 ? workspaceWidth : window.innerWidth);
+    const root = document.documentElement;
+
+    const finishWindowResize = () => {
+      root.classList.remove("is-window-resizing");
+      windowResizeSettleTimerRef.current = null;
     };
 
-    syncWorkspaceWidth();
+    const markWindowResizing = () => {
+      root.classList.add("is-window-resizing");
 
-    const resizeObserver =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(syncWorkspaceWidth);
+      if (windowResizeSettleTimerRef.current !== null) {
+        window.clearTimeout(windowResizeSettleTimerRef.current);
+      }
 
-    if (workspaceRef.current && resizeObserver) {
-      resizeObserver.observe(workspaceRef.current);
-    }
+      windowResizeSettleTimerRef.current = window.setTimeout(finishWindowResize, WINDOW_RESIZE_SETTLE_MS);
+    };
 
-    window.addEventListener("resize", syncWorkspaceWidth);
+    const handleWindowResize = () => markWindowResizing();
+
+    window.addEventListener("resize", handleWindowResize);
 
     return () => {
-      resizeObserver?.disconnect();
-      window.removeEventListener("resize", syncWorkspaceWidth);
+      window.removeEventListener("resize", handleWindowResize);
+      root.classList.remove("is-window-resizing");
+
+      if (windowResizeSettleTimerRef.current !== null) {
+        window.clearTimeout(windowResizeSettleTimerRef.current);
+        windowResizeSettleTimerRef.current = null;
+      }
     };
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(WIDE_LAYOUT_QUERY);
+    const syncWideLayout = () => setIsWideLayout(mediaQuery.matches);
+
+    syncWideLayout();
+    mediaQuery.addEventListener("change", syncWideLayout);
+
+    return () => mediaQuery.removeEventListener("change", syncWideLayout);
   }, []);
 
   useEffect(() => {
@@ -532,7 +615,7 @@ function App() {
     let active = true;
 
     async function refreshClipboard() {
-      const response = await clipboardSearch(deferredQuery);
+      const response = await clipboardSearch(query);
 
       if (!active) {
         return;
@@ -546,7 +629,7 @@ function App() {
     return () => {
       active = false;
     };
-  }, [deferredQuery, refreshNonce]);
+  }, [query, refreshNonce]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -558,16 +641,6 @@ function App() {
 
     root.dataset.themeMode = settings.themeMode;
   }, [settings.themeMode]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsWideLayout(window.innerWidth >= 840);
-    };
-
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
 
   useEffect(() => {
     if (!isTauriRuntime()) {
@@ -837,7 +910,7 @@ function App() {
   const isMigrationBlocking = runtimeState.migrationPhase === "migration_in_progress";
   const isLargeWindow = isWideLayout;
   const isFallbackWindow = runtimeState.lastWindowMode === "fallback_window";
-  const renderedSidebarWidthPx = clampSidebarWidth(liveLayoutSidebarWidthPx ?? layoutSidebarWidthPx, workspaceWidthPx);
+  const renderedSidebarWidthPx = clampSidebarWidth(liveLayoutSidebarWidthPx ?? layoutSidebarWidthPx);
   const historyTitleMaxUnits = getHistoryTitleMaxUnits(renderedSidebarWidthPx);
   const primaryActionLabel = isRecoveryMode
     ? "仅复制"
@@ -847,7 +920,7 @@ function App() {
   const workspaceGridClass = "grid min-h-0 flex-1 overflow-hidden";
   const workspaceGridStyle = {
     "--sidebar-width": `${renderedSidebarWidthPx}px`,
-    gridTemplateColumns: buildWorkspaceGridColumns(renderedSidebarWidthPx),
+    gridTemplateColumns: buildWorkspaceGridColumns(),
   };
   const detailCardClass = isLargeWindow
     ? "flex min-h-0 flex-1 flex-col rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-2.5"
@@ -855,6 +928,9 @@ function App() {
   const previewShellClass = isLargeWindow
     ? "mt-2.5 flex min-h-0 flex-1 flex-col rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-2"
     : "mt-2 flex min-h-0 flex-1 flex-col rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] p-2";
+  const handleSearchQueryChange = useCallback((nextQuery: string) => {
+    setQuery(nextQuery);
+  }, []);
 
   const functionItems = [
     {
@@ -937,7 +1013,7 @@ function App() {
     const pointerId = event.pointerId;
     const startX = event.clientX;
     const startWidth = renderedSidebarWidthPx;
-    const containerWidth = workspace.getBoundingClientRect().width || workspaceWidthPx;
+    const containerWidth = workspace.getBoundingClientRect().width || null;
     const previousCursor = document.body.style.cursor;
     const previousUserSelect = document.body.style.userSelect;
 
@@ -1735,24 +1811,11 @@ function App() {
               </div>
             </div>
 
-            <label className="flex h-10 items-center gap-2.5 rounded-[10px] border border-[var(--border-strong)] bg-[var(--surface)] px-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] transition-colors focus-within:bg-[var(--surface-2)]">
-              <Search className="h-4 w-4 text-[var(--text-tertiary)]" />
-              <input
-                autoFocus
-                value={query}
-                onChange={(event) => {
-                  const nextValue = event.currentTarget.value;
-                  startTransition(() => {
-                    setQuery(nextValue);
-                  });
-                }}
-                placeholder="搜索剪贴板"
-                className="w-full bg-transparent text-[14px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
-              />
-              <span className="hidden rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] sm:inline-flex">
-                {shortcut.binding}
-              </span>
-            </label>
+            <SearchField
+              query={query}
+              shortcutBinding={shortcut.binding}
+              onQueryChange={handleSearchQueryChange}
+            />
           </header>
 
           {!permission.accessibilityTrusted || isRecoveryMode || isFallbackWindow ? (

@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
 import {
@@ -43,6 +43,10 @@ describe("App detail preview", () => {
     tauriListeners.clear();
     invokeMock.mockReset();
     Reflect.deleteProperty(window, "__TAURI_INTERNALS__");
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("renders compact history rows and lets CSS truncate by available width", () => {
@@ -356,6 +360,121 @@ describe("App detail preview", () => {
       expect(screen.queryByText("已直接执行")).not.toBeInTheDocument();
       expect(screen.queryByText("已复制到剪贴板")).not.toBeInTheDocument();
     });
+  });
+
+  it("keeps typing responsive and defers backend search while the user is entering text", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", {
+      configurable: true,
+      value: {},
+    });
+    invokeMock.mockImplementation((command: string, args?: Record<string, unknown>) => {
+      if (command === "settings_get") {
+        return Promise.resolve({
+          schemaVersion: 1,
+          exposedKeys: [],
+          reservedKeys: [],
+          defaultAction: "direct_paste",
+          themeMode: "system",
+          historyLimit: 1000,
+          launchAtLogin: false,
+          showOnStartup: false,
+        });
+      }
+
+      if (command === "rules_list") {
+        return Promise.resolve({ rules: [], total: 0, enabledCount: 0, version: 1 });
+      }
+
+      if (command === "shortcut_get") {
+        return Promise.resolve({
+          binding: "Cmd+Shift+V",
+          isRegistered: true,
+          source: "default",
+          version: 1,
+        });
+      }
+
+      if (command === "permission_check_accessibility") {
+        return Promise.resolve({ accessibilityTrusted: true, checkedAt: "2026-05-04T00:00:00+08:00" });
+      }
+
+      if (command === "window_placement_refresh" || command === "runtime_state_get") {
+        return Promise.resolve({
+          presentationReason: "manual_open",
+          lastDisplayId: "main",
+          lastWindowMode: "large_window",
+          fallbackReason: null,
+          migrationPhase: "ready",
+          isRecoveryMode: false,
+          restoredFromSession: false,
+          updatedAt: "2026-05-04T00:00:00+08:00",
+        });
+      }
+
+      if (command === "session_ui_state_get" || command === "session_ui_state_update") {
+        return Promise.resolve({
+          query: "",
+          selectedItemId: null,
+          scrollAnchor: null,
+          layoutSidebarWidthPx: null,
+          presentationReason: "manual_open",
+          lastDisplayId: "main",
+          lastWindowMode: "large_window",
+          restoredFromSession: false,
+          updatedAt: "2026-05-04T00:00:00+08:00",
+        });
+      }
+
+      if (command === "clipboard_search") {
+        return Promise.resolve({
+          query: String(args?.query ?? ""),
+          normalizedQuery: String(args?.query ?? ""),
+          results: [],
+          total: 0,
+          searchTimeMs: 1,
+          version: 1,
+        });
+      }
+
+      return Promise.resolve({});
+    });
+    renderApp();
+
+    const search = await screen.findByPlaceholderText<HTMLInputElement>("搜索剪贴板");
+    await waitFor(() =>
+      expect(invokeMock.mock.calls.filter(([command]) => command === "clipboard_search")).toHaveLength(1),
+    );
+    vi.useFakeTimers();
+
+    act(() => {
+      fireEvent.change(search, { target: { value: "发布" } });
+    });
+
+    expect(search).toHaveValue("发布");
+    expect(invokeMock.mock.calls.filter(([command]) => command === "clipboard_search")).toHaveLength(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(119);
+    });
+    expect(invokeMock.mock.calls.filter(([command]) => command === "clipboard_search")).toHaveLength(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+    });
+
+    expect(invokeMock.mock.calls.filter(([command]) => command === "clipboard_search")).toHaveLength(2);
+    expect(
+      invokeMock.mock.calls.some(
+        ([command, args]) =>
+          command === "clipboard_search" &&
+          typeof args === "object" &&
+          args !== null &&
+          "query" in args &&
+          args.query === "发布",
+      ),
+    ).toBe(true);
+    vi.useRealTimers();
   });
 
   it("does not render shortcut hints as an inline header row on click", async () => {

@@ -129,6 +129,13 @@ input::placeholder {
   background: rgba(113, 127, 140, 0.22);
 }
 
+.is-window-resizing *,
+.is-window-resizing *::before,
+.is-window-resizing *::after {
+  animation-duration: 0ms !important;
+  transition-duration: 0ms !important;
+}
+
 /* 响应式断点 */
 :root {
   --breakpoint-sm: 840px;

@@ -14,16 +14,23 @@ Object.defineProperty(window, "ResizeObserver", {
 
 Object.defineProperty(window, "matchMedia", {
   writable: true,
-  value: vi.fn().mockImplementation((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
+  value: vi.fn().mockImplementation((query: string) => {
+    const minWidthMatch = query.match(/\(min-width:\s*(\d+)px\)/);
+    const maxWidthMatch = query.match(/\(max-width:\s*(\d+)px\)/);
+    const minWidthMatches = minWidthMatch ? window.innerWidth >= Number(minWidthMatch[1]) : true;
+    const maxWidthMatches = maxWidthMatch ? window.innerWidth <= Number(maxWidthMatch[1]) : true;
+
+    return {
+      matches: minWidthMatches && maxWidthMatches,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    };
+  }),
 });
 
 Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
