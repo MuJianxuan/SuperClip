@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "SuperClip",
         "width": 1120,
         "height": 760,
@@ -19,7 +20,22 @@
         "minHeight": 600,
         "resizable": true,
         "maximizable": true,
-        "fullscreen": true
+        "fullscreen": true,
+        "visible": false
+      },
+      {
+        "label": "popup",
+        "title": "",
+        "url": "/popup.html",
+        "width": 320,
+        "height": 480,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "visible": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": true
       }
     ],
     "security": {

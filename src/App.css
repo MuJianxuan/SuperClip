@@ -23,6 +23,15 @@
   --danger-bg: rgba(247, 231, 226, 0.92);
   --danger-text: #7d4b45;
   --danger-border: rgba(175, 97, 83, 0.2);
+  --popup-bg: rgba(255, 255, 255, 0.78);
+  --popup-border: rgba(0, 0, 0, 0.08);
+  --popup-shadow: 0 20px 60px rgba(0, 0, 0, 0.15), 0 0 0 0.5px rgba(0, 0, 0, 0.05);
+  --selection-accent: #007AFF;
+  --tab-active-bg: rgba(0, 0, 0, 0.06);
+  --tab-hover-bg: rgba(0, 0, 0, 0.03);
+  --row-hover: rgba(0, 0, 0, 0.03);
+  --row-selected: rgba(0, 122, 255, 0.08);
+  --grid-card-bg: rgba(255, 255, 255, 0.92);
 }
 
 :root[data-theme-mode="dark"] {
@@ -48,6 +57,15 @@
   --danger-bg: rgba(69, 36, 32, 0.76);
   --danger-text: #efc1ba;
   --danger-border: rgba(202, 126, 115, 0.18);
+  --popup-bg: rgba(18, 23, 30, 0.82);
+  --popup-border: rgba(255, 255, 255, 0.06);
+  --popup-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(255, 255, 255, 0.05);
+  --selection-accent: #0A84FF;
+  --tab-active-bg: rgba(255, 255, 255, 0.08);
+  --tab-hover-bg: rgba(255, 255, 255, 0.04);
+  --row-hover: rgba(255, 255, 255, 0.03);
+  --row-selected: rgba(10, 132, 255, 0.12);
+  --grid-card-bg: rgba(30, 36, 44, 0.92);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -74,6 +92,15 @@
     --danger-bg: rgba(69, 36, 32, 0.76);
     --danger-text: #efc1ba;
     --danger-border: rgba(202, 126, 115, 0.18);
+    --popup-bg: rgba(18, 23, 30, 0.82);
+    --popup-border: rgba(255, 255, 255, 0.06);
+    --popup-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 0.5px rgba(255, 255, 255, 0.05);
+    --selection-accent: #0A84FF;
+    --tab-active-bg: rgba(255, 255, 255, 0.08);
+    --tab-hover-bg: rgba(255, 255, 255, 0.04);
+    --row-hover: rgba(255, 255, 255, 0.03);
+    --row-selected: rgba(10, 132, 255, 0.12);
+    --grid-card-bg: rgba(30, 36, 44, 0.92);
   }
 }
 
@@ -157,5 +184,70 @@ input::placeholder {
 @media (min-width: 1200px) {
   :root {
     --layout-mode: spacious;
+  }
+}
+
+/* Popup window styles */
+.popup-shell {
+  -webkit-app-region: no-drag;
+}
+
+/* Animation utilities */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-in-from-left {
+  from { transform: translateX(-4px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.animate-in {
+  animation: fade-in 150ms ease-out, slide-in-from-left 150ms ease-out;
+}
+
+/* Smooth transitions for interactive elements */
+.transition-colors {
+  transition-property: color, background-color, border-color;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+
+/* Scrollbar styling for macOS native feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-in {
+    animation: none;
+  }
+  * {
+    transition-duration: 0ms !important;
   }
 }

@@ -1,0 +1,470 @@
+import { useCallback, useEffect, useState } from "react";
+import { Copy, LockKeyhole, MonitorCog, ShieldCheck, TriangleAlert } from "lucide-react";
+import { MainTopBar } from "./MainTopBar";
+import { MainListView } from "./MainListView";
+import { MainGridView } from "./MainGridView";
+import { MainBulkActionBar } from "./MainBulkActionBar";
+import { SettingsShell } from "../../components/settings-shell";
+import { useClipboardData } from "../../hooks/useClipboardData";
+import type { TabId } from "./MainTabNavigation";
+import {
+  clipboardCopy,
+  clipboardPaste,
+  clipboardPin,
+  clipboardUnpin,
+  clipboardDelete,
+  settingsGet,
+  settingsUpdate,
+  rulesList,
+  rulesUpsert,
+  rulesDelete,
+  rulesClear,
+  shortcutGet,
+  shortcutStartRecording,
+  shortcutCancelRecording,
+  shortcutValidate,
+  shortcutUpdate,
+  shortcutRestoreDefault,
+  permissionCheckAccessibility,
+  permissionOpenAccessibility,
+  diagnosticsExport,
+  runtimeStateGet,
+  type SettingsResponse,
+  type SettingsUpdatePayload,
+  type ShortcutStateResponse,
+  type ShortcutValidationResponse,
+  type ExclusionRule,
+  type RulesUpsertPayload,
+} from "../../lib/superclip";
+
+// --- PLACEHOLDER_MAIN_APP_BODY ---
+
+interface FeedbackToast {
+  createdAtMs: number;
+  title: string;
+  message: string;
+  tone: "success" | "warning" | "copy";
+  timeoutMs: number;
+}
+
+const initialSettings: SettingsResponse = {
+  schemaVersion: 1,
+  exposedKeys: [],
+  reservedKeys: [],
+  defaultAction: "direct_paste",
+  themeMode: "system",
+  historyLimit: 1000,
+  launchAtLogin: false,
+  showOnStartup: false,
+};
+
+const initialShortcut: ShortcutStateResponse = {
+  binding: "Cmd+Shift+V",
+  isRegistered: true,
+  source: "default",
+  version: 1,
+};
+
+export function MainApp() {
+  const [activeTab, setActiveTab] = useState<TabId>("all");
+  const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
+    try {
+      const saved = localStorage.getItem("superclip:viewMode");
+      return saved === "grid" ? "grid" : "list";
+    } catch { return "list"; }
+  });
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<SettingsResponse>(initialSettings);
+  const [shortcut, setShortcut] = useState<ShortcutStateResponse>(initialShortcut);
+  const [rules, setRules] = useState<ExclusionRule[]>([]);
+  const [permissionTrusted, setPermissionTrusted] = useState(true);
+  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+  const [isMigrationBlocking, setIsMigrationBlocking] = useState(false);
+  const [feedback, setFeedback] = useState<FeedbackToast | null>(null);
+
+  const kindFilter = activeTab === "all" || activeTab === "pinned" ? undefined : activeTab;
+  const pinnedOnly = activeTab === "pinned";
+
+  const {
+    query,
+    setQuery,
+    items,
+    selectedId,
+    setSelectedId,
+    enqueueRefresh,
+  } = useClipboardData({ kindFilter, pinnedOnly });
+
+  const pinnedCount = items.filter((i) => i.isPinned).length;
+
+  // Bootstrap: load settings, rules, shortcut, permission, runtime state
+  useEffect(() => {
+    let active = true;
+    async function bootstrap() {
+      const [s, r, sc, p] = await Promise.all([
+        settingsGet(),
+        rulesList(),
+        shortcutGet(),
+        permissionCheckAccessibility(),
+      ]);
+      if (!active) return;
+      setSettings(s);
+      setRules(r.rules);
+      setShortcut(sc);
+      setPermissionTrusted(p.accessibilityTrusted);
+
+      try {
+        const rs = await runtimeStateGet();
+        if (!active) return;
+        setIsRecoveryMode(rs.isRecoveryMode);
+        setIsMigrationBlocking(rs.migrationPhase === "migration_in_progress");
+      } catch {}
+    }
+    bootstrap();
+    return () => { active = false; };
+  }, []);
+
+  // Persist view mode
+  useEffect(() => {
+    try { localStorage.setItem("superclip:viewMode", viewMode); } catch {}
+  }, [viewMode]);
+
+  // Theme sync
+  useEffect(() => {
+    const root = document.documentElement;
+    if (settings.themeMode === "system") {
+      delete root.dataset.themeMode;
+    } else {
+      root.dataset.themeMode = settings.themeMode;
+    }
+  }, [settings.themeMode]);
+
+  // Tauri events
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    let unlisten: Array<() => void> = [];
+    let disposed = false;
+
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        Promise.all([
+          listen("app:show-settings", () => { if (!disposed) setIsSettingsOpen(true); }),
+        ]),
+      )
+      .then((fns) => { if (disposed) fns.forEach((f) => void f()); else unlisten = fns; })
+      .catch(() => {});
+
+    return () => { disposed = true; unlisten.forEach((f) => void f()); };
+  }, []);
+
+  // Feedback auto-dismiss
+  useEffect(() => {
+    if (!feedback) return;
+    const t = window.setTimeout(() => setFeedback(null), feedback.timeoutMs);
+    return () => window.clearTimeout(t);
+  }, [feedback]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (isSettingsOpen) return;
+
+      const isInput = event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement;
+
+      if (event.metaKey && event.key >= "1" && event.key <= "5") {
+        event.preventDefault();
+        const tabMap: TabId[] = ["all", "text", "image", "file", "pinned"];
+        setActiveTab(tabMap[parseInt(event.key) - 1]);
+        return;
+      }
+      if (event.metaKey && event.key === "l") {
+        event.preventDefault();
+        setViewMode((m) => (m === "list" ? "grid" : "list"));
+        return;
+      }
+      if (event.metaKey && event.key === "a") {
+        event.preventDefault();
+        setSelectedIds(new Set(items.map((i) => i.id)));
+        return;
+      }
+      if (event.metaKey && event.key === "p") {
+        event.preventDefault();
+        if (selectedId) void handlePin(selectedId);
+        return;
+      }
+      if ((event.key === "Delete" || event.key === "Backspace") && !isInput) {
+        event.preventDefault();
+        if (selectedId) void handleDelete(selectedId);
+        return;
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isSettingsOpen, items, selectedId]);
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  function blockIfReadOnly(label: string): boolean {
+    if (isMigrationBlocking) {
+      setFeedback({ createdAtMs: Date.now(), title: `${label}已禁用`, message: "迁移完成前暂不开放写操作。", tone: "warning", timeoutMs: 4000 });
+      return true;
+    }
+    if (isRecoveryMode) {
+      setFeedback({ createdAtMs: Date.now(), title: `${label}已禁用`, message: "恢复模式下不可修改数据。", tone: "warning", timeoutMs: 4000 });
+      return true;
+    }
+    return false;
+  }
+
+  const handleAction = useCallback(async (id: string) => {
+    if (blockIfReadOnly("粘贴")) return;
+    try { await clipboardPaste(id); } catch { try { await clipboardCopy(id); } catch {} }
+  }, [isRecoveryMode, isMigrationBlocking]);
+
+  const handleCopy = useCallback(async (id: string) => {
+    try { await clipboardCopy(id); } catch {}
+  }, []);
+
+  const handlePin = useCallback(async (id: string) => {
+    if (blockIfReadOnly("置顶")) return;
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    try {
+      if (item.isPinned) await clipboardUnpin(id); else await clipboardPin(id);
+      enqueueRefresh();
+    } catch {}
+  }, [items, enqueueRefresh, isRecoveryMode, isMigrationBlocking]);
+
+  const handleDelete = useCallback(async (id: string) => {
+    if (blockIfReadOnly("删除")) return;
+    try { await clipboardDelete(id); enqueueRefresh(); } catch {}
+  }, [enqueueRefresh, isRecoveryMode, isMigrationBlocking]);
+
+  const handleBulkCopy = useCallback(async () => {
+    for (const id of selectedIds) { try { await clipboardCopy(id); break; } catch {} }
+  }, [selectedIds]);
+
+  const handleBulkPin = useCallback(async () => {
+    if (blockIfReadOnly("批量置顶")) return;
+    for (const id of selectedIds) { try { await clipboardPin(id); } catch {} }
+    enqueueRefresh(); setSelectedIds(new Set());
+  }, [selectedIds, enqueueRefresh, isRecoveryMode, isMigrationBlocking]);
+
+  const handleBulkDelete = useCallback(async () => {
+    if (blockIfReadOnly("批量删除")) return;
+    for (const id of selectedIds) { try { await clipboardDelete(id); } catch {} }
+    enqueueRefresh(); setSelectedIds(new Set());
+  }, [selectedIds, enqueueRefresh, isRecoveryMode, isMigrationBlocking]);
+
+  // Settings handlers
+  async function handleSettingsUpdate(patch: SettingsUpdatePayload) {
+    const next = await settingsUpdate(patch);
+    setSettings(next);
+  }
+
+  async function handleRuleUpsert(payload: RulesUpsertPayload) {
+    const response = await rulesUpsert(payload);
+    setRules((prev) => {
+      const remaining = prev.filter((r) => r.id !== response.rule.id);
+      return [response.rule, ...remaining];
+    });
+  }
+
+  async function handleRuleDelete(ruleId: string) {
+    await rulesDelete(ruleId);
+    setRules((prev) => prev.filter((r) => r.id !== ruleId));
+  }
+
+  async function handleRulesClear() {
+    await rulesClear();
+    setRules([]);
+  }
+
+  async function handleShortcutStart() {
+    const r = await shortcutStartRecording();
+    setShortcut({ binding: r.binding, isRegistered: r.isRegistered, source: r.source, version: r.version });
+  }
+
+  async function handleShortcutCancel() {
+    const r = await shortcutCancelRecording();
+    setShortcut({ binding: r.binding, isRegistered: r.isRegistered, source: r.source, version: r.version });
+  }
+
+  async function handleShortcutValidate(binding: string): Promise<ShortcutValidationResponse> {
+    return shortcutValidate(binding);
+  }
+
+  async function handleShortcutUpdate(binding: string) {
+    const r = await shortcutUpdate(binding);
+    setShortcut(r);
+  }
+
+  async function handleShortcutRestoreDefault() {
+    const r = await shortcutRestoreDefault();
+    setShortcut(r);
+  }
+
+  async function handleDiagnosticsClick() {
+    try {
+      await diagnosticsExport();
+      setFeedback({ createdAtMs: Date.now(), title: "诊断已导出", message: "诊断包已写入本地。", tone: "success", timeoutMs: 3000 });
+    } catch {
+      setFeedback({ createdAtMs: Date.now(), title: "导出失败", message: "请重试。", tone: "warning", timeoutMs: 4000 });
+    }
+  }
+
+  async function handlePermissionGuideClick() {
+    try { await permissionOpenAccessibility(); } catch {}
+  }
+
+  return (
+    <main className="relative flex h-screen flex-col overflow-hidden bg-[var(--bg)] text-[var(--text-primary)]">
+      <MainTopBar
+        activeTab={activeTab}
+        viewMode={viewMode}
+        query={query}
+        onTabChange={setActiveTab}
+        onViewModeChange={setViewMode}
+        onQueryChange={setQuery}
+        onSettingsClick={() => setIsSettingsOpen(true)}
+      />
+
+      {/* Status Banners */}
+      {(!permissionTrusted || isRecoveryMode) && (
+        <div className="space-y-2 border-b border-[var(--border)] bg-[var(--surface-raised)] px-4 py-2.5">
+          {!permissionTrusted && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2">
+              <p className="text-xs font-medium text-[var(--warning-text)]">仅复制模式 — 辅助功能权限未授权</p>
+              <button
+                type="button"
+                onClick={() => void handlePermissionGuideClick()}
+                className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-2)]"
+              >
+                <LockKeyhole className="h-3.5 w-3.5" />
+                授权
+              </button>
+            </div>
+          )}
+          {isRecoveryMode && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2">
+              <div>
+                <p className="text-xs font-medium text-[var(--warning-text)]">恢复模式</p>
+                <p className="mt-0.5 text-xs text-[var(--warning-text)]">只开放浏览、搜索、复制和诊断。</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleDiagnosticsClick()}
+                className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-2)]"
+              >
+                <MonitorCog className="h-3.5 w-3.5" />
+                导出诊断
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {viewMode === "list" ? (
+          <MainListView
+            items={items}
+            selectedId={selectedId}
+            selectedIds={selectedIds}
+            onSelect={setSelectedId}
+            onToggleSelect={handleToggleSelect}
+            onAction={handleAction}
+            onCopy={handleCopy}
+            onPin={handlePin}
+            onDelete={handleDelete}
+          />
+        ) : (
+          <MainGridView
+            items={items}
+            selectedId={selectedId}
+            selectedIds={selectedIds}
+            onSelect={setSelectedId}
+            onToggleSelect={handleToggleSelect}
+            onAction={handleAction}
+            onPin={handlePin}
+            onDelete={handleDelete}
+          />
+        )}
+
+        <MainBulkActionBar
+          selectedCount={selectedIds.size}
+          totalCount={items.length}
+          onSelectAll={() => setSelectedIds(new Set(items.map((i) => i.id)))}
+          onDeselectAll={() => setSelectedIds(new Set())}
+          onBulkCopy={handleBulkCopy}
+          onBulkPin={handleBulkPin}
+          onBulkDelete={handleBulkDelete}
+        />
+      </div>
+
+      {/* Migration Blocking Overlay */}
+      {isMigrationBlocking && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-[rgba(17,22,30,0.42)] px-6 backdrop-blur-sm">
+          <div className="w-full max-w-[420px] rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-6 py-6 text-center shadow-[0_24px_80px_rgba(17,22,30,0.22)]">
+            <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl border border-[var(--border)] bg-[var(--surface-2)] text-[var(--accent)]">
+              <MonitorCog className="h-5 w-5" />
+            </div>
+            <h2 className="mt-4 text-lg font-semibold text-[var(--text-primary)]">正在完成本地迁移</h2>
+            <p className="mt-2 text-sm text-[var(--text-secondary)]">完成前暂不开放写操作。</p>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Shell */}
+      {isSettingsOpen && (
+        <SettingsShell
+          settings={settings}
+          shortcut={shortcut}
+          rules={rules}
+          pinnedCount={pinnedCount}
+          permissionTrusted={permissionTrusted}
+          readOnlyMode={isRecoveryMode || isMigrationBlocking}
+          onClose={() => setIsSettingsOpen(false)}
+          onUpdate={handleSettingsUpdate}
+          onDiagnosticsClick={handleDiagnosticsClick}
+          onPermissionGuideClick={handlePermissionGuideClick}
+          onRuleUpsert={handleRuleUpsert}
+          onRuleDelete={handleRuleDelete}
+          onRulesClear={handleRulesClear}
+          onShortcutStart={handleShortcutStart}
+          onShortcutCancel={handleShortcutCancel}
+          onShortcutValidate={handleShortcutValidate}
+          onShortcutUpdate={handleShortcutUpdate}
+          onShortcutRestoreDefault={handleShortcutRestoreDefault}
+        />
+      )}
+
+      {/* Feedback Toast */}
+      {feedback && (
+        <div className="fixed bottom-5 left-1/2 z-50 w-[min(92vw,480px)] -translate-x-1/2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 shadow-[var(--shadow-soft)] backdrop-blur-xl">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 rounded-full bg-[var(--surface-2)] p-2 text-[var(--accent)]">
+              {feedback.tone === "warning" ? (
+                <TriangleAlert className="h-4 w-4" />
+              ) : feedback.tone === "copy" ? (
+                <Copy className="h-4 w-4" />
+              ) : (
+                <ShieldCheck className="h-4 w-4" />
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-[var(--text-primary)]">{feedback.title}</p>
+              <p className="mt-1 text-sm text-[var(--text-secondary)]">{feedback.message}</p>
+            </div>
+          </div>
+        </div>
+      )}
+    </main>
+  );
+}

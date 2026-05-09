@@ -2626,6 +2626,90 @@ fn register_shortcut_binding(
     Ok(shortcut_state.clone())
 }
 
+fn toggle_popup_window(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("popup") else {
+        return;
+    };
+
+    let is_visible = window.is_visible().unwrap_or(false);
+
+    if is_visible {
+        let _ = window.hide();
+    } else {
+        use tauri_plugin_positioner::WindowExt;
+        let _ = window.move_window(tauri_plugin_positioner::Position::TrayBottomCenter);
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
+fn hide_popup_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("popup") {
+        let _ = window.hide();
+    }
+}
+
+fn pause_monitor_timed(app: &tauri::AppHandle, duration_secs: u64) {
+    let state: State<'_, AppState> = app.state();
+    if let Ok(mut monitoring) = state.is_monitoring.lock() {
+        *monitoring = false;
+    }
+    emit_superclip_event(
+        app,
+        "monitor-status-changed",
+        json!({ "is_monitoring": false, "source": "tray_pause_timed", "resume_after_secs": duration_secs }),
+    );
+
+    let app_handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(duration_secs));
+        let state = app_handle.state::<AppState>();
+        let should_resume = {
+            let mut monitoring = match state.is_monitoring.lock() {
+                Ok(m) => m,
+                Err(_) => return,
+            };
+            if !*monitoring {
+                *monitoring = true;
+                true
+            } else {
+                false
+            }
+        };
+        if should_resume {
+            emit_superclip_event(
+                &app_handle,
+                "monitor-status-changed",
+                json!({ "is_monitoring": true, "source": "timed_resume" }),
+            );
+        }
+    });
+}
+
+fn pause_monitor_indefinite(app: &tauri::AppHandle) {
+    let state: State<'_, AppState> = app.state();
+    if let Ok(mut monitoring) = state.is_monitoring.lock() {
+        *monitoring = false;
+    }
+    emit_superclip_event(
+        app,
+        "monitor-status-changed",
+        json!({ "is_monitoring": false, "source": "tray_pause_indefinite" }),
+    );
+}
+
+fn resume_monitor(app: &tauri::AppHandle) {
+    let state: State<'_, AppState> = app.state();
+    if let Ok(mut monitoring) = state.is_monitoring.lock() {
+        *monitoring = true;
+    }
+    emit_superclip_event(
+        app,
+        "monitor-status-changed",
+        json!({ "is_monitoring": true, "source": "tray_resume" }),
+    );
+}
+
 fn show_main_window(
     app: &tauri::AppHandle,
     presentation_reason: &str,
@@ -2719,7 +2803,7 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app_handle, _shortcut, event| {
                     if event.state == ShortcutState::Pressed {
-                        let _ = show_main_window(app_handle, "global_shortcut", None, None);
+                        toggle_popup_window(app_handle);
                     }
                 })
                 .build(),
@@ -2758,14 +2842,52 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
         };
 
         let tray_menu_open = MenuItemBuilder::with_id("tray_open", "打开主界面").build(app);
+        let tray_menu_pause_1m =
+            MenuItemBuilder::with_id("tray_pause_1m", "暂停 1 分钟").build(app);
+        let tray_menu_pause_5m =
+            MenuItemBuilder::with_id("tray_pause_5m", "暂停 5 分钟").build(app);
+        let tray_menu_pause_until =
+            MenuItemBuilder::with_id("tray_pause_until", "暂停直到恢复").build(app);
+        let tray_menu_resume = MenuItemBuilder::with_id("tray_resume", "恢复监听").build(app);
         let tray_menu_settings = MenuItemBuilder::with_id("tray_settings", "设置").build(app);
         let tray_menu_quit = MenuItemBuilder::with_id("tray_quit", "退出").build(app);
 
-        match (tray_menu_open, tray_menu_settings, tray_menu_quit) {
-            (Ok(tray_menu_open), Ok(tray_menu_settings), Ok(tray_menu_quit)) => {
-                let tray_menu = MenuBuilder::new(app)
-                    .items(&[&tray_menu_open, &tray_menu_settings, &tray_menu_quit])
+        match (
+            tray_menu_open,
+            tray_menu_pause_1m,
+            tray_menu_pause_5m,
+            tray_menu_pause_until,
+            tray_menu_resume,
+            tray_menu_settings,
+            tray_menu_quit,
+        ) {
+            (
+                Ok(tray_menu_open),
+                Ok(tray_menu_pause_1m),
+                Ok(tray_menu_pause_5m),
+                Ok(tray_menu_pause_until),
+                Ok(tray_menu_resume),
+                Ok(tray_menu_settings),
+                Ok(tray_menu_quit),
+            ) => {
+                let pause_submenu = tauri::menu::SubmenuBuilder::with_id(app, "tray_pause_sub", "暂停监听")
+                    .items(&[&tray_menu_pause_1m, &tray_menu_pause_5m, &tray_menu_pause_until])
                     .build();
+
+                let tray_menu = match pause_submenu {
+                    Ok(pause_submenu) => MenuBuilder::new(app)
+                        .item(&tray_menu_open)
+                        .separator()
+                        .item(&pause_submenu)
+                        .item(&tray_menu_resume)
+                        .separator()
+                        .item(&tray_menu_settings)
+                        .item(&tray_menu_quit)
+                        .build(),
+                    Err(_) => MenuBuilder::new(app)
+                        .items(&[&tray_menu_open, &tray_menu_settings, &tray_menu_quit])
+                        .build(),
+                };
 
                 match tray_menu {
                     Ok(menu) => {
@@ -2783,6 +2905,18 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
                                             None,
                                             None,
                                         );
+                                    }
+                                    "tray_pause_1m" => {
+                                        pause_monitor_timed(app_handle, 60);
+                                    }
+                                    "tray_pause_5m" => {
+                                        pause_monitor_timed(app_handle, 300);
+                                    }
+                                    "tray_pause_until" => {
+                                        pause_monitor_indefinite(app_handle);
+                                    }
+                                    "tray_resume" => {
+                                        resume_monitor(app_handle);
                                     }
                                     "tray_settings" => {
                                         let _ = show_main_window(
@@ -2804,18 +2938,12 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
                                         &event,
                                     );
                                     if let TrayIconEvent::Click {
-                                        position,
                                         button: MouseButton::Left,
                                         button_state: MouseButtonState::Up,
                                         ..
                                     } = event
                                     {
-                                        let _ = show_main_window(
-                                            tray.app_handle(),
-                                            "tray_click",
-                                            None,
-                                            Some(position),
-                                        );
+                                        toggle_popup_window(tray.app_handle());
                                     }
                                 })
                                 .build(app);
@@ -4822,6 +4950,21 @@ pub fn run() {
             if let Some(window) = app_handle.get_webview_window("main") {
                 let _ = window.hide();
             }
+        }
+        tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::CloseRequested { api, .. },
+            ..
+        } if label == "popup" => {
+            api.prevent_close();
+            hide_popup_window(app_handle);
+        }
+        tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::Focused(false),
+            ..
+        } if label == "popup" => {
+            hide_popup_window(app_handle);
         }
         tauri::RunEvent::WindowEvent {
             label,
