@@ -10,6 +10,7 @@ use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{
+    image::Image,
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, State,
@@ -23,6 +24,9 @@ use tauri_nspanel::{
     tauri_panel, CollectionBehavior, ManagerExt as NsPanelManagerExt, PanelBuilder, PanelLevel,
 };
 
+#[cfg(target_os = "macos")]
+use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
+
 const RECENT_ERROR_LIMIT: usize = 50;
 const WINDOW_FALLBACK_RECORD_LIMIT: usize = 20;
 const TEXT_PAYLOAD_LIMIT_BYTES: usize = 2 * 1024 * 1024;
@@ -30,6 +34,7 @@ const IMAGE_PAYLOAD_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 const IMAGE_PREVIEW_MAX_EDGE: usize = 360;
 const MONITOR_POLL_MS: u64 = 900;
 const DEFAULT_HISTORY_LIMIT: usize = 1000;
+const TRAY_ICON_BYTES: &[u8] = include_bytes!("../icons/tray-clipboard-list.png");
 const WINDOW_MODE_SMALL: &str = "small_window";
 const WINDOW_MODE_LARGE: &str = "large_window";
 const WINDOW_MODE_FALLBACK: &str = "fallback_window";
@@ -2917,7 +2922,7 @@ tauri_panel! {
 fn create_popup_panel(app: &tauri::AppHandle) -> Result<(), String> {
     use tauri::WebviewUrl;
 
-    let panel = PanelBuilder::<_, SuperClipPanel>::new(app, "popup")
+    let _panel = PanelBuilder::<_, SuperClipPanel>::new(app, "popup")
         .url(WebviewUrl::App("popup.html".into()))
         .level(PanelLevel::MainMenu)
         .collection_behavior(
@@ -2929,6 +2934,7 @@ fn create_popup_panel(app: &tauri::AppHandle) -> Result<(), String> {
         .hides_on_deactivate(false)
         .transparent(true)
         .floating(true)
+        .corner_radius(10.0)
         .with_window(|builder| {
             builder
                 .decorations(false)
@@ -2940,7 +2946,15 @@ fn create_popup_panel(app: &tauri::AppHandle) -> Result<(), String> {
         .build()
         .map_err(|e| format!("Failed to create popup panel: {e}"))?;
 
-    drop(panel);
+    if let Some(window) = app.get_webview_window("popup") {
+        let _ = apply_vibrancy(
+            &window,
+            NSVisualEffectMaterial::Menu,
+            Some(NSVisualEffectState::Active),
+            Some(10.0),
+        );
+    }
+
     Ok(())
 }
 
@@ -3146,9 +3160,19 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
 
                 match tray_menu {
                     Ok(menu) => {
-                        if let Some(window_icon) = app.default_window_icon().cloned() {
+                        let tray_icon = Image::from_bytes(TRAY_ICON_BYTES)
+                            .map(|icon| (icon, true))
+                            .ok()
+                            .or_else(|| {
+                                app.default_window_icon()
+                                    .cloned()
+                                    .map(|icon| (icon, false))
+                            });
+
+                        if let Some((window_icon, icon_as_template)) = tray_icon {
                             let tray_result = TrayIconBuilder::new()
                                 .icon(window_icon)
+                                .icon_as_template(icon_as_template)
                                 .tooltip("SuperClip")
                                 .menu(&menu)
                                 .show_menu_on_left_click(false)

@@ -11,8 +11,8 @@ interface PopupHistoryRowProps {
   onMouseLeave: () => void;
 }
 
-function KindIcon({ kind }: { kind: string }) {
-  const className = "h-4 w-4 text-[var(--text-tertiary)]";
+function KindIcon({ kind, isSelected }: { kind: string; isSelected: boolean }) {
+  const className = `h-3.5 w-3.5 ${isSelected ? "text-white/80" : "text-[var(--text-tertiary)]"}`;
   switch (kind) {
     case "image":
       return <FileImage className={className} />;
@@ -48,21 +48,19 @@ export const PopupHistoryRow = memo(function PopupHistoryRow({
         }
       }}
       onMouseLeave={onMouseLeave}
-      className={`flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors ${
+      className={`mx-1.5 flex w-[calc(100%-12px)] items-center gap-2 rounded-[5px] px-2 py-1.5 text-left transition-colors ${
         isSelected
-          ? "bg-[var(--row-selected)] border-l-[3px] border-l-[var(--selection-accent)]"
-          : "border-l-[3px] border-l-transparent hover:bg-[var(--row-hover)]"
+          ? "bg-[var(--selection-accent)] text-white"
+          : "hover:bg-[var(--row-hover)]"
       }`}
     >
-      <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[var(--surface-2)]">
-        <KindIcon kind={item.kind} />
-      </div>
+      <KindIcon kind={item.kind} isSelected={isSelected} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-medium leading-tight text-[var(--text-primary)]">
+        <p className={`truncate text-[13px] leading-tight ${isSelected ? "text-white font-medium" : "text-[var(--text-primary)]"}`}>
           {item.title}
         </p>
       </div>
-      {item.isPinned && <Pin className="h-3 w-3 shrink-0 text-[var(--text-tertiary)]" />}
+      {item.isPinned && <Pin className={`h-3 w-3 shrink-0 ${isSelected ? "text-white/70" : "text-[var(--text-tertiary)]"}`} />}
     </button>
   );
 });

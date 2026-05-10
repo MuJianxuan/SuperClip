@@ -59,7 +59,7 @@ describe("PopupHistoryRow", () => {
       />,
     );
     const button = container.querySelector("button");
-    expect(button?.className).toContain("row-selected");
+    expect(button?.className).toContain("selection-accent");
   });
 
   it("calls onClick when clicked", () => {

@@ -204,7 +204,7 @@ export function PopupApp() {
   );
 
   return (
-    <div className="popup-shell h-screen w-screen overflow-hidden border border-[var(--popup-border)] bg-[var(--popup-bg)] shadow-[var(--popup-shadow)] backdrop-blur-[24px] backdrop-saturate-[1.8]">
+    <div className={`popup-shell h-screen w-screen overflow-hidden rounded-[10px] border border-[var(--popup-border)] shadow-[var(--popup-shadow)] ${"__TAURI_INTERNALS__" in window ? "bg-transparent" : "bg-[var(--popup-bg)] backdrop-blur-[24px] backdrop-saturate-[1.8]"}`}>
       {/* Search */}
       <div className="flex h-9 items-center gap-2 border-b border-[var(--border)] px-3">
         <Search className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
