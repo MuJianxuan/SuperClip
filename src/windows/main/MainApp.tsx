@@ -90,6 +90,7 @@ export function MainApp() {
     query,
     setQuery,
     items,
+    itemsRef,
     selectedId,
     setSelectedId,
     enqueueRefresh,
@@ -246,13 +247,13 @@ export function MainApp() {
 
   const handlePin = useCallback(async (id: string) => {
     if (blockIfReadOnly("置顶")) return;
-    const item = items.find((i) => i.id === id);
+    const item = itemsRef.current.find((i) => i.id === id);
     if (!item) return;
     try {
       if (item.isPinned) await clipboardUnpin(id); else await clipboardPin(id);
       enqueueRefresh();
     } catch {}
-  }, [items, enqueueRefresh, isRecoveryMode, isMigrationBlocking]);
+  }, [itemsRef, enqueueRefresh, isRecoveryMode, isMigrationBlocking]);
 
   const handleDelete = useCallback(async (id: string) => {
     if (blockIfReadOnly("删除")) return;

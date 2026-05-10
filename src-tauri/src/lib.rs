@@ -711,6 +711,20 @@ fn migrate_database(connection: &Connection) -> Result<(), String> {
         )
         .map_err(map_db_error)?;
 
+    connection
+        .execute_batch(
+            r#"
+            CREATE INDEX IF NOT EXISTS idx_clipboard_items_kind_list
+                ON clipboard_items(kind, is_pinned DESC, last_seen_at DESC);
+
+            INSERT OR IGNORE INTO _superclip_migrations(version, description, applied_at)
+            VALUES (4, 'kind composite index for tab filter performance', unixepoch());
+
+            PRAGMA user_version = 4;
+            "#,
+        )
+        .map_err(map_db_error)?;
+
     Ok(())
 }
 
@@ -1790,7 +1804,7 @@ fn list_clipboard_items(
         "#,
     };
 
-    let mut statement = connection.prepare(sql).map_err(map_db_error)?;
+    let mut statement = connection.prepare_cached(sql).map_err(map_db_error)?;
     let rows = if let Some(kind) = kind_filter {
         statement.query_map(params![kind], row_to_summary).map_err(map_db_error)?
     } else {
@@ -1825,7 +1839,7 @@ fn like_search_items(
         ),
     };
 
-    let mut statement = connection.prepare(&sql).map_err(map_db_error)?;
+    let mut statement = connection.prepare_cached(&sql).map_err(map_db_error)?;
     let rows = if let Some(kind) = kind_filter {
         statement.query_map(params![pattern, kind], row_to_summary).map_err(map_db_error)?
     } else {
@@ -1977,7 +1991,7 @@ fn search_clipboard_items(
             "#, false),
         };
 
-        let mut statement = connection.prepare(sql).map_err(map_db_error)?;
+        let mut statement = connection.prepare_cached(sql).map_err(map_db_error)?;
         let rows = if has_kind {
             statement.query_map(params![match_query, kind_filter.unwrap()], row_to_summary)
         } else {

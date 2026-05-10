@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef } from "react";
 import {
   clipboardSearch,
   type ClipboardItemDetail,
@@ -7,6 +7,53 @@ import {
 import type { ClipboardItem } from "../components/history-row";
 
 const SEARCH_DEBOUNCE_MS = 150;
+const CACHE_TTL_MS = 30_000;
+
+interface CacheEntry {
+  items: ClipboardItem[];
+  ts: number;
+}
+
+interface DataState {
+  items: ClipboardItem[];
+  selectedId: string;
+  isLoading: boolean;
+}
+
+type DataAction =
+  | { type: "SET_DATA"; items: ClipboardItem[]; keepSelection: boolean; prevSelectedId: string }
+  | { type: "SET_SELECTED"; id: string }
+  | { type: "SET_LOADING" };
+
+function deriveSelectedId(
+  items: ClipboardItem[],
+  prevId: string,
+  keepSelection: boolean,
+): string {
+  if (!items.length) return "";
+  if (keepSelection && items.some((i) => i.id === prevId)) return prevId;
+  return items[0].id;
+}
+
+function dataReducer(state: DataState, action: DataAction): DataState {
+  switch (action.type) {
+    case "SET_LOADING":
+      return { ...state, isLoading: true };
+    case "SET_DATA": {
+      const selectedId = deriveSelectedId(
+        action.items,
+        action.prevSelectedId,
+        action.keepSelection,
+      );
+      return { items: action.items, selectedId, isLoading: false };
+    }
+    case "SET_SELECTED":
+      if (!state.items.length || !state.items.some((i) => i.id === action.id)) {
+        return state.selectedId === "" ? state : { ...state, selectedId: "" };
+      }
+      return state.selectedId === action.id ? state : { ...state, selectedId: action.id };
+  }
+}
 
 export interface UseClipboardDataOptions {
   kindFilter?: string;
@@ -15,15 +62,29 @@ export interface UseClipboardDataOptions {
 
 export function useClipboardData(options: UseClipboardDataOptions = {}) {
   const { kindFilter, pinnedOnly } = options;
-  const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  const [items, setItems] = useState<ClipboardItem[]>([]);
-  const [selectedId, setSelectedId] = useState("");
-  const [refreshNonce, setRefreshNonce] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+
+  const [query, setQuery] = useReducer((_: string, next: string) => next, "");
+  const [debouncedQuery, setDebouncedQuery] = useReducer((_: string, next: string) => next, "");
+
+  const [state, dispatch] = useReducer(dataReducer, {
+    items: [],
+    selectedId: "",
+    isLoading: true,
+  });
+
+  const itemsRef = useRef<ClipboardItem[]>([]);
+  itemsRef.current = state.items;
+
+  const selectedIdRef = useRef("");
+  selectedIdRef.current = state.selectedId;
+
+  const cacheRef = useRef<Map<string, CacheEntry>>(new Map());
+  const refreshNonceRef = useRef(0);
+  const [refreshNonce, bumpNonce] = useReducer((n: number) => n + 1, 0);
+  const debouncedQueryRef = useRef("");
 
   const enqueueRefresh = useCallback(() => {
-    setRefreshNonce((n) => n + 1);
+    bumpNonce();
   }, []);
 
   useEffect(() => {
@@ -36,31 +97,55 @@ export function useClipboardData(options: UseClipboardDataOptions = {}) {
   }, [query]);
 
   useEffect(() => {
-    let active = true;
-
-    async function fetchData() {
-      setIsLoading(true);
-      const response = await clipboardSearch(debouncedQuery, kindFilter, pinnedOnly);
-
-      if (!active) return;
-
-      setItems(response.results);
-      setIsLoading(false);
-    }
-
-    fetchData();
-    return () => { active = false; };
-  }, [debouncedQuery, refreshNonce, kindFilter, pinnedOnly]);
+    debouncedQueryRef.current = debouncedQuery;
+  }, [debouncedQuery]);
 
   useEffect(() => {
-    if (!items.length) {
-      setSelectedId("");
-      return;
+    let active = true;
+    const cacheKey = `${kindFilter ?? ""}:${pinnedOnly ? "1" : "0"}:${debouncedQuery}`;
+    const cached = cacheRef.current.get(cacheKey);
+    const now = Date.now();
+
+    if (cached) {
+      dispatch({
+        type: "SET_DATA",
+        items: cached.items,
+        keepSelection: true,
+        prevSelectedId: selectedIdRef.current,
+      });
+
+      const isStale = now - cached.ts > CACHE_TTL_MS;
+      if (!isStale && refreshNonce === refreshNonceRef.current) {
+        return;
+      }
+    } else {
+      dispatch({ type: "SET_LOADING" });
     }
-    if (!items.some((item) => item.id === selectedId)) {
-      setSelectedId(items[0].id);
+
+    refreshNonceRef.current = refreshNonce;
+
+    async function fetchData() {
+      try {
+        const response = await clipboardSearch(debouncedQuery, kindFilter, pinnedOnly);
+        if (!active) return;
+
+        cacheRef.current.set(cacheKey, { items: response.results, ts: Date.now() });
+
+        dispatch({
+          type: "SET_DATA",
+          items: response.results,
+          keepSelection: !!cached,
+          prevSelectedId: selectedIdRef.current,
+        });
+      } catch {
+        // 请求失败时保留已有数据
+      }
     }
-  }, [items, selectedId]);
+
+    void fetchData();
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedQuery, refreshNonce, kindFilter, pinnedOnly]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
@@ -72,7 +157,11 @@ export function useClipboardData(options: UseClipboardDataOptions = {}) {
       .then(({ listen }) =>
         Promise.all([
           listen("history-updated", () => {
-            if (!disposed) enqueueRefresh();
+            if (!disposed) {
+              const cacheKey = `${kindFilter ?? ""}:${pinnedOnly ? "1" : "0"}:${debouncedQueryRef.current}`;
+              cacheRef.current.delete(cacheKey);
+              enqueueRefresh();
+            }
           }),
         ]),
       )
@@ -89,25 +178,37 @@ export function useClipboardData(options: UseClipboardDataOptions = {}) {
       disposed = true;
       unlisten.forEach((fn) => void fn());
     };
-  }, [enqueueRefresh]);
+  }, [enqueueRefresh, kindFilter, pinnedOnly]);
 
-  const selectedItem = items.find((item) => item.id === selectedId) ?? items[0] ?? null;
+  const setSelectedId = useCallback((id: string) => {
+    dispatch({ type: "SET_SELECTED", id });
+  }, []);
+
+  const selectedItem =
+    state.items.find((item) => item.id === state.selectedId) ?? state.items[0] ?? null;
 
   return {
     query,
     setQuery,
-    items,
-    selectedId,
+    items: state.items,
+    itemsRef,
+    selectedId: state.selectedId,
     setSelectedId,
     selectedItem,
-    isLoading,
+    isLoading: state.isLoading,
     enqueueRefresh,
   };
 }
 
 export function useClipboardDetail(itemId: string | null) {
-  const [detail, setDetail] = useState<ClipboardItemDetail | null>(null);
-  const [loadState, setLoadState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [detail, setDetail] = useReducer(
+    (_: ClipboardItemDetail | null, next: ClipboardItemDetail | null) => next,
+    null,
+  );
+  const [loadState, setLoadState] = useReducer(
+    (_: "idle" | "loading" | "ready" | "error", next: "idle" | "loading" | "ready" | "error") => next,
+    "idle",
+  );
 
   useEffect(() => {
     if (!itemId) {
