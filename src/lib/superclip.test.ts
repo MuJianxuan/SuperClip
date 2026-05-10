@@ -3,8 +3,11 @@ import {
   __resetSuperClipFallbackForTests,
   clipboardGet,
   clipboardSearch,
+  previewHide,
+  previewShow,
   sessionUiStateGet,
   sessionUiStateUpdate,
+  showMain,
   windowPlacementRefresh,
 } from "./superclip";
 
@@ -62,5 +65,17 @@ describe("superclip browser fallback", () => {
 
     expect(state.lastWindowMode).toBe("fallback_window");
     expect(state.fallbackReason).toBe("safe_area_fallback");
+  });
+
+  it("showMain resolves without error in fallback mode", async () => {
+    await expect(showMain()).resolves.toBeUndefined();
+  });
+
+  it("previewShow resolves without error in fallback mode", async () => {
+    await expect(previewShow(100, 200, 280, 320)).resolves.toBeUndefined();
+  });
+
+  it("previewHide resolves without error in fallback mode", async () => {
+    await expect(previewHide()).resolves.toBeUndefined();
   });
 });

@@ -36,6 +36,20 @@
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "focus": true
+      },
+      {
+        "label": "preview",
+        "title": "",
+        "url": "/preview.html",
+        "width": 280,
+        "height": 320,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "visible": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "focus": false
       }
     ],
     "security": {

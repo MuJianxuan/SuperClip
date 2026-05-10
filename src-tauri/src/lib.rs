@@ -438,6 +438,7 @@ struct AppState {
     window_fallback_records: Mutex<Vec<WindowFallbackRecord>>,
     window_placement: Mutex<WindowPlacementCoordinator>,
     tray_icon: Mutex<Option<TrayIcon<tauri::Wry>>>,
+    preview_active: Mutex<bool>,
 }
 
 impl AppState {
@@ -531,6 +532,7 @@ impl AppState {
             window_fallback_records: Mutex::new(Vec::new()),
             window_placement: Mutex::new(WindowPlacementCoordinator::new()),
             tray_icon: Mutex::new(None),
+            preview_active: Mutex::new(false),
         }
     }
 }
@@ -2739,7 +2741,15 @@ fn toggle_popup_window(app: &tauri::AppHandle) {
 }
 
 fn hide_popup_window(app: &tauri::AppHandle) {
+    if let Some(state) = app.try_state::<AppState>() {
+        if let Ok(mut flag) = state.preview_active.lock() {
+            *flag = false;
+        }
+    }
     if let Some(window) = app.get_webview_window("popup") {
+        let _ = window.hide();
+    }
+    if let Some(window) = app.get_webview_window("preview") {
         let _ = window.hide();
     }
 }
@@ -4040,6 +4050,88 @@ fn permission_open_accessibility(app: tauri::AppHandle) -> Result<bool, String> 
 }
 
 #[tauri::command]
+fn show_main(app: tauri::AppHandle) -> Result<(), String> {
+    show_main_window(&app, "popup_button", Some("popup_button"), None)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn preview_show(
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let Some(window) = app.get_webview_window("preview") else {
+        return Err("preview window not found".into());
+    };
+
+    if let Ok(mut flag) = state.preview_active.lock() {
+        *flag = true;
+    }
+
+    let mut final_x = x;
+    let mut final_y = y;
+
+    if let Some(monitor) = window.current_monitor().ok().flatten()
+        .or_else(|| window.primary_monitor().ok().flatten())
+    {
+        let scale = monitor.scale_factor();
+        let mon_pos = monitor.position();
+        let mon_size = monitor.size();
+        let mon_x = mon_pos.x as f64 / scale;
+        let mon_y = mon_pos.y as f64 / scale;
+        let mon_w = mon_size.width as f64 / scale;
+        let mon_h = mon_size.height as f64 / scale;
+
+        let screen_right = mon_x + mon_w;
+        let screen_bottom = mon_y + mon_h;
+
+        if final_x + width > screen_right {
+            if let Some(popup) = app.get_webview_window("popup") {
+                if let Ok(popup_pos) = popup.outer_position() {
+                    let popup_x = popup_pos.x as f64 / scale;
+                    final_x = popup_x - width - 4.0;
+                }
+            }
+        }
+        if final_y + height > screen_bottom {
+            final_y = screen_bottom - height;
+        }
+        if final_y < mon_y {
+            final_y = mon_y;
+        }
+        if final_x < mon_x {
+            final_x = mon_x;
+        }
+    }
+
+    let _ = window.set_size(tauri::LogicalSize::new(width, height));
+    let _ = window.set_position(tauri::LogicalPosition::new(final_x, final_y));
+    let _ = window.show();
+
+    if let Some(popup) = app.get_webview_window("popup") {
+        let _ = popup.set_focus();
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn preview_hide(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    if let Ok(mut flag) = state.preview_active.lock() {
+        *flag = false;
+    }
+    let Some(window) = app.get_webview_window("preview") else {
+        return Err("preview window not found".into());
+    };
+    let _ = window.hide();
+    Ok(())
+}
+
+#[tauri::command]
 fn monitor_toggle(
     next_state: Option<bool>,
     app: tauri::AppHandle,
@@ -5038,6 +5130,9 @@ pub fn run() {
             shortcut_restore_default,
             permission_check_accessibility,
             permission_open_accessibility,
+            show_main,
+            preview_show,
+            preview_hide,
             monitor_toggle,
             clipboard_copy,
             clipboard_paste,
@@ -5078,10 +5173,39 @@ pub fn run() {
         }
         tauri::RunEvent::WindowEvent {
             label,
+            event: tauri::WindowEvent::CloseRequested { api, .. },
+            ..
+        } if label == "preview" => {
+            api.prevent_close();
+            if let Some(window) = app_handle.get_webview_window("preview") {
+                let _ = window.hide();
+            }
+        }
+        tauri::RunEvent::WindowEvent {
+            label,
             event: tauri::WindowEvent::Focused(false),
             ..
         } if label == "popup" => {
-            hide_popup_window(app_handle);
+            let preview_active = app_handle
+                .try_state::<AppState>()
+                .and_then(|s| s.preview_active.lock().ok().map(|f| *f))
+                .unwrap_or(false);
+            if !preview_active {
+                hide_popup_window(app_handle);
+            }
+        }
+        tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::Focused(false),
+            ..
+        } if label == "preview" => {
+            let popup_focused = app_handle
+                .get_webview_window("popup")
+                .and_then(|w| w.is_focused().ok())
+                .unwrap_or(false);
+            if !popup_focused {
+                hide_popup_window(app_handle);
+            }
         }
         tauri::RunEvent::WindowEvent {
             label,

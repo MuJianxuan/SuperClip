@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { clipboardGet, type ClipboardItemDetail } from "../lib/superclip";
 import type { ClipboardItem } from "../components/history-row";
 
@@ -10,6 +10,26 @@ interface PopupPreviewPopoverProps {
 }
 
 const detailCache = new Map<string, ClipboardItemDetail>();
+
+function useImageDataUrl(detail: ClipboardItemDetail | null) {
+  return useMemo(() => {
+    const bytes = detail?.payload?.imageBytes;
+    const w = detail?.payload?.imageWidth;
+    const h = detail?.payload?.imageHeight;
+    if (!bytes || !w || !h) return null;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    const imageData = ctx.createImageData(w, h);
+    imageData.data.set(new Uint8ClampedArray(bytes));
+    ctx.putImageData(imageData, 0, 0);
+    return canvas.toDataURL("image/png");
+  }, [detail?.payload?.imageBytes, detail?.payload?.imageWidth, detail?.payload?.imageHeight]);
+}
 
 export function PopupPreviewPopover({
   item,
@@ -41,6 +61,8 @@ export function PopupPreviewPopover({
     return () => { active = false; };
   }, [item.id]);
 
+  const imageDataUrl = useImageDataUrl(detail);
+
   const previewText =
     detail?.payload?.textPlain?.trim() || item.preview || "暂无预览";
 
@@ -50,40 +72,33 @@ export function PopupPreviewPopover({
     <div
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className="fixed z-50 w-[280px] max-h-[320px] overflow-hidden rounded-xl border border-[var(--popup-border)] bg-[var(--popup-bg)] shadow-[var(--popup-shadow)] animate-in fade-in slide-in-from-left-1 duration-150"
+      className="fixed z-50 max-w-[280px] max-h-[300px] overflow-hidden rounded-lg border border-[var(--popup-border)] bg-[var(--popup-bg)] shadow-[var(--popup-shadow)] backdrop-blur-[24px] backdrop-saturate-[1.8] animate-in fade-in slide-in-from-left-1 duration-150"
       style={{
         left: `${anchorRect.right + 8}px`,
         top: `${popoverTop}px`,
       }}
     >
-      <div className="p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-[var(--text-tertiary)]">
-            {item.kind}
-          </span>
-          <span className="text-[11px] text-[var(--text-tertiary)]">
-            {item.sourceApp}
-          </span>
+      {item.kind === "image" ? (
+        <div className="p-1.5">
+          {imageDataUrl ? (
+            <img
+              src={imageDataUrl}
+              alt=""
+              className="max-h-[260px] max-w-full rounded object-contain"
+            />
+          ) : (
+            <p className="px-1 py-3 text-[12px] text-[var(--text-tertiary)]">
+              {item.meta || "图片"}
+            </p>
+          )}
         </div>
-
-        {item.kind === "image" ? (
-          <div className="flex h-[180px] items-center justify-center rounded-lg border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)]">
-            <p className="text-[12px] text-[var(--text-tertiary)]">
-              {item.meta || "图片预览"}
-            </p>
-          </div>
-        ) : (
-          <div className="max-h-[240px] overflow-hidden rounded-lg bg-[var(--surface-2)] p-2.5">
-            <p className="whitespace-pre-wrap text-[12px] leading-[1.6] text-[var(--text-primary)] line-clamp-[8]">
-              {previewText}
-            </p>
-          </div>
-        )}
-
-        <p className="mt-2 text-[11px] text-[var(--text-tertiary)]">
-          {item.timeLabel}
-        </p>
-      </div>
+      ) : (
+        <div className="px-2 py-1.5">
+          <p className="whitespace-pre-wrap text-[12px] leading-[1.5] text-[var(--text-primary)] line-clamp-6">
+            {previewText}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

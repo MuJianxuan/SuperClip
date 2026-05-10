@@ -1,34 +1,66 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search, Settings2, Pause, Play, Pin } from "lucide-react";
+import { Search, Settings2, Pause, Play, Pin, Home } from "lucide-react";
 import { useClipboardData } from "../hooks/useClipboardData";
 import { useHoverPreview } from "../hooks/useHoverPreview";
 import { PopupHistoryRow } from "./PopupHistoryRow";
-import { PopupPreviewPopover } from "./PopupPreviewPopover";
 import {
   clipboardCopy,
   clipboardPaste,
   monitorToggle,
+  previewShow,
+  previewHide,
   settingsGet,
   shortcutGet,
+  showMain,
   type SettingsResponse,
 } from "../lib/superclip";
 import type { ClipboardItem } from "../components/history-row";
 
-const INITIAL_VISIBLE_COUNT = 8;
-const EXPANDED_VISIBLE_COUNT = 20;
+const MAX_VISIBLE_COUNT = 50;
 
 export function PopupApp() {
   const { query, setQuery, items, selectedId, setSelectedId, selectedItem } =
     useClipboardData();
   const [isMonitoring, setIsMonitoring] = useState(true);
-  const [isExpanded, setIsExpanded] = useState(false);
   const [settings, setSettings] = useState<SettingsResponse | null>(null);
   const [shortcutBinding, setShortcutBinding] = useState("Cmd+Shift+V");
 
   const hoverPreview = useHoverPreview<ClipboardItem>({ delay: 300, hideDelay: 100 });
 
-  const visibleCount = isExpanded ? EXPANDED_VISIBLE_COUNT : INITIAL_VISIBLE_COUNT;
-  const visibleItems = items.slice(0, visibleCount);
+  useEffect(() => {
+    if (hoverPreview.isPreviewVisible && hoverPreview.hoveredItem && hoverPreview.hoveredRect) {
+      const item = hoverPreview.hoveredItem;
+      const rect = hoverPreview.hoveredRect;
+      if (!("__TAURI_INTERNALS__" in window)) return;
+
+      void (async () => {
+        try {
+          const { getCurrentWindow } = await import("@tauri-apps/api/window");
+          const win = getCurrentWindow();
+          const pos = await win.outerPosition();
+          const scale = await win.scaleFactor();
+          const logicalX = pos.x / scale;
+          const logicalY = pos.y / scale;
+
+          const isImage = item.kind === "image";
+          const previewW = isImage ? 240 : 260;
+          const previewH = isImage ? 200 : 126;
+
+          const previewX = logicalX + 320 + 4;
+          const previewY = logicalY + rect.top - 8;
+
+          await previewShow(previewX, previewY, previewW, previewH);
+
+          const { emit } = await import("@tauri-apps/api/event");
+          await emit("preview:show", { item });
+        } catch {}
+      })();
+    } else {
+      void previewHide().catch(() => {});
+    }
+  }, [hoverPreview.isPreviewVisible, hoverPreview.hoveredItem, hoverPreview.hoveredRect]);
+
+  const visibleItems = items.slice(0, MAX_VISIBLE_COUNT);
   const pinnedCount = useMemo(() => items.filter((item) => item.isPinned).length, [items]);
 
   useEffect(() => {
@@ -53,6 +85,25 @@ export function PopupApp() {
     return () => { disposed = true; unlisten?.(); };
   }, []);
 
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    let unlistenEnter: (() => void) | null = null;
+    let unlistenLeave: (() => void) | null = null;
+    let disposed = false;
+
+    void import("@tauri-apps/api/event").then(({ listen }) => {
+      listen("preview:mouse-enter", () => {
+        if (!disposed) hoverPreview.handlePreviewEnter();
+      }).then((fn) => { if (disposed) void fn(); else unlistenEnter = fn; });
+
+      listen("preview:mouse-leave", () => {
+        if (!disposed) hoverPreview.handlePreviewLeave();
+      }).then((fn) => { if (disposed) void fn(); else unlistenLeave = fn; });
+    });
+
+    return () => { disposed = true; unlistenEnter?.(); unlistenLeave?.(); };
+  }, [hoverPreview.handlePreviewEnter, hoverPreview.handlePreviewLeave]);
+
   const popupKeyStateRef = useRef({ query, selectedId, selectedItem, visibleItems });
   useEffect(() => {
     popupKeyStateRef.current = { query, selectedId, selectedItem, visibleItems };
@@ -69,12 +120,6 @@ export function PopupApp() {
         } else {
           hidePopup();
         }
-        return;
-      }
-
-      if (event.key === "Tab" && !event.shiftKey) {
-        event.preventDefault();
-        setIsExpanded((v) => !v);
         return;
       }
 
@@ -109,13 +154,10 @@ export function PopupApp() {
       } else {
         await clipboardPaste(item.id);
       }
-      hidePopup();
     } catch {
-      // fallback to copy
-      try {
-        await clipboardCopy(item.id);
-        hidePopup();
-      } catch {}
+      try { await clipboardCopy(item.id); } catch {}
+    } finally {
+      hidePopup();
     }
   }
 
@@ -127,6 +169,7 @@ export function PopupApp() {
   }
 
   function hidePopup() {
+    void previewHide().catch(() => {});
     if ("__TAURI_INTERNALS__" in window) {
       import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
         getCurrentWindow().hide();
@@ -134,12 +177,22 @@ export function PopupApp() {
     }
   }
 
-  function openSettings() {
-    if ("__TAURI_INTERNALS__" in window) {
-      import("@tauri-apps/api/event").then(({ emit }) => {
-        emit("app:show-settings", { source: "popup" });
-      }).catch(() => {});
-    }
+  async function openSettings() {
+    try {
+      await showMain();
+      if ("__TAURI_INTERNALS__" in window) {
+        const { emit } = await import("@tauri-apps/api/event");
+        await emit("app:show-settings", { source: "popup" });
+      }
+      hidePopup();
+    } catch {}
+  }
+
+  async function openMain() {
+    try {
+      await showMain();
+      hidePopup();
+    } catch {}
   }
 
   const handleRowClick = useCallback(
@@ -151,7 +204,7 @@ export function PopupApp() {
   );
 
   return (
-    <div className="popup-shell h-screen w-screen overflow-hidden rounded-xl border border-[var(--popup-border)] bg-[var(--popup-bg)] shadow-[var(--popup-shadow)] backdrop-blur-[24px] backdrop-saturate-[1.8]">
+    <div className="popup-shell h-screen w-screen overflow-hidden border border-[var(--popup-border)] bg-[var(--popup-bg)] shadow-[var(--popup-shadow)] backdrop-blur-[24px] backdrop-saturate-[1.8]">
       {/* Search */}
       <div className="flex h-9 items-center gap-2 border-b border-[var(--border)] px-3">
         <Search className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
@@ -182,15 +235,6 @@ export function PopupApp() {
                 onMouseLeave={hoverPreview.handleRowLeave}
               />
             ))}
-            {items.length > visibleCount && (
-              <button
-                type="button"
-                onClick={() => setIsExpanded((v) => !v)}
-                className="w-full px-3 py-1.5 text-center text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]"
-              >
-                {isExpanded ? "收起" : `Tab 展开更多 (${items.length - visibleCount})`}
-              </button>
-            )}
           </div>
         ) : (
           <div className="flex h-full items-center justify-center px-4">
@@ -210,6 +254,13 @@ export function PopupApp() {
         <span className="flex-1" />
         <button
           type="button"
+          onClick={openMain}
+          className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--tab-hover-bg)] hover:text-[var(--text-secondary)]"
+        >
+          <Home className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
           onClick={openSettings}
           className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--tab-hover-bg)] hover:text-[var(--text-secondary)]"
         >
@@ -223,16 +274,6 @@ export function PopupApp() {
           {isMonitoring ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
         </button>
       </div>
-
-      {/* Hover Preview Popover */}
-      {hoverPreview.isPreviewVisible && hoverPreview.hoveredItem && hoverPreview.hoveredRect && (
-        <PopupPreviewPopover
-          item={hoverPreview.hoveredItem}
-          anchorRect={hoverPreview.hoveredRect}
-          onMouseEnter={hoverPreview.handlePreviewEnter}
-          onMouseLeave={hoverPreview.handlePreviewLeave}
-        />
-      )}
     </div>
   );
 }

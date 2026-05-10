@@ -8,10 +8,15 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn(() => Promise.resolve(() => {})),
+  emit: vi.fn(() => Promise.resolve()),
 }));
 
 vi.mock("@tauri-apps/api/window", () => ({
-  getCurrentWindow: () => ({ hide: vi.fn() }),
+  getCurrentWindow: () => ({
+    hide: vi.fn(),
+    outerPosition: () => Promise.resolve({ x: 100, y: 50 }),
+    scaleFactor: () => Promise.resolve(1),
+  }),
 }));
 
 describe("PopupApp", () => {
@@ -53,5 +58,32 @@ describe("PopupApp", () => {
     fireEvent.change(input, { target: { value: "test" } });
     fireEvent.keyDown(window, { key: "Escape" });
     expect(input).toHaveValue("");
+  });
+
+  it("renders Home button in bottom bar", async () => {
+    const { container } = render(<PopupApp />);
+    const buttons = container.querySelectorAll("button");
+    // Bottom bar has 3 buttons: Home, Settings, Pause
+    const bottomButtons = Array.from(buttons).filter(
+      (btn) => btn.closest(".border-t") !== null,
+    );
+    expect(bottomButtons.length).toBe(3);
+  });
+
+  it("renders Settings button in bottom bar", () => {
+    const { container } = render(<PopupApp />);
+    const settingsIcon = container.querySelector(".lucide-settings-2");
+    expect(settingsIcon).toBeInTheDocument();
+  });
+
+  it("renders Pause/Play button in bottom bar", () => {
+    const { container } = render(<PopupApp />);
+    const pauseIcon = container.querySelector(".lucide-pause");
+    expect(pauseIcon).toBeInTheDocument();
+  });
+
+  it("does not render expand/collapse button", () => {
+    render(<PopupApp />);
+    expect(screen.queryByText(/展开更多/)).not.toBeInTheDocument();
   });
 });

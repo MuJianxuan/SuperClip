@@ -18,7 +18,7 @@ const mockItem: ClipboardItem = {
 };
 
 describe("PopupHistoryRow", () => {
-  it("renders item title and meta", () => {
+  it("renders item title", () => {
     render(
       <PopupHistoryRow
         item={mockItem}
@@ -30,7 +30,6 @@ describe("PopupHistoryRow", () => {
       />,
     );
     expect(screen.getByText("Hello World")).toBeInTheDocument();
-    expect(screen.getByText("VSCode · 3s前")).toBeInTheDocument();
   });
 
   it("shows pin indicator when pinned", () => {

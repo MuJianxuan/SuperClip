@@ -61,9 +61,6 @@ export const PopupHistoryRow = memo(function PopupHistoryRow({
         <p className="truncate text-[13px] font-medium leading-tight text-[var(--text-primary)]">
           {item.title}
         </p>
-        <p className="mt-0.5 truncate text-[11px] leading-tight text-[var(--text-tertiary)]">
-          {item.sourceApp} · {item.timeLabel}
-        </p>
       </div>
       {item.isPinned && <Pin className="h-3 w-3 shrink-0 text-[var(--text-tertiary)]" />}
     </button>

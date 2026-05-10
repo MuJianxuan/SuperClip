@@ -31,6 +31,9 @@ interface CommandMap {
   shortcutRestoreDefault: "shortcut_restore_default";
   permissionCheckAccessibility: "permission_check_accessibility";
   permissionOpenAccessibility: "permission_open_accessibility";
+  showMain: "show_main";
+  previewShow: "preview_show";
+  previewHide: "preview_hide";
   monitorToggle: "monitor_toggle";
 }
 
@@ -64,6 +67,9 @@ const COMMANDS: CommandMap = {
   shortcutRestoreDefault: "shortcut_restore_default",
   permissionCheckAccessibility: "permission_check_accessibility",
   permissionOpenAccessibility: "permission_open_accessibility",
+  showMain: "show_main",
+  previewShow: "preview_show",
+  previewHide: "preview_hide",
   monitorToggle: "monitor_toggle",
 };
 
@@ -1249,6 +1255,18 @@ export async function permissionCheckAccessibility() {
 
 export async function permissionOpenAccessibility() {
   return invokeOrFallback<boolean>("permissionOpenAccessibility", {}, () => false);
+}
+
+export async function showMain() {
+  return invokeOrFallback<void>("showMain", {}, () => {});
+}
+
+export async function previewShow(x: number, y: number, width: number, height: number) {
+  return invokeOrFallback<void>("previewShow", { x, y, width, height }, () => {});
+}
+
+export async function previewHide() {
+  return invokeOrFallback<void>("previewHide", {}, () => {});
 }
 
 export async function monitorToggle(nextState?: boolean) {
