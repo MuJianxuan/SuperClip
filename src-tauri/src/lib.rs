@@ -4196,6 +4196,8 @@ fn clipboard_copy(
         json!({ "item_id": item.id.clone(), "action": "copy", "use_count_changed": true }),
     );
 
+    hide_popup_window(&app);
+
     Ok(result)
 }
 
@@ -4246,6 +4248,8 @@ fn clipboard_paste(
         "item-updated",
         json!({ "item_id": item.id.clone(), "action": "paste", "use_count_changed": true }),
     );
+
+    hide_popup_window(&app);
 
     Ok(result)
 }
@@ -4774,6 +4778,7 @@ mod tests {
             window_fallback_records: Mutex::new(Vec::new()),
             window_placement: Mutex::new(WindowPlacementCoordinator::new()),
             tray_icon: Mutex::new(None),
+            preview_active: Mutex::new(false),
         }
     }
 
