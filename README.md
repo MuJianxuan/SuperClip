@@ -5,6 +5,8 @@
 - Popup = 左键弹出的历史面板
 - Tray Menu = 右键弹出的操作菜单
 
+两种视图模式：list（列表视图）和 grid（网格视图）。
+
 在 macOS / Tauri 的术语体系中：
 
 - 菜单栏上的图标叫 Tray Icon（系统托盘图标，macOS 原生术语是 Status Item / Menu Bar Extra）

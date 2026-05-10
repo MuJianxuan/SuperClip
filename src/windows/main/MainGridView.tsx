@@ -15,7 +15,8 @@ interface MainGridViewProps {
   onDelete: (id: string) => void;
 }
 
-const CARD_HEIGHT = 210;
+const CARD_HEIGHT = 140;
+const ROW_GAP = 5;
 const COLUMNS = 3;
 
 export const MainGridView = memo(function MainGridView({
@@ -34,7 +35,7 @@ export const MainGridView = memo(function MainGridView({
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => CARD_HEIGHT,
+    estimateSize: () => CARD_HEIGHT + ROW_GAP,
     overscan: 4,
   });
 
@@ -56,14 +57,14 @@ export const MainGridView = memo(function MainGridView({
                 height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
               }}
-              className="grid grid-cols-3 gap-x-3 gap-y-5"
+              className="grid grid-cols-3 items-start gap-x-5"
             >
               {rowItems.map((item) => (
                 <div
                   key={item.id}
                   onClick={() => onSelect(item.id)}
                   onDoubleClick={() => onAction(item.id)}
-                  className={`group relative cursor-pointer rounded-xl border p-4 ${
+                  className={`group relative cursor-pointer rounded-xl border p-2.5 ${
                     item.id === selectedId
                       ? "border-[var(--selection-accent)] bg-[var(--row-selected)] shadow-sm"
                       : "border-[var(--border)] bg-[var(--grid-card-bg)] hover:border-[var(--border-strong)] hover:shadow-sm"
@@ -82,11 +83,11 @@ export const MainGridView = memo(function MainGridView({
                     />
                   </div>
 
-                  <div className="mb-2.5 flex h-[100px] items-center justify-center overflow-hidden rounded-lg bg-[var(--surface-2)]">
+                  <div className="mb-1.5 flex h-[68px] items-start overflow-hidden rounded-lg bg-[var(--surface-2)]">
                     {item.kind === "image" ? (
                       <ImageThumbnail itemId={item.id} className="h-full w-full object-cover" />
                     ) : (
-                      <p className="line-clamp-4 px-2.5 text-[11px] leading-[1.6] text-[var(--text-secondary)]">
+                      <p className="line-clamp-3 px-2 pt-1.5 text-[11px] leading-[1.6] text-[var(--text-secondary)]">
                         {item.preview || item.title}
                       </p>
                     )}
