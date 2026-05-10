@@ -65,6 +65,11 @@ if (!("ImageData" in window)) {
 Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
   writable: true,
   value: vi.fn(() => ({
+    createImageData: vi.fn((w: number, h: number) => ({
+      data: new Uint8ClampedArray(w * h * 4),
+      width: w,
+      height: h,
+    })),
     putImageData: vi.fn(),
   })),
 });

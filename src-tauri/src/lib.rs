@@ -474,7 +474,7 @@ impl AppState {
         } else {
             let conn = Connection::open(&database_path).expect("read connection must open");
             conn.execute_batch(
-                "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA cache_size = -8000; PRAGMA mmap_size = 134217728; PRAGMA temp_store = MEMORY; PRAGMA query_only = ON;",
+                "PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 2500; PRAGMA synchronous = NORMAL; PRAGMA cache_size = -8000; PRAGMA mmap_size = 134217728; PRAGMA temp_store = MEMORY; PRAGMA query_only = ON;",
             ).expect("read connection PRAGMA must succeed");
             conn
         };

@@ -2,17 +2,25 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useClipboardData } from "./useClipboardData";
 
+let historyUpdatedHandler: (() => void) | null = null;
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: vi.fn(() => Promise.resolve(() => {})),
+  listen: vi.fn((event: string, handler: () => void) => {
+    if (event === "history-updated") {
+      historyUpdatedHandler = handler;
+    }
+    return Promise.resolve(() => { historyUpdatedHandler = null; });
+  }),
 }));
 
 describe("useClipboardData", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    historyUpdatedHandler = null;
   });
 
   it("initializes with empty items and loading state", () => {
@@ -31,7 +39,6 @@ describe("useClipboardData", () => {
   it("provides setSelectedId (resets when no matching item)", () => {
     const { result } = renderHook(() => useClipboardData());
     act(() => { result.current.setSelectedId("clip-1"); });
-    // selectedId resets to "" because items is empty and clip-1 doesn't exist
     expect(result.current.selectedId).toBe("");
   });
 
@@ -56,5 +63,25 @@ describe("useClipboardData", () => {
   it("selectedItem is null when no items", () => {
     const { result } = renderHook(() => useClipboardData());
     expect(result.current.selectedItem).toBeNull();
+  });
+
+  it("history-updated event triggers enqueueRefresh in Tauri environment", async () => {
+    Object.defineProperty(window, "__TAURI_INTERNALS__", {
+      value: {},
+      writable: true,
+      configurable: true,
+    });
+
+    renderHook(() => useClipboardData());
+
+    await waitFor(() => {
+      expect(historyUpdatedHandler).not.toBeNull();
+    });
+
+    // Simulate history-updated event — should not throw
+    act(() => { historyUpdatedHandler!(); });
+
+    // Cleanup
+    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
   });
 });

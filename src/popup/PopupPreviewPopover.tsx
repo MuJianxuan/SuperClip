@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { clipboardGet, type ClipboardItemDetail } from "../lib/superclip";
+import { resolveImageDataUrl } from "../lib/image-utils";
 import type { ClipboardItem } from "../components/history-row";
 
 interface PopupPreviewPopoverProps {
@@ -13,22 +14,8 @@ const detailCache = new Map<string, ClipboardItemDetail>();
 
 function useImageDataUrl(detail: ClipboardItemDetail | null) {
   return useMemo(() => {
-    const bytes = detail?.payload?.imageBytes;
-    const w = detail?.payload?.imageWidth;
-    const h = detail?.payload?.imageHeight;
-    if (!bytes || !w || !h) return null;
-
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return null;
-
-    const imageData = ctx.createImageData(w, h);
-    imageData.data.set(new Uint8ClampedArray(bytes));
-    ctx.putImageData(imageData, 0, 0);
-    return canvas.toDataURL("image/png");
-  }, [detail?.payload?.imageBytes, detail?.payload?.imageWidth, detail?.payload?.imageHeight]);
+    return resolveImageDataUrl(detail?.payload ?? null);
+  }, [detail?.payload]);
 }
 
 export function PopupPreviewPopover({

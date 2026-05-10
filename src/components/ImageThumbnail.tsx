@@ -1,62 +1,102 @@
 import { useEffect, useRef, useState } from "react";
 import { FileImage } from "lucide-react";
 import { clipboardGet } from "../lib/superclip";
+import { resolveImageDataUrl } from "../lib/image-utils";
 
 interface ImageThumbnailProps {
   itemId: string;
   className?: string;
 }
 
+const MAX_CACHE_SIZE = 200;
 const cache = new Map<string, string>();
+
+function cacheSet(key: string, value: string) {
+  if (cache.size >= MAX_CACHE_SIZE) {
+    const firstKey = cache.keys().next().value!;
+    cache.delete(firstKey);
+  }
+  cache.set(key, value);
+}
+
+const MAX_CONCURRENT = 2;
+let activeCount = 0;
+const queue: Array<() => void> = [];
+
+function enqueue<T>(fn: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    function run() {
+      activeCount++;
+      fn()
+        .then(resolve, reject)
+        .finally(() => {
+          activeCount--;
+          if (queue.length > 0) {
+            queue.shift()!();
+          }
+        });
+    }
+
+    if (activeCount < MAX_CONCURRENT) {
+      run();
+    } else {
+      queue.push(run);
+    }
+  });
+}
+
+const MAX_RETRIES = 1;
+const RETRY_DELAY_MS = 3000;
 
 export function ImageThumbnail({ itemId, className }: ImageThumbnailProps) {
   const [dataUrl, setDataUrl] = useState<string | null>(() => cache.get(itemId) ?? null);
   const [failed, setFailed] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const retriesRef = useRef(0);
 
   useEffect(() => {
+    retriesRef.current = 0;
+    setFailed(false);
+
     if (cache.has(itemId)) {
       setDataUrl(cache.get(itemId)!);
       return;
     }
 
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-    clipboardGet(itemId).then((detail) => {
-      if (cancelled) return;
-      const { imageBytes, imageWidth, imageHeight } = detail.payload;
-      if (!imageBytes || !imageWidth || !imageHeight) {
-        setFailed(true);
-        return;
-      }
+    function attempt() {
+      enqueue(() => clipboardGet(itemId)).then((detail) => {
+        if (cancelled) return;
+        const url = resolveImageDataUrl(detail.payload);
+        if (!url) {
+          if (retriesRef.current < MAX_RETRIES) {
+            retriesRef.current++;
+            retryTimer = setTimeout(attempt, RETRY_DELAY_MS);
+          } else {
+            setFailed(true);
+          }
+          return;
+        }
+        cacheSet(itemId, url);
+        setDataUrl(url);
+      }).catch(() => {
+        if (cancelled) return;
+        if (retriesRef.current < MAX_RETRIES) {
+          retriesRef.current++;
+          retryTimer = setTimeout(attempt, RETRY_DELAY_MS);
+        } else {
+          setFailed(true);
+        }
+      });
+    }
 
-      const canvas = canvasRef.current;
-      if (!canvas) {
-        setFailed(true);
-        return;
-      }
+    attempt();
 
-      canvas.width = imageWidth;
-      canvas.height = imageHeight;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        setFailed(true);
-        return;
-      }
-
-      const imageData = ctx.createImageData(imageWidth, imageHeight);
-      const pixels = new Uint8ClampedArray(imageBytes);
-      imageData.data.set(pixels);
-      ctx.putImageData(imageData, 0, 0);
-
-      const url = canvas.toDataURL("image/png");
-      cache.set(itemId, url);
-      setDataUrl(url);
-    }).catch(() => {
-      if (!cancelled) setFailed(true);
-    });
-
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, [itemId]);
 
   if (failed) {
@@ -65,10 +105,7 @@ export function ImageThumbnail({ itemId, className }: ImageThumbnailProps) {
 
   if (!dataUrl) {
     return (
-      <>
-        <canvas ref={canvasRef} className="hidden" />
-        <div className={`animate-pulse rounded bg-[var(--surface-2)] ${className ?? "h-8 w-8"}`} />
-      </>
+      <div className={`animate-pulse rounded bg-[var(--surface-2)] ${className ?? "h-8 w-8"}`} />
     );
   }
 

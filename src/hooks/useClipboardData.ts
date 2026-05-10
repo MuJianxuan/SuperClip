@@ -158,8 +158,7 @@ export function useClipboardData(options: UseClipboardDataOptions = {}) {
         Promise.all([
           listen("history-updated", () => {
             if (!disposed) {
-              const cacheKey = `${kindFilter ?? ""}:${pinnedOnly ? "1" : "0"}:${debouncedQueryRef.current}`;
-              cacheRef.current.delete(cacheKey);
+              cacheRef.current.clear();
               enqueueRefresh();
             }
           }),
