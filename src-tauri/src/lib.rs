@@ -423,7 +423,9 @@ impl WindowPlacementCoordinator {
 
 struct AppState {
     db: Mutex<Connection>,
+    db_read: Mutex<Connection>,
     database_path: PathBuf,
+    exclusion_rules_cache: std::sync::RwLock<Vec<ExclusionRule>>,
     monitor_state: Mutex<ClipboardMonitorState>,
     shortcut_state: Mutex<ShortcutStateResponse>,
     shortcut_recording: Mutex<bool>,
@@ -454,6 +456,16 @@ impl AppState {
                 )
             }
         };
+
+        let db_read = if database_path.to_str() == Some(":memory:") {
+            Connection::open_in_memory().expect("fallback read connection must open")
+        } else {
+            let conn = Connection::open(&database_path).expect("read connection must open");
+            conn.execute_batch(
+                "PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA cache_size = -8000; PRAGMA mmap_size = 134217728; PRAGMA temp_store = MEMORY; PRAGMA query_only = ON;",
+            ).expect("read connection PRAGMA must succeed");
+            conn
+        };
         let startup_recent_errors = startup_error
             .map(|error_code| {
                 let record = RecentErrorRecord {
@@ -470,10 +482,13 @@ impl AppState {
             .collect::<Vec<_>>();
 
         let initial_settings = load_settings(&db).unwrap_or_else(|_| default_settings_response());
+        let initial_rules = list_exclusion_rules(&db).unwrap_or_default();
 
         Self {
             db: Mutex::new(db),
+            db_read: Mutex::new(db_read),
             database_path,
+            exclusion_rules_cache: std::sync::RwLock::new(initial_rules),
             monitor_state: Mutex::new(ClipboardMonitorState {
                 last_seen_hash: None,
                 self_write_hash: None,
@@ -560,6 +575,10 @@ fn migrate_database(connection: &Connection) -> Result<(), String> {
             PRAGMA journal_mode = WAL;
             PRAGMA foreign_keys = ON;
             PRAGMA busy_timeout = 2500;
+            PRAGMA synchronous = NORMAL;
+            PRAGMA cache_size = -8000;
+            PRAGMA mmap_size = 134217728;
+            PRAGMA temp_store = MEMORY;
 
             CREATE TABLE IF NOT EXISTS _superclip_migrations (
                 version INTEGER PRIMARY KEY,
@@ -657,6 +676,23 @@ fn migrate_database(connection: &Connection) -> Result<(), String> {
                 ('rule-3', 'content_kind', 'image', 0, unixepoch(), unixepoch());
 
             PRAGMA user_version = 2;
+            "#,
+        )
+        .map_err(map_db_error)?;
+
+    connection
+        .execute_batch(
+            r#"
+            CREATE INDEX IF NOT EXISTS idx_clipboard_items_cleanup
+                ON clipboard_items(is_pinned, last_seen_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_clipboard_items_list
+                ON clipboard_items(is_pinned DESC, last_seen_at DESC);
+
+            INSERT OR IGNORE INTO _superclip_migrations(version, description, applied_at)
+            VALUES (3, 'performance indexes for cleanup and list', unixepoch());
+
+            PRAGMA user_version = 3;
             "#,
         )
         .map_err(map_db_error)?;
@@ -1588,6 +1624,7 @@ fn insert_fts(
 fn upsert_clipboard_snapshot(
     connection: &Connection,
     snapshot: ClipboardSnapshot,
+    history_limit: usize,
 ) -> Result<bool, String> {
     let now = now_epoch_secs()?;
     let existing_id = connection
@@ -1676,9 +1713,6 @@ fn upsert_clipboard_snapshot(
     transaction.commit().map_err(map_db_error)?;
 
     insert_fts(connection, &snapshot, &id)?;
-    let history_limit = load_settings(connection)
-        .map(|settings| settings.history_limit as usize)
-        .unwrap_or(DEFAULT_HISTORY_LIMIT);
     cleanup_history(connection, history_limit)?;
 
     Ok(true)
@@ -1711,20 +1745,43 @@ fn cleanup_history(connection: &Connection, limit: usize) -> Result<(), String> 
     Ok(())
 }
 
-fn list_clipboard_items(connection: &Connection) -> Result<Vec<ClipboardItemSummary>, String> {
-    let mut statement = connection
-        .prepare(
-            r#"
-            SELECT *
-            FROM clipboard_items
+fn list_clipboard_items(
+    connection: &Connection,
+    kind_filter: Option<&str>,
+    pinned_only: bool,
+) -> Result<Vec<ClipboardItemSummary>, String> {
+    let sql = match (kind_filter, pinned_only) {
+        (Some(_), true) => r#"
+            SELECT * FROM clipboard_items
+            WHERE kind = ?1 AND is_pinned = 1
             ORDER BY is_pinned DESC, COALESCE(pinned_at, 0) DESC, last_seen_at DESC
             LIMIT 250
-            "#,
-        )
-        .map_err(map_db_error)?;
-    let rows = statement
-        .query_map([], row_to_summary)
-        .map_err(map_db_error)?;
+        "#,
+        (Some(_), false) => r#"
+            SELECT * FROM clipboard_items
+            WHERE kind = ?1
+            ORDER BY is_pinned DESC, COALESCE(pinned_at, 0) DESC, last_seen_at DESC
+            LIMIT 250
+        "#,
+        (None, true) => r#"
+            SELECT * FROM clipboard_items
+            WHERE is_pinned = 1
+            ORDER BY COALESCE(pinned_at, 0) DESC, last_seen_at DESC
+            LIMIT 250
+        "#,
+        (None, false) => r#"
+            SELECT * FROM clipboard_items
+            ORDER BY is_pinned DESC, COALESCE(pinned_at, 0) DESC, last_seen_at DESC
+            LIMIT 250
+        "#,
+    };
+
+    let mut statement = connection.prepare(sql).map_err(map_db_error)?;
+    let rows = if let Some(kind) = kind_filter {
+        statement.query_map(params![kind], row_to_summary).map_err(map_db_error)?
+    } else {
+        statement.query_map([], row_to_summary).map_err(map_db_error)?
+    };
 
     rows.collect::<rusqlite::Result<Vec<_>>>()
         .map_err(map_db_error)
@@ -1733,25 +1790,33 @@ fn list_clipboard_items(connection: &Connection) -> Result<Vec<ClipboardItemSumm
 fn like_search_items(
     connection: &Connection,
     query: &str,
+    kind_filter: Option<&str>,
+    pinned_only: bool,
 ) -> Result<Vec<ClipboardItemSummary>, String> {
     let pattern = format!("%{}%", normalized(query));
-    let mut statement = connection
-        .prepare(
-            r#"
-            SELECT *
-            FROM clipboard_items
-            WHERE lower(title) LIKE ?1
-               OR lower(preview_text) LIKE ?1
-               OR lower(source_app) LIKE ?1
-               OR lower(meta) LIKE ?1
-            ORDER BY is_pinned DESC, last_seen_at DESC
-            LIMIT 250
-            "#,
-        )
-        .map_err(map_db_error)?;
-    let rows = statement
-        .query_map(params![pattern], row_to_summary)
-        .map_err(map_db_error)?;
+
+    let base_where = "(lower(title) LIKE ?1 OR lower(preview_text) LIKE ?1 OR lower(source_app) LIKE ?1 OR lower(meta) LIKE ?1)";
+    let sql = match (kind_filter, pinned_only) {
+        (Some(_), true) => format!(
+            "SELECT * FROM clipboard_items WHERE {base_where} AND kind = ?2 AND is_pinned = 1 ORDER BY is_pinned DESC, last_seen_at DESC LIMIT 250"
+        ),
+        (Some(_), false) => format!(
+            "SELECT * FROM clipboard_items WHERE {base_where} AND kind = ?2 ORDER BY is_pinned DESC, last_seen_at DESC LIMIT 250"
+        ),
+        (None, true) => format!(
+            "SELECT * FROM clipboard_items WHERE {base_where} AND is_pinned = 1 ORDER BY is_pinned DESC, last_seen_at DESC LIMIT 250"
+        ),
+        (None, false) => format!(
+            "SELECT * FROM clipboard_items WHERE {base_where} ORDER BY is_pinned DESC, last_seen_at DESC LIMIT 250"
+        ),
+    };
+
+    let mut statement = connection.prepare(&sql).map_err(map_db_error)?;
+    let rows = if let Some(kind) = kind_filter {
+        statement.query_map(params![pattern, kind], row_to_summary).map_err(map_db_error)?
+    } else {
+        statement.query_map(params![pattern], row_to_summary).map_err(map_db_error)?
+    };
 
     rows.collect::<rusqlite::Result<Vec<_>>>()
         .map(|items| annotate_search_results(items, query, "contains"))
@@ -1855,26 +1920,56 @@ fn fts_query(query: &str) -> Option<String> {
 fn search_clipboard_items(
     connection: &Connection,
     query: &str,
+    kind_filter: Option<&str>,
+    pinned_only: bool,
 ) -> Result<Vec<ClipboardItemSummary>, String> {
     if normalized(query).is_empty() {
-        return list_clipboard_items(connection);
+        return list_clipboard_items(connection, kind_filter, pinned_only);
     }
 
     if let Some(match_query) = fts_query(query) {
-        let mut statement = connection
-            .prepare(
-                r#"
+        let (sql, has_kind) = match (kind_filter, pinned_only) {
+            (Some(_), true) => (r#"
+                SELECT ci.*
+                FROM fts_clipboard_items fts
+                JOIN clipboard_items ci ON ci.id = fts.item_id
+                WHERE fts_clipboard_items MATCH ?1 AND ci.kind = ?2 AND ci.is_pinned = 1
+                ORDER BY ci.is_pinned DESC, rank, ci.last_seen_at DESC
+                LIMIT 250
+            "#, true),
+            (Some(_), false) => (r#"
+                SELECT ci.*
+                FROM fts_clipboard_items fts
+                JOIN clipboard_items ci ON ci.id = fts.item_id
+                WHERE fts_clipboard_items MATCH ?1 AND ci.kind = ?2
+                ORDER BY ci.is_pinned DESC, rank, ci.last_seen_at DESC
+                LIMIT 250
+            "#, true),
+            (None, true) => (r#"
+                SELECT ci.*
+                FROM fts_clipboard_items fts
+                JOIN clipboard_items ci ON ci.id = fts.item_id
+                WHERE fts_clipboard_items MATCH ?1 AND ci.is_pinned = 1
+                ORDER BY ci.is_pinned DESC, rank, ci.last_seen_at DESC
+                LIMIT 250
+            "#, false),
+            (None, false) => (r#"
                 SELECT ci.*
                 FROM fts_clipboard_items fts
                 JOIN clipboard_items ci ON ci.id = fts.item_id
                 WHERE fts_clipboard_items MATCH ?1
                 ORDER BY ci.is_pinned DESC, rank, ci.last_seen_at DESC
                 LIMIT 250
-                "#,
-            )
-            .map_err(map_db_error)?;
+            "#, false),
+        };
 
-        let rows = statement.query_map(params![match_query], row_to_summary);
+        let mut statement = connection.prepare(sql).map_err(map_db_error)?;
+        let rows = if has_kind {
+            statement.query_map(params![match_query, kind_filter.unwrap()], row_to_summary)
+        } else {
+            statement.query_map(params![match_query], row_to_summary)
+        };
+
         if let Ok(rows) = rows {
             let results = rows
                 .collect::<rusqlite::Result<Vec<_>>>()
@@ -1885,7 +1980,7 @@ fn search_clipboard_items(
         }
     }
 
-    like_search_items(connection, query)
+    like_search_items(connection, query, kind_filter, pinned_only)
 }
 
 fn write_text_with_pbcopy(text: &str) -> Result<(), String> {
@@ -3059,25 +3154,27 @@ fn ensure_not_recovery_mode(state: &State<'_, AppState>, context: &str) -> Resul
 #[tauri::command]
 fn clipboard_list(state: State<'_, AppState>) -> Result<Vec<ClipboardItemSummary>, String> {
     let db = state
-        .db
+        .db_read
         .lock()
         .map_err(|_| "clipboard store unavailable".to_string())?;
 
-    list_clipboard_items(&db)
+    list_clipboard_items(&db, None, false)
 }
 
 #[tauri::command]
 fn clipboard_search(
     query: String,
+    kind_filter: Option<String>,
+    pinned_only: Option<bool>,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<ClipboardSearchResponse, String> {
     let started_at = Instant::now();
     let db = state
-        .db
+        .db_read
         .lock()
         .map_err(|_| "clipboard store unavailable".to_string())?;
-    let results = search_clipboard_items(&db, &query)?;
+    let results = search_clipboard_items(&db, &query, kind_filter.as_deref(), pinned_only.unwrap_or(false))?;
     let total = results.len();
     let search_time_ms = started_at.elapsed().as_millis() as u64;
     emit_superclip_event(
@@ -3103,7 +3200,7 @@ fn clipboard_search(
 #[tauri::command]
 fn clipboard_get(id: String, state: State<'_, AppState>) -> Result<ClipboardItemDetail, String> {
     let db = state
-        .db
+        .db_read
         .lock()
         .map_err(|_| "clipboard store unavailable".to_string())?;
 
@@ -3121,7 +3218,7 @@ fn settings_get(
 ) -> Result<SettingsResponse, String> {
     let mut next_settings = {
         let db = state
-            .db
+            .db_read
             .lock()
             .map_err(|_| "clipboard store unavailable".to_string())?;
         load_settings(&db)?
@@ -3258,7 +3355,7 @@ fn settings_update(
 fn rules_list(state: State<'_, AppState>) -> Result<RulesListResponse, String> {
     let rules = {
         let db = state
-            .db
+            .db_read
             .lock()
             .map_err(|_| "clipboard store unavailable".to_string())?;
         list_exclusion_rules(&db)?
@@ -3344,6 +3441,14 @@ fn rules_upsert(
         json!({ "action": action, "rule_id": next_rule.id.clone() }),
     );
 
+    if let Ok(db) = state.db.lock() {
+        if let Ok(rules) = list_exclusion_rules(&db) {
+            if let Ok(mut cache) = state.exclusion_rules_cache.write() {
+                *cache = rules;
+            }
+        }
+    }
+
     Ok(RulesUpsertResponse {
         rule: next_rule,
         version: 1,
@@ -3374,6 +3479,14 @@ fn rules_delete(
         "exclusion-rules-updated",
         json!({ "action": "delete", "rule_id": rule_id.clone() }),
     );
+
+    if let Ok(db) = state.db.lock() {
+        if let Ok(rules) = list_exclusion_rules(&db) {
+            if let Ok(mut cache) = state.exclusion_rules_cache.write() {
+                *cache = rules;
+            }
+        }
+    }
 
     Ok(RulesDeleteResponse {
         rule_id,
@@ -3408,6 +3521,10 @@ fn rules_clear(
         json!({ "action": "clear", "cleared_count": cleared_count }),
     );
 
+    if let Ok(mut cache) = state.exclusion_rules_cache.write() {
+        cache.clear();
+    }
+
     Ok(RulesClearResponse {
         cleared_count,
         version: 1,
@@ -3418,10 +3535,10 @@ fn rules_clear(
 fn session_ui_state_get(state: State<'_, AppState>) -> Result<SessionUiStateResponse, String> {
     let items = {
         let db = state
-            .db
+            .db_read
             .lock()
             .map_err(|_| "clipboard store unavailable".to_string())?;
-        list_clipboard_items(&db)?
+        list_clipboard_items(&db, None, false)?
     };
     let mut session_ui_state = state
         .session_ui_state
@@ -3453,10 +3570,10 @@ fn session_ui_state_update(
 ) -> Result<SessionUiStateResponse, String> {
     let items = {
         let db = state
-            .db
+            .db_read
             .lock()
             .map_err(|_| "clipboard store unavailable".to_string())?;
-        list_clipboard_items(&db)?
+        list_clipboard_items(&db, None, false)?
     };
     let mut session_ui_state = state
         .session_ui_state
@@ -4463,14 +4580,24 @@ fn process_clipboard_monitor_tick(app: &tauri::AppHandle) {
             }
 
             let inserted = {
-                let db = state.db.lock();
-                match db {
-                    Ok(db) => match list_exclusion_rules(&db) {
-                        Ok(rules) if snapshot_is_excluded(&snapshot, &rules) => Ok(false),
-                        Ok(_) => upsert_clipboard_snapshot(&db, snapshot),
-                        Err(error) => Err(error),
-                    },
-                    Err(_) => Err("DB_LOCKED".into()),
+                let is_excluded = state
+                    .exclusion_rules_cache
+                    .read()
+                    .map(|rules| snapshot_is_excluded(&snapshot, &rules))
+                    .unwrap_or(false);
+
+                if is_excluded {
+                    Ok(false)
+                } else {
+                    let history_limit = state
+                        .settings
+                        .lock()
+                        .map(|s| s.history_limit as usize)
+                        .unwrap_or(DEFAULT_HISTORY_LIMIT);
+                    match state.db.lock() {
+                        Ok(db) => upsert_clipboard_snapshot(&db, snapshot, history_limit),
+                        Err(_) => Err("DB_LOCKED".into()),
+                    }
                 }
             };
 
@@ -4485,7 +4612,6 @@ fn process_clipboard_monitor_tick(app: &tauri::AppHandle) {
                     if let Ok(mut monitor_state) = state.monitor_state.lock() {
                         monitor_state.last_seen_hash = Some(hash.clone());
                     }
-                    emit_history_updated(app, "monitor_seen");
                 }
                 Err(error_code) => {
                     push_recent_error_code(&state, &error_code, "clipboard-monitor/write");
@@ -4501,18 +4627,7 @@ fn process_clipboard_monitor_tick(app: &tauri::AppHandle) {
 
 fn start_clipboard_monitor(app: tauri::AppHandle) {
     std::thread::spawn(move || loop {
-        let app_for_tick = app.clone();
-        if let Err(error) = app.run_on_main_thread(move || {
-            process_clipboard_monitor_tick(&app_for_tick);
-        }) {
-            let state: State<'_, AppState> = app.state();
-            push_recent_error_code(
-                &state,
-                "MONITOR_MAIN_THREAD_DISPATCH_FAILED",
-                &format!("clipboard-monitor/dispatch/{error}"),
-            );
-        }
-
+        process_clipboard_monitor_tick(&app);
         std::thread::sleep(Duration::from_millis(MONITOR_POLL_MS));
     });
 }
@@ -4530,7 +4645,9 @@ mod tests {
     fn test_app_state() -> AppState {
         AppState {
             db: Mutex::new(test_connection()),
+            db_read: Mutex::new(test_connection()),
             database_path: PathBuf::from(":memory:"),
+            exclusion_rules_cache: std::sync::RwLock::new(Vec::new()),
             monitor_state: Mutex::new(ClipboardMonitorState {
                 last_seen_hash: None,
                 self_write_hash: None,
@@ -4613,10 +4730,10 @@ mod tests {
                 .expect("text snapshot should normalize");
 
         let inserted =
-            upsert_clipboard_snapshot(&connection, snapshot).expect("upsert should pass");
+            upsert_clipboard_snapshot(&connection, snapshot, DEFAULT_HISTORY_LIMIT).expect("upsert should pass");
         assert!(inserted);
 
-        let results = search_clipboard_items(&connection, "backend").expect("search should pass");
+        let results = search_clipboard_items(&connection, "backend", None, false).expect("search should pass");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].kind, "text");
         assert!(results[0].preview.contains("SQLite FTS"));
@@ -4732,8 +4849,8 @@ mod tests {
         assert_eq!(snapshot.kind, "file");
         assert!(snapshot.payload.file_urls.is_some());
 
-        upsert_clipboard_snapshot(&connection, snapshot).expect("file upsert should pass");
-        let results = search_clipboard_items(&connection, "copy-only").expect("search should pass");
+        upsert_clipboard_snapshot(&connection, snapshot, DEFAULT_HISTORY_LIMIT).expect("file upsert should pass");
+        let results = search_clipboard_items(&connection, "copy-only", None, false).expect("search should pass");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].kind, "file");
     }
@@ -4785,8 +4902,8 @@ mod tests {
             "SuperClip HTML clipboard"
         );
 
-        upsert_clipboard_snapshot(&connection, snapshot).expect("html upsert should pass");
-        let results = search_clipboard_items(&connection, "clipboard").expect("search should pass");
+        upsert_clipboard_snapshot(&connection, snapshot, DEFAULT_HISTORY_LIMIT).expect("html upsert should pass");
+        let results = search_clipboard_items(&connection, "clipboard", None, false).expect("search should pass");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].kind, "html");
     }

@@ -1,4 +1,5 @@
-import { memo } from "react";
+import { memo, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Copy, Pin, Trash2, ArrowUpRight } from "lucide-react";
 import type { ClipboardItem } from "../../components/history-row";
 
@@ -14,6 +15,8 @@ interface MainListViewProps {
   onDelete: (id: string) => void;
 }
 
+const ROW_HEIGHT = 52;
+
 export const MainListView = memo(function MainListView({
   items,
   selectedId,
@@ -25,43 +28,60 @@ export const MainListView = memo(function MainListView({
   onPin,
   onDelete,
 }: MainListViewProps) {
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const rowVirtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 8,
+  });
+
   return (
-    <div className="flex-1 overflow-y-auto">
-      <table className="w-full">
-        <thead className="sticky top-0 z-10 bg-[var(--surface-raised)] backdrop-blur-sm">
-          <tr className="border-b border-[var(--border)] text-left text-[11px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
-            <th className="w-10 px-3 py-2">
-              <input
-                type="checkbox"
-                checked={selectedIds.size === items.length && items.length > 0}
-                onChange={() => {
-                  if (selectedIds.size === items.length) {
-                    selectedIds.clear();
-                  }
-                }}
-                className="h-3.5 w-3.5 rounded border-[var(--border-strong)]"
-              />
-            </th>
-            <th className="px-3 py-2">内容</th>
-            <th className="w-24 px-3 py-2">来源</th>
-            <th className="w-20 px-3 py-2">时间</th>
-            <th className="w-28 px-3 py-2 text-right">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr
+    <div className="flex-1 overflow-y-auto" ref={parentRef}>
+      <div className="sticky top-0 z-10 flex h-8 items-center border-b border-[var(--border)] bg-[var(--surface-raised)] text-[11px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+        <div className="w-10 px-3">
+          <input
+            type="checkbox"
+            checked={selectedIds.size === items.length && items.length > 0}
+            onChange={() => {
+              if (selectedIds.size === items.length) {
+                selectedIds.clear();
+              }
+            }}
+            className="h-3.5 w-3.5 rounded border-[var(--border-strong)]"
+          />
+        </div>
+        <div className="flex-1 px-3">内容</div>
+        <div className="w-24 px-3">来源</div>
+        <div className="w-20 px-3">时间</div>
+        <div className="w-28 px-3 text-right">操作</div>
+      </div>
+
+      <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: "relative" }}>
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const item = items[virtualRow.index];
+          return (
+            <div
               key={item.id}
               data-clipboard-row-id={item.id}
               onClick={() => onSelect(item.id)}
               onDoubleClick={() => onAction(item.id)}
-              className={`group h-[52px] cursor-pointer border-b border-[var(--border)] transition-colors ${
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: `${virtualRow.size}px`,
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+              className={`group flex cursor-pointer items-center border-b border-[var(--border)] transition-colors ${
                 item.id === selectedId
                   ? "bg-[var(--row-selected)]"
                   : "hover:bg-[var(--row-hover)]"
               }`}
             >
-              <td className="px-3 py-2">
+              <div className="w-10 px-3">
                 <input
                   type="checkbox"
                   checked={selectedIds.has(item.id)}
@@ -72,25 +92,23 @@ export const MainListView = memo(function MainListView({
                   onClick={(e) => e.stopPropagation()}
                   className="h-3.5 w-3.5 rounded border-[var(--border-strong)]"
                 />
-              </td>
-              <td className="px-3 py-2">
-                <div className="flex items-center gap-2.5">
-                  <span className="inline-flex h-6 items-center rounded-md bg-[var(--surface-2)] px-1.5 text-[10px] font-medium uppercase text-[var(--text-tertiary)]">
-                    {item.kind}
-                  </span>
-                  <span className="truncate text-[13px] text-[var(--text-primary)]">
-                    {item.title}
-                  </span>
-                  {item.isPinned && <Pin className="h-3 w-3 shrink-0 text-[var(--selection-accent)]" />}
-                </div>
-              </td>
-              <td className="px-3 py-2 text-[12px] text-[var(--text-secondary)]">
+              </div>
+              <div className="flex flex-1 items-center gap-2.5 px-3">
+                <span className="inline-flex h-6 items-center rounded-md bg-[var(--surface-2)] px-1.5 text-[10px] font-medium uppercase text-[var(--text-tertiary)]">
+                  {item.kind}
+                </span>
+                <span className="truncate text-[13px] text-[var(--text-primary)]">
+                  {item.title}
+                </span>
+                {item.isPinned && <Pin className="h-3 w-3 shrink-0 text-[var(--selection-accent)]" />}
+              </div>
+              <div className="w-24 px-3 text-[12px] text-[var(--text-secondary)]">
                 {item.sourceApp}
-              </td>
-              <td className="px-3 py-2 text-[12px] text-[var(--text-tertiary)]">
+              </div>
+              <div className="w-20 px-3 text-[12px] text-[var(--text-tertiary)]">
                 {item.timeLabel}
-              </td>
-              <td className="px-3 py-2">
+              </div>
+              <div className="w-28 px-3">
                 <div className="flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                   <button
                     type="button"
@@ -125,11 +143,12 @@ export const MainListView = memo(function MainListView({
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       {!items.length && (
         <div className="flex h-[300px] items-center justify-center">
           <p className="text-[14px] text-[var(--text-tertiary)]">暂无记录</p>

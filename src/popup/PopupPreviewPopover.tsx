@@ -9,18 +9,34 @@ interface PopupPreviewPopoverProps {
   onMouseLeave: () => void;
 }
 
+const detailCache = new Map<string, ClipboardItemDetail>();
+
 export function PopupPreviewPopover({
   item,
   anchorRect,
   onMouseEnter,
   onMouseLeave,
 }: PopupPreviewPopoverProps) {
-  const [detail, setDetail] = useState<ClipboardItemDetail | null>(null);
+  const [detail, setDetail] = useState<ClipboardItemDetail | null>(
+    () => detailCache.get(item.id) ?? null,
+  );
 
   useEffect(() => {
+    if (detailCache.has(item.id)) {
+      setDetail(detailCache.get(item.id)!);
+      return;
+    }
     let active = true;
     clipboardGet(item.id)
-      .then((d) => { if (active) setDetail(d); })
+      .then((d) => {
+        if (!active) return;
+        detailCache.set(item.id, d);
+        if (detailCache.size > 50) {
+          const firstKey = detailCache.keys().next().value;
+          if (firstKey) detailCache.delete(firstKey);
+        }
+        setDetail(d);
+      })
       .catch(() => {});
     return () => { active = false; };
   }, [item.id]);
@@ -34,7 +50,7 @@ export function PopupPreviewPopover({
     <div
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-      className="fixed z-50 w-[280px] max-h-[320px] overflow-hidden rounded-xl border border-[var(--popup-border)] bg-[var(--popup-bg)] shadow-[var(--popup-shadow)] backdrop-blur-[24px] backdrop-saturate-[1.8] animate-in fade-in slide-in-from-left-1 duration-150"
+      className="fixed z-50 w-[280px] max-h-[320px] overflow-hidden rounded-xl border border-[var(--popup-border)] bg-[var(--popup-bg)] shadow-[var(--popup-shadow)] animate-in fade-in slide-in-from-left-1 duration-150"
       style={{
         left: `${anchorRect.right + 8}px`,
         top: `${popoverTop}px`,

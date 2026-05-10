@@ -6,6 +6,8 @@ import {
 } from "../lib/superclip";
 import type { ClipboardItem } from "../components/history-row";
 
+const SEARCH_DEBOUNCE_MS = 150;
+
 export interface UseClipboardDataOptions {
   kindFilter?: string;
   pinnedOnly?: boolean;
@@ -14,6 +16,7 @@ export interface UseClipboardDataOptions {
 export function useClipboardData(options: UseClipboardDataOptions = {}) {
   const { kindFilter, pinnedOnly } = options;
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [items, setItems] = useState<ClipboardItem[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [refreshNonce, setRefreshNonce] = useState(0);
@@ -24,30 +27,30 @@ export function useClipboardData(options: UseClipboardDataOptions = {}) {
   }, []);
 
   useEffect(() => {
+    if (!query) {
+      setDebouncedQuery("");
+      return;
+    }
+    const t = window.setTimeout(() => setDebouncedQuery(query), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(t);
+  }, [query]);
+
+  useEffect(() => {
     let active = true;
 
     async function fetchData() {
       setIsLoading(true);
-      const response = await clipboardSearch(query);
+      const response = await clipboardSearch(debouncedQuery, kindFilter, pinnedOnly);
 
       if (!active) return;
 
-      let results = response.results;
-
-      if (kindFilter) {
-        results = results.filter((item) => item.kind === kindFilter);
-      }
-      if (pinnedOnly) {
-        results = results.filter((item) => item.isPinned);
-      }
-
-      setItems(results);
+      setItems(response.results);
       setIsLoading(false);
     }
 
     fetchData();
     return () => { active = false; };
-  }, [query, refreshNonce, kindFilter, pinnedOnly]);
+  }, [debouncedQuery, refreshNonce, kindFilter, pinnedOnly]);
 
   useEffect(() => {
     if (!items.length) {

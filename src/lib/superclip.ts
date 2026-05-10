@@ -863,19 +863,33 @@ export async function clipboardGet(id: string) {
   }));
 }
 
-export async function clipboardSearch(query: string) {
-  return invokeOrFallback<ClipboardSearchResponse>("clipboardSearch", { query }, () => {
-    const results = filterItems(query);
+export async function clipboardSearch(
+  query: string,
+  kindFilter?: string,
+  pinnedOnly?: boolean,
+) {
+  return invokeOrFallback<ClipboardSearchResponse>(
+    "clipboardSearch",
+    { query, kindFilter: kindFilter ?? null, pinnedOnly: pinnedOnly ?? false },
+    () => {
+      let results = filterItems(query);
+      if (kindFilter) {
+        results = results.filter((item) => item.kind === kindFilter);
+      }
+      if (pinnedOnly) {
+        results = results.filter((item) => item.isPinned);
+      }
 
-    return {
-      query,
-      normalizedQuery: normalizeQuery(query),
-      results,
-      total: results.length,
-      searchTimeMs: normalizeQuery(query) ? 6 : 2,
-      version: 1,
-    };
-  });
+      return {
+        query,
+        normalizedQuery: normalizeQuery(query),
+        results,
+        total: results.length,
+        searchTimeMs: normalizeQuery(query) ? 6 : 2,
+        version: 1,
+      };
+    },
+  );
 }
 
 export async function settingsGet() {

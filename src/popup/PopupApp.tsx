@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Settings2, Pause, Play, Pin } from "lucide-react";
 import { useClipboardData } from "../hooks/useClipboardData";
 import { useHoverPreview } from "../hooks/useHoverPreview";
@@ -29,7 +29,7 @@ export function PopupApp() {
 
   const visibleCount = isExpanded ? EXPANDED_VISIBLE_COUNT : INITIAL_VISIBLE_COUNT;
   const visibleItems = items.slice(0, visibleCount);
-  const pinnedCount = items.filter((item) => item.isPinned).length;
+  const pinnedCount = useMemo(() => items.filter((item) => item.isPinned).length, [items]);
 
   useEffect(() => {
     settingsGet().then(setSettings).catch(() => {});
@@ -53,11 +53,18 @@ export function PopupApp() {
     return () => { disposed = true; unlisten?.(); };
   }, []);
 
+  const popupKeyStateRef = useRef({ query, selectedId, selectedItem, visibleItems });
+  useEffect(() => {
+    popupKeyStateRef.current = { query, selectedId, selectedItem, visibleItems };
+  });
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      const { query: q, selectedId: selId, selectedItem: selItem, visibleItems: visible } = popupKeyStateRef.current;
+
       if (event.key === "Escape") {
         event.preventDefault();
-        if (query) {
+        if (q) {
           setQuery("");
         } else {
           hidePopup();
@@ -73,26 +80,26 @@ export function PopupApp() {
 
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
-        const currentIndex = visibleItems.findIndex((item) => item.id === selectedId);
+        const currentIndex = visible.findIndex((item) => item.id === selId);
         const safeIndex = currentIndex >= 0 ? currentIndex : 0;
         const nextIndex =
           event.key === "ArrowDown"
-            ? (safeIndex + 1) % visibleItems.length
-            : (safeIndex - 1 + visibleItems.length) % visibleItems.length;
-        setSelectedId(visibleItems[nextIndex].id);
+            ? (safeIndex + 1) % visible.length
+            : (safeIndex - 1 + visible.length) % visible.length;
+        setSelectedId(visible[nextIndex].id);
         return;
       }
 
-      if (event.key === "Enter" && selectedItem) {
+      if (event.key === "Enter" && selItem) {
         event.preventDefault();
-        void handleAction(selectedItem, event.metaKey);
+        void handleAction(selItem, event.metaKey);
         return;
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [query, selectedId, selectedItem, visibleItems]);
+  }, []);
 
   async function handleAction(item: ClipboardItem, alternate = false) {
     try {

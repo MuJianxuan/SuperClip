@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useMemo, useState } from "react";
 import { Copy, LockKeyhole, MonitorCog, ShieldCheck, TriangleAlert } from "lucide-react";
 import { MainTopBar } from "./MainTopBar";
 import { MainListView } from "./MainListView";
@@ -95,7 +95,7 @@ export function MainApp() {
     enqueueRefresh,
   } = useClipboardData({ kindFilter, pinnedOnly });
 
-  const pinnedCount = items.filter((i) => i.isPinned).length;
+  const pinnedCount = useMemo(() => items.filter((i) => i.isPinned).length, [items]);
 
   // Bootstrap: load settings, rules, shortcut, permission, runtime state
   useEffect(() => {
@@ -165,9 +165,21 @@ export function MainApp() {
   }, [feedback]);
 
   // Keyboard shortcuts
+  const keyStateRef = useRef<{
+    isSettingsOpen: boolean;
+    items: typeof items;
+    selectedId: string;
+    handlePin: (id: string) => void;
+    handleDelete: (id: string) => void;
+  }>({ isSettingsOpen, items, selectedId, handlePin: () => {}, handleDelete: () => {} });
+  useEffect(() => {
+    keyStateRef.current = { isSettingsOpen, items, selectedId, handlePin, handleDelete };
+  });
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (isSettingsOpen) return;
+      const { isSettingsOpen: settingsOpen, items: currentItems, selectedId: currentSelectedId, handlePin: pin, handleDelete: del } = keyStateRef.current;
+      if (settingsOpen) return;
 
       const isInput = event.target instanceof HTMLInputElement ||
         event.target instanceof HTMLTextAreaElement;
@@ -185,23 +197,23 @@ export function MainApp() {
       }
       if (event.metaKey && event.key === "a") {
         event.preventDefault();
-        setSelectedIds(new Set(items.map((i) => i.id)));
+        setSelectedIds(new Set(currentItems.map((i) => i.id)));
         return;
       }
       if (event.metaKey && event.key === "p") {
         event.preventDefault();
-        if (selectedId) void handlePin(selectedId);
+        if (currentSelectedId) void pin(currentSelectedId);
         return;
       }
       if ((event.key === "Delete" || event.key === "Backspace") && !isInput) {
         event.preventDefault();
-        if (selectedId) void handleDelete(selectedId);
+        if (currentSelectedId) void del(currentSelectedId);
         return;
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isSettingsOpen, items, selectedId]);
+  }, []);
 
   const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
