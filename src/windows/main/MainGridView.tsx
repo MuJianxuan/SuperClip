@@ -1,7 +1,8 @@
 import { memo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Pin, Trash2, FileImage } from "lucide-react";
+import { Pin, Trash2 } from "lucide-react";
 import type { ClipboardItem } from "../../components/history-row";
+import { ImageThumbnail } from "../../components/ImageThumbnail";
 
 interface MainGridViewProps {
   items: ClipboardItem[];
@@ -14,7 +15,7 @@ interface MainGridViewProps {
   onDelete: (id: string) => void;
 }
 
-const CARD_HEIGHT = 172;
+const CARD_HEIGHT = 210;
 const COLUMNS = 3;
 
 export const MainGridView = memo(function MainGridView({
@@ -38,7 +39,7 @@ export const MainGridView = memo(function MainGridView({
   });
 
   return (
-    <div className="flex-1 overflow-y-auto p-4" ref={parentRef}>
+    <div className="flex-1 overflow-y-auto px-4 py-5" ref={parentRef}>
       <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: "relative" }}>
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
           const startIdx = virtualRow.index * COLUMNS;
@@ -55,14 +56,14 @@ export const MainGridView = memo(function MainGridView({
                 height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
               }}
-              className="grid grid-cols-3 gap-3"
+              className="grid grid-cols-3 gap-x-3 gap-y-5"
             >
               {rowItems.map((item) => (
                 <div
                   key={item.id}
                   onClick={() => onSelect(item.id)}
                   onDoubleClick={() => onAction(item.id)}
-                  className={`group relative cursor-pointer rounded-xl border p-3 ${
+                  className={`group relative cursor-pointer rounded-xl border p-4 ${
                     item.id === selectedId
                       ? "border-[var(--selection-accent)] bg-[var(--row-selected)] shadow-sm"
                       : "border-[var(--border)] bg-[var(--grid-card-bg)] hover:border-[var(--border-strong)] hover:shadow-sm"
@@ -83,7 +84,7 @@ export const MainGridView = memo(function MainGridView({
 
                   <div className="mb-2.5 flex h-[100px] items-center justify-center overflow-hidden rounded-lg bg-[var(--surface-2)]">
                     {item.kind === "image" ? (
-                      <FileImage className="h-8 w-8 text-[var(--text-tertiary)]" />
+                      <ImageThumbnail itemId={item.id} className="h-full w-full object-cover" />
                     ) : (
                       <p className="line-clamp-4 px-2.5 text-[11px] leading-[1.6] text-[var(--text-secondary)]">
                         {item.preview || item.title}

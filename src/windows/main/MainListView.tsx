@@ -2,6 +2,7 @@ import { memo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Copy, Pin, Trash2, ArrowUpRight } from "lucide-react";
 import type { ClipboardItem } from "../../components/history-row";
+import { ImageThumbnail } from "../../components/ImageThumbnail";
 
 interface MainListViewProps {
   items: ClipboardItem[];
@@ -9,13 +10,15 @@ interface MainListViewProps {
   selectedIds: Set<string>;
   onSelect: (id: string) => void;
   onToggleSelect: (id: string) => void;
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
   onAction: (id: string) => void;
   onCopy: (id: string) => void;
   onPin: (id: string) => void;
   onDelete: (id: string) => void;
 }
 
-const ROW_HEIGHT = 52;
+const ROW_HEIGHT = 60;
 
 export const MainListView = memo(function MainListView({
   items,
@@ -23,6 +26,8 @@ export const MainListView = memo(function MainListView({
   selectedIds,
   onSelect,
   onToggleSelect,
+  onSelectAll,
+  onDeselectAll,
   onAction,
   onCopy,
   onPin,
@@ -39,14 +44,16 @@ export const MainListView = memo(function MainListView({
 
   return (
     <div className="flex-1 overflow-y-auto" ref={parentRef}>
-      <div className="sticky top-0 z-10 flex h-8 items-center border-b border-[var(--border)] bg-[var(--surface-raised)] text-[11px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
+      <div className="sticky top-0 z-10 flex h-9 items-center border-b border-[var(--border)] bg-[var(--surface-raised)] text-[11px] font-medium uppercase tracking-wider text-[var(--text-tertiary)]">
         <div className="w-10 px-3">
           <input
             type="checkbox"
             checked={selectedIds.size === items.length && items.length > 0}
             onChange={() => {
               if (selectedIds.size === items.length) {
-                selectedIds.clear();
+                onDeselectAll();
+              } else {
+                onSelectAll();
               }
             }}
             className="h-3.5 w-3.5 rounded border-[var(--border-strong)]"
@@ -75,7 +82,7 @@ export const MainListView = memo(function MainListView({
                 height: `${virtualRow.size}px`,
                 transform: `translateY(${virtualRow.start}px)`,
               }}
-              className={`group flex cursor-pointer items-center border-b border-[var(--border)] transition-colors ${
+              className={`group flex cursor-pointer items-center border-b border-[var(--border)] py-2 transition-colors ${
                 item.id === selectedId
                   ? "bg-[var(--row-selected)]"
                   : "hover:bg-[var(--row-hover)]"
@@ -94,9 +101,13 @@ export const MainListView = memo(function MainListView({
                 />
               </div>
               <div className="flex flex-1 items-center gap-2.5 px-3">
-                <span className="inline-flex h-6 items-center rounded-md bg-[var(--surface-2)] px-1.5 text-[10px] font-medium uppercase text-[var(--text-tertiary)]">
-                  {item.kind}
-                </span>
+                {item.kind === "image" ? (
+                  <ImageThumbnail itemId={item.id} className="h-8 w-8 shrink-0" />
+                ) : (
+                  <span className="inline-flex h-6 items-center rounded-md bg-[var(--surface-2)] px-1.5 text-[10px] font-medium uppercase text-[var(--text-tertiary)]">
+                    {item.kind}
+                  </span>
+                )}
                 <span className="truncate text-[13px] text-[var(--text-primary)]">
                   {item.title}
                 </span>

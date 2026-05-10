@@ -34,6 +34,7 @@ interface CommandMap {
   showMain: "show_main";
   previewShow: "preview_show";
   previewHide: "preview_hide";
+  popupReady: "popup_ready";
   monitorToggle: "monitor_toggle";
 }
 
@@ -70,6 +71,7 @@ const COMMANDS: CommandMap = {
   showMain: "show_main",
   previewShow: "preview_show",
   previewHide: "preview_hide",
+  popupReady: "popup_ready",
   monitorToggle: "monitor_toggle",
 };
 
@@ -1267,6 +1269,10 @@ export async function previewShow(x: number, y: number, width: number, height: n
 
 export async function previewHide() {
   return invokeOrFallback<void>("previewHide", {}, () => {});
+}
+
+export async function popupReady() {
+  return invokeOrFallback<void>("popupReady", {}, () => {});
 }
 
 export async function monitorToggle(nextState?: boolean) {

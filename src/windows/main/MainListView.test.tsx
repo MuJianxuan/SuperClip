@@ -15,6 +15,8 @@ describe("MainListView", () => {
     selectedIds: new Set<string>(),
     onSelect: vi.fn(),
     onToggleSelect: vi.fn(),
+    onSelectAll: vi.fn(),
+    onDeselectAll: vi.fn(),
     onAction: vi.fn(),
     onCopy: vi.fn(),
     onPin: vi.fn(),

@@ -7,6 +7,7 @@ import {
   clipboardCopy,
   clipboardPaste,
   monitorToggle,
+  popupReady,
   previewShow,
   previewHide,
   settingsGet,
@@ -66,6 +67,7 @@ export function PopupApp() {
   useEffect(() => {
     settingsGet().then(setSettings).catch(() => {});
     shortcutGet().then((sc) => setShortcutBinding(sc.binding)).catch(() => {});
+    popupReady().catch(() => {});
   }, []);
 
   useEffect(() => {

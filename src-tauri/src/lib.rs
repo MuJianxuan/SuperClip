@@ -449,6 +449,7 @@ struct AppState {
     window_placement: Mutex<WindowPlacementCoordinator>,
     tray_icon: Mutex<Option<TrayIcon<tauri::Wry>>>,
     preview_active: Mutex<bool>,
+    popup_ready: Mutex<bool>,
 }
 
 impl AppState {
@@ -543,6 +544,7 @@ impl AppState {
             window_placement: Mutex::new(WindowPlacementCoordinator::new()),
             tray_icon: Mutex::new(None),
             preview_active: Mutex::new(false),
+            popup_ready: Mutex::new(false),
         }
     }
 }
@@ -2738,6 +2740,13 @@ fn toggle_popup_window(app: &tauri::AppHandle) {
         return;
     };
 
+    if let Some(state) = app.try_state::<AppState>() {
+        let ready = state.popup_ready.lock().map(|f| *f).unwrap_or(false);
+        if !ready {
+            return;
+        }
+    }
+
     let is_visible = window.is_visible().unwrap_or(false);
 
     if is_visible {
@@ -4352,6 +4361,13 @@ fn preview_hide(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(),
 }
 
 #[tauri::command]
+fn popup_ready(state: State<'_, AppState>) {
+    if let Ok(mut flag) = state.popup_ready.lock() {
+        *flag = true;
+    }
+}
+
+#[tauri::command]
 fn monitor_toggle(
     next_state: Option<bool>,
     app: tauri::AppHandle,
@@ -4999,6 +5015,7 @@ mod tests {
             window_placement: Mutex::new(WindowPlacementCoordinator::new()),
             tray_icon: Mutex::new(None),
             preview_active: Mutex::new(false),
+            popup_ready: Mutex::new(false),
         }
     }
 
@@ -5396,6 +5413,7 @@ pub fn run() {
             show_main,
             preview_show,
             preview_hide,
+            popup_ready,
             monitor_toggle,
             clipboard_copy,
             clipboard_paste,

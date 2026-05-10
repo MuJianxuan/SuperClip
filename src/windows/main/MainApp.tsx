@@ -391,6 +391,8 @@ export function MainApp() {
             selectedIds={selectedIds}
             onSelect={setSelectedId}
             onToggleSelect={handleToggleSelect}
+            onSelectAll={() => setSelectedIds(new Set(items.map((i) => i.id)))}
+            onDeselectAll={() => setSelectedIds(new Set())}
             onAction={handleAction}
             onCopy={handleCopy}
             onPin={handlePin}
