@@ -18,6 +18,11 @@ use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_opener::OpenerExt;
 
+#[cfg(target_os = "macos")]
+use tauri_nspanel::{
+    tauri_panel, CollectionBehavior, ManagerExt as NsPanelManagerExt, PanelBuilder, PanelLevel,
+};
+
 const RECENT_ERROR_LIMIT: usize = 50;
 const WINDOW_FALLBACK_RECORD_LIMIT: usize = 20;
 const TEXT_PAYLOAD_LIMIT_BYTES: usize = 2 * 1024 * 1024;
@@ -2731,10 +2736,25 @@ fn toggle_popup_window(app: &tauri::AppHandle) {
     let is_visible = window.is_visible().unwrap_or(false);
 
     if is_visible {
+        #[cfg(target_os = "macos")]
+        {
+            if let Ok(panel) = app.get_webview_panel("popup") {
+                panel.hide();
+                return;
+            }
+        }
         let _ = window.hide();
     } else {
         use tauri_plugin_positioner::WindowExt;
         let _ = window.move_window(tauri_plugin_positioner::Position::TrayBottomCenter);
+
+        #[cfg(target_os = "macos")]
+        {
+            if let Ok(panel) = app.get_webview_panel("popup") {
+                panel.show_and_make_key();
+                return;
+            }
+        }
         let _ = window.show();
         let _ = window.set_focus();
     }
@@ -2746,11 +2766,25 @@ fn hide_popup_window(app: &tauri::AppHandle) {
             *flag = false;
         }
     }
-    if let Some(window) = app.get_webview_window("popup") {
-        let _ = window.hide();
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(panel) = app.get_webview_panel("popup") {
+            panel.hide();
+        }
+        if let Ok(panel) = app.get_webview_panel("preview") {
+            panel.hide();
+        }
     }
-    if let Some(window) = app.get_webview_window("preview") {
-        let _ = window.hide();
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        if let Some(window) = app.get_webview_window("popup") {
+            let _ = window.hide();
+        }
+        if let Some(window) = app.get_webview_window("preview") {
+            let _ = window.hide();
+        }
     }
 }
 
@@ -2870,6 +2904,79 @@ fn emit_settings_request(app: &tauri::AppHandle, source: &str) {
 }
 
 #[cfg(target_os = "macos")]
+tauri_panel! {
+    panel!(SuperClipPanel {
+        config: {
+            can_become_key_window: true,
+            is_floating_panel: true
+        }
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn create_popup_panel(app: &tauri::AppHandle) -> Result<(), String> {
+    use tauri::WebviewUrl;
+
+    let panel = PanelBuilder::<_, SuperClipPanel>::new(app, "popup")
+        .url(WebviewUrl::App("popup.html".into()))
+        .level(PanelLevel::MainMenu)
+        .collection_behavior(
+            CollectionBehavior::new()
+                .can_join_all_spaces()
+                .full_screen_auxiliary()
+                .transient(),
+        )
+        .hides_on_deactivate(false)
+        .transparent(true)
+        .floating(true)
+        .with_window(|builder| {
+            builder
+                .decorations(false)
+                .resizable(false)
+                .inner_size(320.0, 480.0)
+                .visible(false)
+                .skip_taskbar(true)
+        })
+        .build()
+        .map_err(|e| format!("Failed to create popup panel: {e}"))?;
+
+    drop(panel);
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn create_preview_panel(app: &tauri::AppHandle) -> Result<(), String> {
+    use tauri::WebviewUrl;
+
+    let panel = PanelBuilder::<_, SuperClipPanel>::new(app, "preview")
+        .url(WebviewUrl::App("preview.html".into()))
+        .level(PanelLevel::MainMenu)
+        .collection_behavior(
+            CollectionBehavior::new()
+                .can_join_all_spaces()
+                .full_screen_auxiliary()
+                .transient(),
+        )
+        .hides_on_deactivate(false)
+        .transparent(true)
+        .floating(true)
+        .with_window(|builder| {
+            builder
+                .decorations(false)
+                .resizable(false)
+                .inner_size(280.0, 320.0)
+                .visible(false)
+                .skip_taskbar(true)
+                .focused(false)
+        })
+        .build()
+        .map_err(|e| format!("Failed to create preview panel: {e}"))?;
+
+    drop(panel);
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
 fn apply_macos_dock_policy(app: &tauri::AppHandle, state: &State<'_, AppState>) {
     if let Err(error) = app.set_dock_visibility(false) {
         record_recent_error(
@@ -2890,6 +2997,49 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
     {
         #[cfg(target_os = "macos")]
         apply_macos_dock_policy(app, state);
+
+        #[cfg(target_os = "macos")]
+        {
+            if let Err(error) = app.plugin(tauri_nspanel::init()) {
+                record_recent_error(
+                    state,
+                    RecentErrorRecord {
+                        error_code: "NSPANEL_PLUGIN_FAILED".into(),
+                        context: format!("desktop-controls/nspanel/{error}"),
+                        occurred_at: build_runtime_timestamp().unwrap_or_else(|_| "unknown".into()),
+                        startup_phase: Some("desktop_controls".into()),
+                        setting_value: None,
+                    },
+                );
+            } else {
+                if let Err(error) = create_popup_panel(app) {
+                    record_recent_error(
+                        state,
+                        RecentErrorRecord {
+                            error_code: "POPUP_PANEL_CREATE_FAILED".into(),
+                            context: format!("desktop-controls/nspanel/popup/{error}"),
+                            occurred_at: build_runtime_timestamp()
+                                .unwrap_or_else(|_| "unknown".into()),
+                            startup_phase: Some("desktop_controls".into()),
+                            setting_value: None,
+                        },
+                    );
+                }
+                if let Err(error) = create_preview_panel(app) {
+                    record_recent_error(
+                        state,
+                        RecentErrorRecord {
+                            error_code: "PREVIEW_PANEL_CREATE_FAILED".into(),
+                            context: format!("desktop-controls/nspanel/preview/{error}"),
+                            occurred_at: build_runtime_timestamp()
+                                .unwrap_or_else(|_| "unknown".into()),
+                            startup_phase: Some("desktop_controls".into()),
+                            setting_value: None,
+                        },
+                    );
+                }
+            }
+        }
 
         if let Err(error) = app.plugin(tauri_plugin_positioner::init()) {
             record_recent_error(
@@ -4110,7 +4260,19 @@ fn preview_show(
 
     let _ = window.set_size(tauri::LogicalSize::new(width, height));
     let _ = window.set_position(tauri::LogicalPosition::new(final_x, final_y));
-    let _ = window.show();
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(panel) = app.get_webview_panel("preview") {
+            panel.show();
+        } else {
+            let _ = window.show();
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = window.show();
+    }
 
     if let Some(popup) = app.get_webview_window("popup") {
         let _ = popup.set_focus();
@@ -4124,6 +4286,15 @@ fn preview_hide(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(),
     if let Ok(mut flag) = state.preview_active.lock() {
         *flag = false;
     }
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(panel) = app.get_webview_panel("preview") {
+            panel.hide();
+            return Ok(());
+        }
+    }
+
     let Some(window) = app.get_webview_window("preview") else {
         return Err("preview window not found".into());
     };
@@ -5066,6 +5237,44 @@ mod tests {
         assert!(result.fallback_used);
         assert_eq!(result.error_code.as_deref(), Some("PAYLOAD_UNSUPPORTED"));
     }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn panel_level_main_menu_is_above_floating() {
+        assert!(
+            PanelLevel::MainMenu.value() > PanelLevel::Floating.value(),
+            "MainMenu level ({}) must be higher than Floating level ({}) to appear above fullscreen apps",
+            PanelLevel::MainMenu.value(),
+            PanelLevel::Floating.value()
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn collection_behavior_includes_fullscreen_auxiliary_and_join_all_spaces() {
+        let behavior = CollectionBehavior::new()
+            .can_join_all_spaces()
+            .full_screen_auxiliary()
+            .transient();
+
+        let raw = behavior.value();
+        // NSWindowCollectionBehaviorCanJoinAllSpaces = 1 << 0
+        // NSWindowCollectionBehaviorFullScreenAuxiliary = 1 << 8
+        // NSWindowCollectionBehaviorTransient = 1 << 3
+        let raw_bits = raw.0;
+        assert!(
+            raw_bits & (1 << 0) != 0,
+            "canJoinAllSpaces bit must be set"
+        );
+        assert!(
+            raw_bits & (1 << 8) != 0,
+            "fullScreenAuxiliary bit must be set"
+        );
+        assert!(
+            raw_bits & (1 << 3) != 0,
+            "transient bit must be set"
+        );
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -5182,8 +5391,17 @@ pub fn run() {
             ..
         } if label == "preview" => {
             api.prevent_close();
-            if let Some(window) = app_handle.get_webview_window("preview") {
-                let _ = window.hide();
+            #[cfg(target_os = "macos")]
+            {
+                if let Ok(panel) = app_handle.get_webview_panel("preview") {
+                    panel.hide();
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                if let Some(window) = app_handle.get_webview_window("preview") {
+                    let _ = window.hide();
+                }
             }
         }
         tauri::RunEvent::WindowEvent {
