@@ -2750,11 +2750,36 @@ fn toggle_popup_window(app: &tauri::AppHandle) {
         }
         let _ = window.hide();
     } else {
-        use tauri_plugin_positioner::WindowExt;
-        let _ = window.move_window(tauri_plugin_positioner::Position::Center);
+        if let Some(monitor) = window.current_monitor().ok().flatten().or_else(|| {
+            window.primary_monitor().ok().flatten()
+        }) {
+            let scale = monitor.scale_factor();
+            let monitor_pos = monitor.position();
+            let monitor_size = monitor.size();
+            let window_width = 320.0_f64;
+            let window_height = 480.0_f64;
+            let monitor_logical_w = monitor_size.width as f64 / scale;
+            let monitor_logical_h = monitor_size.height as f64 / scale;
+            let x = monitor_pos.x as f64 / scale + (monitor_logical_w - window_width) / 2.0;
+            let y = monitor_pos.y as f64 / scale + window_width / 2.0;
+            let max_y = monitor_pos.y as f64 / scale + monitor_logical_h - window_height;
+            let y = y.min(max_y).max(monitor_pos.y as f64 / scale);
+            let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+        } else {
+            use tauri_plugin_positioner::WindowExt;
+            let _ = window.move_window(tauri_plugin_positioner::Position::Center);
+        }
 
         #[cfg(target_os = "macos")]
         {
+            unsafe {
+                let cls =
+                    tauri_nspanel::objc2::runtime::AnyClass::get(c"NSApplication").unwrap();
+                let ns_app: *mut tauri_nspanel::objc2::runtime::AnyObject =
+                    tauri_nspanel::objc2::msg_send![cls, sharedApplication];
+                let _: () =
+                    tauri_nspanel::objc2::msg_send![ns_app, activateIgnoringOtherApps: true];
+            }
             if let Ok(panel) = app.get_webview_panel("popup") {
                 panel.show_and_make_key();
                 return;
