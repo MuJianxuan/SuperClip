@@ -5,6 +5,8 @@
   "windows": ["main", "popup", "preview"],
   "permissions": [
     "core:default",
+    "core:window:allow-hide",
+    "core:window:allow-start-dragging",
     "opener:default"
   ]
 }

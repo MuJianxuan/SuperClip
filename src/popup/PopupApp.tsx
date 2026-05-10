@@ -246,7 +246,7 @@ export function PopupApp() {
       </div>
 
       {/* Bottom Bar */}
-      <div className="flex h-9 items-center gap-2 border-t border-[var(--border)] px-3">
+      <div data-tauri-drag-region className="flex h-9 cursor-grab items-center gap-2 border-t border-[var(--border)] px-3 active:cursor-grabbing">
         <span className="flex items-center gap-1 text-[11px] text-[var(--text-tertiary)]">
           <Pin className="h-3 w-3" />
           {pinnedCount}

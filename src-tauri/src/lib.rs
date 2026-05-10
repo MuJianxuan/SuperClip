@@ -2751,7 +2751,7 @@ fn toggle_popup_window(app: &tauri::AppHandle) {
         let _ = window.hide();
     } else {
         use tauri_plugin_positioner::WindowExt;
-        let _ = window.move_window(tauri_plugin_positioner::Position::TrayBottomCenter);
+        let _ = window.move_window(tauri_plugin_positioner::Position::Center);
 
         #[cfg(target_os = "macos")]
         {
