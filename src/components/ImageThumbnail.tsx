@@ -21,28 +21,49 @@ function cacheSet(key: string, value: string) {
 
 const MAX_CONCURRENT = 2;
 let activeCount = 0;
-const queue: Array<() => void> = [];
+const queue: Array<{ run: () => void; cancelled: boolean }> = [];
 
-function enqueue<T>(fn: () => Promise<T>): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
+function drainQueue() {
+  while (queue.length > 0 && activeCount < MAX_CONCURRENT) {
+    const next = queue.shift()!;
+    if (next.cancelled) continue;
+    next.run();
+  }
+}
+
+interface Cancellable<T> {
+  promise: Promise<T>;
+  cancel: () => void;
+}
+
+function enqueue<T>(fn: () => Promise<T>): Cancellable<T> {
+  let entry: { run: () => void; cancelled: boolean } | null = null;
+
+  const promise = new Promise<T>((resolve, reject) => {
     function run() {
       activeCount++;
       fn()
         .then(resolve, reject)
         .finally(() => {
           activeCount--;
-          if (queue.length > 0) {
-            queue.shift()!();
-          }
+          drainQueue();
         });
     }
 
     if (activeCount < MAX_CONCURRENT) {
       run();
     } else {
-      queue.push(run);
+      entry = { run, cancelled: false };
+      queue.push(entry);
     }
   });
+
+  return {
+    promise,
+    cancel() {
+      if (entry) entry.cancelled = true;
+    },
+  };
 }
 
 const MAX_RETRIES = 1;
@@ -64,9 +85,12 @@ export function ImageThumbnail({ itemId, className }: ImageThumbnailProps) {
 
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let pending: Cancellable<unknown> | null = null;
 
     function attempt() {
-      enqueue(() => clipboardGet(itemId)).then((detail) => {
+      const task = enqueue(() => clipboardGet(itemId));
+      pending = task as Cancellable<unknown>;
+      task.promise.then((detail) => {
         if (cancelled) return;
         const url = resolveImageDataUrl(detail.payload);
         if (!url) {
@@ -96,6 +120,7 @@ export function ImageThumbnail({ itemId, className }: ImageThumbnailProps) {
     return () => {
       cancelled = true;
       if (retryTimer) clearTimeout(retryTimer);
+      if (pending) pending.cancel();
     };
   }, [itemId]);
 

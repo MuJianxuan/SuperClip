@@ -177,7 +177,7 @@ export function useClipboardData(options: UseClipboardDataOptions = {}) {
       disposed = true;
       unlisten.forEach((fn) => void fn());
     };
-  }, [enqueueRefresh, kindFilter, pinnedOnly]);
+  }, [enqueueRefresh]);
 
   const setSelectedId = useCallback((id: string) => {
     dispatch({ type: "SET_SELECTED", id });

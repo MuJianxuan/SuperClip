@@ -1,5 +1,5 @@
 use arboard::{Clipboard, ImageData};
-use rusqlite::{params, Connection, ErrorCode, OptionalExtension};
+use rusqlite::{params, Connection, ErrorCode, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -457,8 +457,13 @@ impl AppState {
         let (db, database_path, is_recovery_mode, startup_error) = match open_database() {
             Ok((db, database_path)) => (db, database_path, false, None),
             Err(error_code) => {
+                let flags = OpenFlags::SQLITE_OPEN_READ_WRITE
+                    | OpenFlags::SQLITE_OPEN_CREATE
+                    | OpenFlags::SQLITE_OPEN_URI
+                    | OpenFlags::SQLITE_OPEN_NO_MUTEX;
                 let fallback_db =
-                    Connection::open_in_memory().expect("fallback sqlite connection must open");
+                    Connection::open_with_flags("file::memory:?cache=shared", flags)
+                        .expect("fallback sqlite connection must open");
                 let _ = migrate_database(&fallback_db);
                 (
                     fallback_db,
@@ -470,7 +475,11 @@ impl AppState {
         };
 
         let db_read = if database_path.to_str() == Some(":memory:") {
-            Connection::open_in_memory().expect("fallback read connection must open")
+            let flags = OpenFlags::SQLITE_OPEN_READ_WRITE
+                | OpenFlags::SQLITE_OPEN_URI
+                | OpenFlags::SQLITE_OPEN_NO_MUTEX;
+            Connection::open_with_flags("file::memory:?cache=shared", flags)
+                .expect("fallback read connection must open")
         } else {
             let conn = Connection::open(&database_path).expect("read connection must open");
             conn.execute_batch(
@@ -569,12 +578,22 @@ fn default_database_path() -> Result<PathBuf, String> {
         .join("SuperClip");
 
     fs::create_dir_all(&dir).map_err(|_| "DATABASE_PATH_UNAVAILABLE".to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&dir, fs::Permissions::from_mode(0o700));
+    }
     Ok(dir.join("superclip.sqlite3"))
 }
 
 fn open_database() -> Result<(Connection, PathBuf), String> {
     let database_path = default_database_path()?;
     let connection = Connection::open(&database_path).map_err(map_db_error)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&database_path, fs::Permissions::from_mode(0o600));
+    }
     migrate_database(&connection)?;
     Ok((connection, database_path))
 }
@@ -1429,6 +1448,27 @@ return "ok"
     run_osascript_stdin(&script).map(|_| ())
 }
 
+fn write_rtf_to_nspasteboard(rtf: &str, plain: &str) -> Result<(), String> {
+    let script = format!(
+        r#"
+use framework "AppKit"
+use scripting additions
+set pb to current application's NSPasteboard's generalPasteboard()
+pb's clearContents()
+set rtfData to (current application's NSString's stringWithString:({}))'s dataUsingEncoding:(current application's NSUTF8StringEncoding)
+set rtfWrite to pb's setData:rtfData forType:(current application's NSPasteboardTypeRTF)
+set plainWrite to pb's setString:({}) forType:(current application's NSPasteboardTypeString)
+if (rtfWrite as boolean) is false then error "rtf write failed"
+if (plainWrite as boolean) is false then error "plain write failed"
+return "ok"
+"#,
+        applescript_string_literal(rtf),
+        applescript_string_literal(plain),
+    );
+
+    run_osascript_stdin(&script).map(|_| ())
+}
+
 fn strip_html_tags(html: &str) -> String {
     let mut output = String::new();
     let mut inside_tag = false;
@@ -1520,28 +1560,39 @@ fn check_accessibility_trusted() -> Result<bool, String> {
     Ok(output.trim() == "true")
 }
 
+fn frontmost_app_bundle_id() -> String {
+    run_osascript(&[
+        "-l",
+        "JavaScript",
+        "-e",
+        r#"ObjC.import("AppKit"); ObjC.unwrap($.NSWorkspace.sharedWorkspace.frontmostApplication.bundleIdentifier) || """#,
+    ])
+    .unwrap_or_default()
+}
+
 fn read_clipboard_snapshot() -> Result<Option<ClipboardSnapshot>, String> {
-    let source_app = "System Clipboard";
+    let bundle_id = frontmost_app_bundle_id();
+    let source_app = if bundle_id.is_empty() { "System Clipboard".to_string() } else { bundle_id };
     let plain_text = run_pbpaste("txt").unwrap_or_default();
 
     if let Some(html) = read_html_from_nspasteboard() {
-        if let Some(snapshot) = normalize_html_snapshot(&html, &plain_text, source_app) {
+        if let Some(snapshot) = normalize_html_snapshot(&html, &plain_text, &source_app) {
             return Ok(Some(snapshot));
         }
     }
 
     if let Some(rtf) = run_pbpaste("rtf") {
-        if let Some(snapshot) = normalize_rtf_snapshot(&rtf, &plain_text, source_app) {
+        if let Some(snapshot) = normalize_rtf_snapshot(&rtf, &plain_text, &source_app) {
             return Ok(Some(snapshot));
         }
     }
 
-    if let Some(snapshot) = normalize_text_snapshot(&plain_text, source_app) {
+    if let Some(snapshot) = normalize_text_snapshot(&plain_text, &source_app) {
         return Ok(Some(snapshot));
     }
 
     match Clipboard::new().and_then(|mut clipboard| clipboard.get_image()) {
-        Ok(image) => Ok(Some(normalize_image_snapshot(image, source_app))),
+        Ok(image) => Ok(Some(normalize_image_snapshot(image, &source_app))),
         Err(_) => Ok(None),
     }
 }
@@ -1738,9 +1789,9 @@ fn upsert_clipboard_snapshot(
             ],
         )
         .map_err(map_db_error)?;
+    insert_fts(&transaction, &snapshot, &id)?;
     transaction.commit().map_err(map_db_error)?;
 
-    insert_fts(connection, &snapshot, &id)?;
     cleanup_history(connection, history_limit)?;
 
     Ok(true)
@@ -2059,7 +2110,8 @@ fn write_payload_to_clipboard(payload: &ClipboardPayloadSnapshot) -> Result<(), 
     }
 
     if let Some(rtf) = payload.text_rtf.as_deref() {
-        return write_text_with_pbcopy(rtf);
+        let plain = payload.text_plain.as_deref().unwrap_or("");
+        return write_rtf_to_nspasteboard(rtf, plain);
     }
 
     if let Some(paths) = payload.file_urls.as_ref() {
@@ -2784,7 +2836,7 @@ fn toggle_popup_window(app: &tauri::AppHandle) {
             let monitor_logical_w = monitor_size.width as f64 / scale;
             let monitor_logical_h = monitor_size.height as f64 / scale;
             let x = monitor_pos.x as f64 / scale + (monitor_logical_w - window_width) / 2.0;
-            let y = monitor_pos.y as f64 / scale + window_width / 2.0;
+            let y = monitor_pos.y as f64 / scale + (monitor_logical_h - window_height) / 2.0;
             let max_y = monitor_pos.y as f64 / scale + monitor_logical_h - window_height;
             let y = y.min(max_y).max(monitor_pos.y as f64 / scale);
             let _ = window.set_position(tauri::LogicalPosition::new(x, y));
@@ -3626,7 +3678,7 @@ fn rules_upsert(
             return Err("RULE_DUPLICATE".into());
         }
 
-        if let Some(rule_id) = payload.id {
+        let result = if let Some(rule_id) = payload.id {
             let changed = db
                 .execute(
                     r#"
@@ -3664,7 +3716,15 @@ fn rules_upsert(
             )
             .map_err(map_db_error)?;
             (get_rule_by_id(&db, &next_id)?, "create")
+        };
+
+        if let Ok(rules) = list_exclusion_rules(&db) {
+            if let Ok(mut cache) = state.exclusion_rules_cache.write() {
+                *cache = rules;
+            }
         }
+
+        result
     };
 
     emit_superclip_event(
@@ -3672,14 +3732,6 @@ fn rules_upsert(
         "exclusion-rules-updated",
         json!({ "action": action, "rule_id": next_rule.id.clone() }),
     );
-
-    if let Ok(db) = state.db.lock() {
-        if let Ok(rules) = list_exclusion_rules(&db) {
-            if let Ok(mut cache) = state.exclusion_rules_cache.write() {
-                *cache = rules;
-            }
-        }
-    }
 
     Ok(RulesUpsertResponse {
         rule: next_rule,
@@ -3705,20 +3757,18 @@ fn rules_delete(
             params![&rule_id],
         )
         .map_err(map_db_error)?;
-    }
-    emit_superclip_event(
-        &app,
-        "exclusion-rules-updated",
-        json!({ "action": "delete", "rule_id": rule_id.clone() }),
-    );
 
-    if let Ok(db) = state.db.lock() {
         if let Ok(rules) = list_exclusion_rules(&db) {
             if let Ok(mut cache) = state.exclusion_rules_cache.write() {
                 *cache = rules;
             }
         }
     }
+    emit_superclip_event(
+        &app,
+        "exclusion-rules-updated",
+        json!({ "action": "delete", "rule_id": rule_id.clone() }),
+    );
 
     Ok(RulesDeleteResponse {
         rule_id,
@@ -3987,9 +4037,14 @@ fn build_diagnostics_payload(state: &AppState) -> Result<serde_json::Value, Stri
 }
 
 fn diagnostics_export_dir() -> PathBuf {
-    std::env::var("SUPERCLIP_DIAGNOSTICS_EXPORT_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| std::env::temp_dir())
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+    let dir = Path::new(&home)
+        .join("Library")
+        .join("Application Support")
+        .join("SuperClip")
+        .join("diagnostics");
+    let _ = fs::create_dir_all(&dir);
+    dir
 }
 
 fn write_diagnostics_export(
@@ -4418,7 +4473,7 @@ fn clipboard_copy(
 ) -> Result<ClipboardActionResult, String> {
     let (item, payload, hash) = {
         let db = state
-            .db
+            .db_read
             .lock()
             .map_err(|_| "clipboard store unavailable".to_string())?;
         (
@@ -4461,7 +4516,7 @@ fn clipboard_paste(
 
     let (item, payload, hash) = {
         let db = state
-            .db
+            .db_read
             .lock()
             .map_err(|_| "clipboard store unavailable".to_string())?;
         (
@@ -4779,15 +4834,15 @@ fn clipboard_restore(
                 params![&undo_token],
             )
             .map_err(map_db_error)?;
+        transaction
+            .execute(
+                "DELETE FROM fts_clipboard_items WHERE item_id = ?1",
+                params![&item.id],
+            )
+            .map_err(map_db_error)?;
+        insert_fts(&transaction, &snapshot, &item.id)?;
         transaction.commit().map_err(map_db_error)?;
-        let restored = get_item_by_id(&db, &item.id)?;
-        db.execute(
-            "DELETE FROM fts_clipboard_items WHERE item_id = ?1",
-            params![&item.id],
-        )
-        .map_err(map_db_error)?;
-        insert_fts(&db, &snapshot, &item.id)?;
-        restored
+        get_item_by_id(&db, &item.id)?
     };
 
     emit_superclip_event(

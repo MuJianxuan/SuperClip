@@ -10,7 +10,8 @@ interface PreviewPayload {
 function useImageDataUrl(detail: ClipboardItemDetail | null) {
   return useMemo(() => {
     return resolveImageDataUrl(detail?.payload ?? null);
-  }, [detail?.payload]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail?.item?.id]);
 }
 
 export function PreviewApp() {

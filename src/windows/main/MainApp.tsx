@@ -83,6 +83,9 @@ export function MainApp() {
   const [isMigrationBlocking, setIsMigrationBlocking] = useState(false);
   const [feedback, setFeedback] = useState<FeedbackToast | null>(null);
 
+  const readOnlyRef = useRef({ isRecoveryMode, isMigrationBlocking });
+  readOnlyRef.current = { isRecoveryMode, isMigrationBlocking };
+
   const kindFilter = activeTab === "all" || activeTab === "pinned" ? undefined : activeTab;
   const pinnedOnly = activeTab === "pinned";
 
@@ -224,22 +227,22 @@ export function MainApp() {
     });
   }, []);
 
-  function blockIfReadOnly(label: string): boolean {
-    if (isMigrationBlocking) {
+  const blockIfReadOnly = useCallback((label: string): boolean => {
+    if (readOnlyRef.current.isMigrationBlocking) {
       setFeedback({ createdAtMs: Date.now(), title: `${label}已禁用`, message: "迁移完成前暂不开放写操作。", tone: "warning", timeoutMs: 4000 });
       return true;
     }
-    if (isRecoveryMode) {
+    if (readOnlyRef.current.isRecoveryMode) {
       setFeedback({ createdAtMs: Date.now(), title: `${label}已禁用`, message: "恢复模式下不可修改数据。", tone: "warning", timeoutMs: 4000 });
       return true;
     }
     return false;
-  }
+  }, []);
 
   const handleAction = useCallback(async (id: string) => {
     if (blockIfReadOnly("粘贴")) return;
     try { await clipboardPaste(id); } catch { try { await clipboardCopy(id); } catch {} }
-  }, [isRecoveryMode, isMigrationBlocking]);
+  }, [blockIfReadOnly]);
 
   const handleCopy = useCallback(async (id: string) => {
     try { await clipboardCopy(id); } catch {}
@@ -253,12 +256,12 @@ export function MainApp() {
       if (item.isPinned) await clipboardUnpin(id); else await clipboardPin(id);
       enqueueRefresh();
     } catch {}
-  }, [itemsRef, enqueueRefresh, isRecoveryMode, isMigrationBlocking]);
+  }, [itemsRef, enqueueRefresh, blockIfReadOnly]);
 
   const handleDelete = useCallback(async (id: string) => {
     if (blockIfReadOnly("删除")) return;
     try { await clipboardDelete(id); enqueueRefresh(); } catch {}
-  }, [enqueueRefresh, isRecoveryMode, isMigrationBlocking]);
+  }, [enqueueRefresh, blockIfReadOnly]);
 
   const handleBulkCopy = useCallback(async () => {
     for (const id of selectedIds) { try { await clipboardCopy(id); break; } catch {} }
@@ -268,13 +271,13 @@ export function MainApp() {
     if (blockIfReadOnly("批量置顶")) return;
     for (const id of selectedIds) { try { await clipboardPin(id); } catch {} }
     enqueueRefresh(); setSelectedIds(new Set());
-  }, [selectedIds, enqueueRefresh, isRecoveryMode, isMigrationBlocking]);
+  }, [selectedIds, enqueueRefresh, blockIfReadOnly]);
 
   const handleBulkDelete = useCallback(async () => {
     if (blockIfReadOnly("批量删除")) return;
     for (const id of selectedIds) { try { await clipboardDelete(id); } catch {} }
     enqueueRefresh(); setSelectedIds(new Set());
-  }, [selectedIds, enqueueRefresh, isRecoveryMode, isMigrationBlocking]);
+  }, [selectedIds, enqueueRefresh, blockIfReadOnly]);
 
   // Settings handlers
   async function handleSettingsUpdate(patch: SettingsUpdatePayload) {
