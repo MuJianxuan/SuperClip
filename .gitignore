@@ -64,3 +64,5 @@ temp/
 *.dmg
 *.app
 *.pkg
+
+.pi/tasks
