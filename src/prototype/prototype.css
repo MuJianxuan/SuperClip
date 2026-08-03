@@ -1,0 +1,175 @@
+/* ===========================
+   SuperClip UI Prototype
+   Throwaway — do not use in production
+   =========================== */
+
+/* --- base styles --- */
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font-family: "Inter", "SF Pro Text", "SF Pro Display", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* --- mock popup frame --- */
+.mock-popup {
+  width: 360px;
+  height: 520px;
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+}
+
+/* --- prototype switcher bar --- */
+.prototype-switcher {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-radius: 100px;
+  background: rgba(30, 35, 42, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  user-select: none;
+}
+
+.prototype-switcher button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  font-size: 16px;
+}
+.prototype-switcher button:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.prototype-switcher .label {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  min-width: 120px;
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
+.prototype-switcher .dots {
+  display: flex;
+  gap: 6px;
+}
+.prototype-switcher .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transition: all 0.2s ease;
+}
+.prototype-switcher .dot.active {
+  background: #ffffff;
+  width: 20px;
+  border-radius: 3px;
+}
+
+/* --- card slide-in animation --- */
+@keyframes cardSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- preview animation --- */
+@keyframes previewFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* --- panel pop-in (Quick Control Panel) --- */
+@keyframes panelPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* --- settings pane switch --- */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- custom range slider (Settings) --- */
+.slider-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.6), rgba(56, 189, 248, 0.6)) 0 / var(--slider-fill, 0%) 100% no-repeat, rgba(255, 255, 255, 0.08);
+  outline: none;
+  cursor: pointer;
+}
+.slider-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+  transition: transform 0.12s ease;
+}
+.slider-range::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+/* --- scrollbar --- */
+.mock-popup ::-webkit-scrollbar {
+  width: 4px;
+}
+.mock-popup ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.mock-popup ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 2px;
+}
