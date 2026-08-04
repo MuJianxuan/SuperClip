@@ -1,32 +1,45 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search, Settings2, Pause, Play, Pin, Home } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { useClipboardData } from "../hooks/useClipboardData";
 import { useHoverPreview } from "../hooks/useHoverPreview";
 import { PopupHistoryRow } from "./PopupHistoryRow";
 import {
   clipboardCopy,
   clipboardPaste,
-  monitorToggle,
   popupReady,
   previewShow,
   previewHide,
   settingsGet,
   shortcutGet,
-  showMain,
   type SettingsResponse,
 } from "../lib/superclip";
 import type { ClipboardItem } from "../components/history-row";
 
-const MAX_VISIBLE_COUNT = 50;
+/** Popup 面板宽度（与 Rust 侧 popup panel 的 inner_size 320 保持一致） */
+const POPUP_WIDTH = 320;
+/** 固定行高（Popup 列表虚拟滚动用；行外层以 h-[46px] 固定对齐，见下） */
+const ROW_HEIGHT_PX = 46;
+/** 可视区上下额外渲染行数 */
+const OVERSCAN_ROWS = 6;
+
+/** 三模式主题同步：浅/深/跟随系统（与 MainApp 同一套逻辑） */
+function applyThemeMode(mode: string) {
+  const root = document.documentElement;
+  if (mode === "system") {
+    delete root.dataset.themeMode;
+  } else {
+    root.dataset.themeMode = mode;
+  }
+}
 
 export function PopupApp() {
   const { query, setQuery, items, selectedId, setSelectedId, selectedItem } =
     useClipboardData();
-  const [isMonitoring, setIsMonitoring] = useState(true);
   const [settings, setSettings] = useState<SettingsResponse | null>(null);
   const [shortcutBinding, setShortcutBinding] = useState("Cmd+Shift+V");
 
-  const hoverPreview = useHoverPreview<ClipboardItem>({ delay: 300, hideDelay: 100 });
+  // B2：悬停 200ms 显示预览，移入浮窗 150ms 容错
+  const hoverPreview = useHoverPreview<ClipboardItem>({ delay: 200, hideDelay: 150 });
 
   useEffect(() => {
     if (hoverPreview.isPreviewVisible && hoverPreview.hoveredItem && hoverPreview.hoveredRect) {
@@ -43,12 +56,13 @@ export function PopupApp() {
           const logicalX = pos.x / scale;
           const logicalY = pos.y / scale;
 
+          // B2：文本 280 / 图片 240 宽；右侧优先定位（gap 8），越界切左与视口 clamp 由 Rust preview_show 兜底
           const isImage = item.kind === "image";
-          const previewW = isImage ? 240 : 260;
-          const previewH = isImage ? 200 : 126;
+          const previewW = isImage ? 240 : 280;
+          const previewH = isImage ? 200 : 220;
 
-          const previewX = logicalX + 320 + 4;
-          const previewY = logicalY + rect.top - 8;
+          const previewX = logicalX + POPUP_WIDTH + 8;
+          const previewY = logicalY + rect.top;
 
           await previewShow(previewX, previewY, previewW, previewH);
 
@@ -61,15 +75,70 @@ export function PopupApp() {
     }
   }, [hoverPreview.isPreviewVisible, hoverPreview.hoveredItem, hoverPreview.hoveredRect]);
 
-  const visibleItems = items.slice(0, MAX_VISIBLE_COUNT);
-  const pinnedCount = useMemo(() => items.filter((item) => item.isPinned).length, [items]);
+  // ---- 虚拟滚动状态（固定行高，仅渲染可视窗 + overscan）----
+  const listRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportH, setViewportH] = useState(0);
 
   useEffect(() => {
-    settingsGet().then(setSettings).catch(() => {});
+    const el = listRef.current;
+    if (!el) return;
+    const update = () => setViewportH(el.clientHeight);
+    update();
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(update);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+    return undefined;
+  }, []);
+
+  // 查询变化时列表回到顶部
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = 0;
+  }, [query]);
+
+  // 选中行不在可视区时（键盘导航）滚到该行
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el || !items.length) return;
+    const idx = items.findIndex((i) => i.id === selectedId);
+    if (idx < 0) return;
+    const rowTop = idx * ROW_HEIGHT_PX;
+    const rowBottom = rowTop + ROW_HEIGHT_PX;
+    if (rowTop < el.scrollTop || rowBottom > el.scrollTop + el.clientHeight) {
+      el.scrollTop = Math.max(
+        0,
+        Math.min(rowTop - (el.clientHeight - ROW_HEIGHT_PX) / 2, el.scrollHeight - el.clientHeight),
+      );
+    }
+  }, [selectedId, items]);
+
+  const renderedWindow = useMemo(() => {
+    const total = items.length;
+    if (!total) return { startIndex: 0, endIndex: 0, total: 0, items: [] as ClipboardItem[] };
+    const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT_PX) - OVERSCAN_ROWS);
+    // jsdom/未测量时 fallback 高度，保证测试与真实皆有内容渲染
+    const visibleCount = Math.ceil((viewportH || ROW_HEIGHT_PX * 8) / ROW_HEIGHT_PX);
+    const endIndex = Math.min(total, startIndex + visibleCount + OVERSCAN_ROWS * 2);
+    return { startIndex, endIndex, total, items: items.slice(startIndex, endIndex) };
+  }, [items, scrollTop, viewportH]);
+
+  const setScroll = useCallback(() => {
+    const el = listRef.current;
+    if (el) setScrollTop(el.scrollTop);
+  }, []);
+
+  useEffect(() => {
+    settingsGet().then((s) => {
+      setSettings(s);
+      applyThemeMode(s.themeMode);
+    }).catch(() => {});
     shortcutGet().then((sc) => setShortcutBinding(sc.binding)).catch(() => {});
     popupReady().catch(() => {});
   }, []);
 
+  // 三模式主题同步：监听 settings-updated（Main/Settings 里改动时联动）
   useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window)) return;
     let unlisten: (() => void) | null = null;
@@ -77,14 +146,22 @@ export function PopupApp() {
 
     void import("@tauri-apps/api/event")
       .then(({ listen }) =>
-        listen("monitor-status-changed", (event: { payload: { is_monitoring: boolean } }) => {
-          if (!disposed) setIsMonitoring(event.payload.is_monitoring);
+        listen<{ theme_mode?: string }>("settings-updated", (event) => {
+          if (!disposed && event.payload.theme_mode) {
+            applyThemeMode(event.payload.theme_mode);
+          }
         }),
       )
-      .then((fn) => { if (disposed) void fn(); else unlisten = fn; })
+      .then((fn) => {
+        if (disposed) void fn();
+        else unlisten = fn;
+      })
       .catch(() => {});
 
-    return () => { disposed = true; unlisten?.(); };
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -106,14 +183,14 @@ export function PopupApp() {
     return () => { disposed = true; unlistenEnter?.(); unlistenLeave?.(); };
   }, [hoverPreview.handlePreviewEnter, hoverPreview.handlePreviewLeave]);
 
-  const popupKeyStateRef = useRef({ query, selectedId, selectedItem, visibleItems });
+  const popupKeyStateRef = useRef({ query, selectedId, selectedItem, items });
   useEffect(() => {
-    popupKeyStateRef.current = { query, selectedId, selectedItem, visibleItems };
+    popupKeyStateRef.current = { query, selectedId, selectedItem, items };
   });
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      const { query: q, selectedId: selId, selectedItem: selItem, visibleItems: visible } = popupKeyStateRef.current;
+      const { query: q, selectedId: selId, selectedItem: selItem, items: list } = popupKeyStateRef.current;
 
       if (event.key === "Escape") {
         event.preventDefault();
@@ -127,13 +204,14 @@ export function PopupApp() {
 
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
-        const currentIndex = visible.findIndex((item) => item.id === selId);
+        if (!list.length) return;
+        const currentIndex = list.findIndex((item) => item.id === selId);
         const safeIndex = currentIndex >= 0 ? currentIndex : 0;
         const nextIndex =
           event.key === "ArrowDown"
-            ? (safeIndex + 1) % visible.length
-            : (safeIndex - 1 + visible.length) % visible.length;
-        setSelectedId(visible[nextIndex].id);
+            ? (safeIndex + 1) % list.length
+            : (safeIndex - 1 + list.length) % list.length;
+        setSelectedId(list[nextIndex].id);
         return;
       }
 
@@ -163,13 +241,6 @@ export function PopupApp() {
     }
   }
 
-  async function handleMonitorToggle() {
-    try {
-      const response = await monitorToggle(!isMonitoring);
-      setIsMonitoring(response.isMonitoring);
-    } catch {}
-  }
-
   function hidePopup() {
     void previewHide().catch(() => {});
     if ("__TAURI_INTERNALS__" in window) {
@@ -177,24 +248,6 @@ export function PopupApp() {
         getCurrentWindow().hide();
       }).catch(() => {});
     }
-  }
-
-  async function openSettings() {
-    try {
-      await showMain();
-      if ("__TAURI_INTERNALS__" in window) {
-        const { emit } = await import("@tauri-apps/api/event");
-        await emit("app:show-settings", { source: "popup" });
-      }
-      hidePopup();
-    } catch {}
-  }
-
-  async function openMain() {
-    try {
-      await showMain();
-      hidePopup();
-    } catch {}
   }
 
   const handleRowClick = useCallback(
@@ -206,75 +259,80 @@ export function PopupApp() {
   );
 
   return (
-    <div className={`popup-shell h-screen w-screen overflow-hidden rounded-[10px] border border-[var(--popup-border)] shadow-[var(--popup-shadow)] ${"__TAURI_INTERNALS__" in window ? "bg-transparent" : "bg-[var(--popup-bg)] backdrop-blur-[24px] backdrop-saturate-[1.8]"}`}>
-      {/* Search */}
-      <div className="flex h-9 items-center gap-2 border-b border-[var(--border)] px-3">
-        <Search className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
-        <input
-          autoFocus
-          value={query}
-          onChange={(e) => setQuery(e.currentTarget.value)}
-          placeholder="搜索剪贴板..."
-          className="w-full bg-transparent text-[13px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
-        />
-        <span className="shrink-0 rounded-md border border-[var(--border)] bg-[var(--surface-2)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--text-tertiary)]">
-          {shortcutBinding}
-        </span>
+    <div className={`popup-shell flex h-screen w-screen flex-col overflow-hidden rounded-[12px] border border-[var(--popup-border)] shadow-[var(--popup-shadow)] ${"__TAURI_INTERNALS__" in window ? "bg-transparent" : "bg-[var(--popup-bg)] frost-window"}`}>
+      {/* 单行紧凑搜索（含窗口拖拽区；输入框与清空按钮自身不可拖拽） */}
+      <div data-tauri-drag-region className="flex h-12 shrink-0 cursor-grab items-center gap-2 px-3 active:cursor-grabbing">
+        <div
+          data-tauri-drag-region
+          className="flex h-8 w-full items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--accent)_45%,transparent)] focus-within:border-[var(--selection-accent)]"
+        >
+          <Search className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.currentTarget.value)}
+            placeholder="搜索..."
+            className="w-full bg-transparent text-[13px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
+          />
+          {query ? (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="清空搜索"
+              className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[var(--border)] text-[var(--text-tertiary)] transition-colors hover:bg-[var(--tab-hover-bg)] hover:text-[var(--text-secondary)]"
+            >
+              <X className="h-2.5 w-2.5" />
+            </button>
+          ) : null}
+          <span className="shrink-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 font-mono text-[9px] font-semibold text-[var(--text-tertiary)]">
+            {shortcutBinding}
+          </span>
+        </div>
       </div>
 
-      {/* History List */}
-      <div className="flex-1 overflow-y-auto" style={{ height: "calc(100vh - 72px)" }}>
-        {visibleItems.length ? (
-          <div className="py-1">
-            {visibleItems.map((item) => (
-              <PopupHistoryRow
-                key={item.id}
-                item={item}
-                isSelected={item.id === selectedId}
-                onSelect={() => setSelectedId(item.id)}
-                onClick={() => handleRowClick(item)}
-                onMouseEnter={(rect) => hoverPreview.handleRowEnter(item, rect)}
-                onMouseLeave={hoverPreview.handleRowLeave}
-              />
+      {/* 历史列表（固定行高虚拟滚动） */}
+      {items.length ? (
+        <div
+          ref={listRef}
+          onScroll={setScroll}
+          className="animate-[rowSlideIn_0.2s_ease-out] flex-1 overflow-y-auto"
+          style={{ height: "calc(100vh - 80px)" }}
+        >
+          {/* 上下 spacer 占位保持滚动条比例 */}
+          <div
+            style={{
+              paddingTop: renderedWindow.startIndex * ROW_HEIGHT_PX,
+              paddingBottom: (renderedWindow.total - renderedWindow.endIndex) * ROW_HEIGHT_PX,
+            }}
+          >
+            {renderedWindow.items.map((item) => (
+              <div key={item.id} className="h-[46px]">
+                <PopupHistoryRow
+                  item={item}
+                  isSelected={item.id === selectedId}
+                  onSelect={() => setSelectedId(item.id)}
+                  onClick={() => handleRowClick(item)}
+                  onMouseEnter={(rect) => hoverPreview.handleRowEnter(item, rect)}
+                  onMouseLeave={hoverPreview.handleRowLeave}
+                />
+              </div>
             ))}
           </div>
-        ) : (
-          <div className="flex h-full items-center justify-center px-4">
-            <p className="text-[13px] text-[var(--text-tertiary)]">
-              {query ? "没有匹配项" : "暂无记录"}
-            </p>
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="flex h-[calc(100vh-80px)] items-center justify-center px-4">
+          <p className="text-[13px] text-[var(--text-tertiary)]">
+            {query ? "没有匹配的内容" : "剪贴板暂无记录"}
+          </p>
+        </div>
+      )}
 
-      {/* Bottom Bar */}
-      <div data-tauri-drag-region className="flex h-9 cursor-grab items-center gap-2 border-t border-[var(--border)] px-3 active:cursor-grabbing">
-        <span className="flex items-center gap-1 text-[11px] text-[var(--text-tertiary)]">
-          <Pin className="h-3 w-3" />
-          {pinnedCount}
+      {/* 单行信息底栏（纯信息，无任何按钮） */}
+      <div className="flex h-8 shrink-0 items-center justify-between border-t border-[var(--border)] px-3">
+        <span className="text-[10.5px] text-[var(--text-tertiary)]">共 {items.length} 条</span>
+        <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] text-[var(--text-tertiary)]">
+          悬停预览
         </span>
-        <span className="flex-1" />
-        <button
-          type="button"
-          onClick={openMain}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--tab-hover-bg)] hover:text-[var(--text-secondary)]"
-        >
-          <Home className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={openSettings}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--tab-hover-bg)] hover:text-[var(--text-secondary)]"
-        >
-          <Settings2 className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={handleMonitorToggle}
-          className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--tab-hover-bg)] hover:text-[var(--text-secondary)]"
-        >
-          {isMonitoring ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-        </button>
       </div>
     </div>
   );

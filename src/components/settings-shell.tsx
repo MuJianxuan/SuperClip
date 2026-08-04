@@ -1,17 +1,17 @@
 import * as React from "react";
 import {
-  ClipboardPaste,
+  ArrowLeft,
   Download,
   Info,
   Keyboard,
-  Palette,
+  Monitor,
+  Moon,
   PencilLine,
   Plus,
-  Rocket,
   Settings2,
   Shield,
+  Sun,
   Trash2,
-  X,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
@@ -28,14 +28,7 @@ import type {
   ShortcutValidationResponse,
 } from "../lib/superclip";
 
-type SettingsSectionKey =
-  | "general"
-  | "shortcuts"
-  | "pasteBehavior"
-  | "privacy"
-  | "appearance"
-  | "startup"
-  | "about";
+type SettingsSectionKey = "general" | "shortcuts" | "privacy" | "about";
 
 interface SettingsShellProps {
   settings: SettingsResponse;
@@ -65,11 +58,8 @@ const sections: Array<{
 }> = [
   { key: "general", label: "通用", icon: Settings2 },
   { key: "shortcuts", label: "快捷键", icon: Keyboard },
-  { key: "pasteBehavior", label: "粘贴行为", icon: ClipboardPaste },
-  { key: "privacy", label: "隐私规则", icon: Shield },
-  { key: "appearance", label: "外观", icon: Palette },
-  { key: "startup", label: "启动更新", icon: Rocket },
-  { key: "about", label: "关于", icon: Info },
+  { key: "privacy", label: "排除规则", icon: Shield },
+  { key: "about", label: "高级", icon: Info },
 ];
 
 const ruleKindLabels: Record<ExclusionRuleKind, string> = {
@@ -125,6 +115,14 @@ function Row({
       </div>
       <div className="shrink-0">{action}</div>
     </div>
+  );
+}
+
+function ShortcutBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 font-mono text-[11px] font-medium text-[var(--text-secondary)]">
+      {children}
+    </span>
   );
 }
 
@@ -425,28 +423,36 @@ export function SettingsShell({
   }, [activeSection, isShortcutRecording, onShortcutCancel]);
 
   return (
-    <div className="fixed inset-0 z-40 bg-[var(--bg)]">
-      <div className="flex h-full w-full overflow-hidden border border-[var(--border)] bg-[var(--bg)]">
-        <aside className="hidden w-[92px] shrink-0 border-r border-[var(--border)] bg-[var(--surface-raised)] p-2 min-[840px]:flex min-[840px]:flex-col">
-          <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-[10px] border border-[var(--border-strong)] bg-[var(--accent-soft)] text-[var(--accent)]">
-            <Settings2 className="h-4 w-4" />
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--bg)]">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <aside className="flex w-[176px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface-raised)] p-2">
+          <div className="flex h-8 items-center gap-2 rounded-[10px] px-2">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] bg-[var(--accent-soft)] text-[var(--accent)]">
+              <Settings2 className="h-3.5 w-3.5" />
+            </div>
+            <span className="text-[12px] font-semibold text-[var(--text-primary)]">设置</span>
           </div>
 
-          <nav className="mt-3 space-y-1">
+          <nav className="mt-2 space-y-1">
             {sections.map((section) => (
               <button
                 key={section.key}
                 type="button"
                 onClick={() => setActiveSection(section.key)}
                 className={cn(
-                  "flex w-full flex-col items-center gap-1 rounded-[8px] border px-1.5 py-1.5 text-center transition-colors",
+                  "relative flex w-full items-center gap-2.5 rounded-[9px] border border-transparent px-2.5 py-2 text-left transition-colors",
                   activeSection === section.key
-                    ? "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-primary)]"
-                    : "border-transparent bg-transparent text-[var(--text-secondary)] hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]",
+                    ? "bg-[var(--accent-soft)] text-[var(--accent)]"
+                    : "bg-transparent text-[var(--text-secondary)] hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]",
                 )}
               >
-                <section.icon className="h-4 w-4" />
-                <span className="text-[10px] font-medium leading-4">{section.label}</span>
+                {activeSection === section.key ? (
+                  <span
+                    className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-[var(--accent)]"
+                  />
+                ) : null}
+                <section.icon className="h-4 w-4 shrink-0" />
+                <span className="text-[12px] font-medium leading-4">{section.label}</span>
               </button>
             ))}
           </nav>
@@ -460,13 +466,19 @@ export function SettingsShell({
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="border-b border-[var(--border)] bg-[var(--surface-raised)] px-3.5 py-2.5">
             <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-[16px] font-semibold text-[var(--text-primary)]">
-                  {activeSectionMeta.label}
-                </h2>
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
+                  <Settings2 className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <h2 className="text-[14px] font-semibold leading-tight text-[var(--text-primary)]">
+                    设置
+                  </h2>
+                  <p className="text-[11px] leading-tight text-[var(--text-tertiary)]">{activeSectionMeta.label}</p>
+                </div>
               </div>
               <div className="flex flex-wrap justify-end gap-2">
-                <Button variant="secondary" size="sm" onClick={onDiagnosticsClick}>
+                <Button variant="danger" size="sm" onClick={onDiagnosticsClick}>
                   <Download className="h-4 w-4" />
                   诊断
                 </Button>
@@ -474,34 +486,20 @@ export function SettingsShell({
                   <Shield className="h-4 w-4" />
                   权限
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => void handleClose()}>
-                  <X className="h-4 w-4" />
-                  关闭
+                <Button variant="default" size="sm" onClick={() => void handleClose()}>
+                  <ArrowLeft className="h-4 w-4" />
+                  返回列表
                 </Button>
               </div>
-            </div>
-
-            <div className="mt-2.5 flex gap-2 overflow-x-auto min-[840px]:hidden">
-              {sections.map((section) => (
-                <button
-                  key={section.key}
-                  type="button"
-                  onClick={() => setActiveSection(section.key)}
-                  className={cn(
-                    "shrink-0 rounded-[10px] border px-3 py-1.5 text-xs font-medium transition-colors",
-                    activeSection === section.key
-                      ? "border-[var(--border-strong)] bg-[var(--surface-2)] text-[var(--text-primary)]"
-                      : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]",
-                  )}
-                >
-                  {section.label}
-                </button>
-              ))}
             </div>
           </header>
 
           <ScrollArea className="min-h-0 flex-1">
-            <div className="space-y-2.5 px-3.5 py-3">
+            <div
+              key={activeSection}
+              className="space-y-2.5 px-3.5 py-3"
+              style={{ animation: "fadeSlideIn 0.18s ease-out" }}
+            >
               {readOnlyMode ? (
                 <div className="rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm text-[var(--warning-text)]">
                   只读模式：修改类操作已禁用。
@@ -509,255 +507,308 @@ export function SettingsShell({
               ) : null}
 
               {activeSection === "general" ? (
-                <SectionCard
-                  title="通用"
-                  description="历史数量和置顶提醒。"
-                >
-                  <Row
-                    label="历史保留数量"
-                    hint="建议 100 到 5000。"
-                    action={
-                      <label className="inline-flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
-                        <input
-                          type="number"
-                          min={100}
-                          max={5000}
-                          step={100}
-                          disabled={readOnlyMode}
-                          value={settings.historyLimit}
-                          onChange={(event) => {
-                            const nextValue = Number(event.currentTarget.value);
-                            if (Number.isNaN(nextValue)) {
-                              return;
-                            }
-
-                            void onUpdate({
-                              historyLimit: Math.max(100, Math.min(5000, nextValue)),
-                            });
-                          }}
-                          className="w-24 border-0 bg-transparent text-right text-sm font-medium text-[var(--text-primary)] outline-none"
-                        />
-                        <span className="text-xs text-[var(--text-tertiary)]">items</span>
-                      </label>
-                    }
-                  />
-
-                  {pinnedCount > 50 ? (
-                    <div className="rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm leading-6 text-[var(--warning-text)]">
-                      置顶项较多，可能影响首屏检索效率。建议进入历史整理路径收敛置顶数量。
-                    </div>
-                  ) : null}
-                </SectionCard>
-              ) : null}
-
-              {activeSection === "shortcuts" ? (
-                <SectionCard
-                  title="快捷键"
-                  description="修改全局唤起快捷键。"
-                >
-                  <Row
-                    label="当前全局快捷键"
-                    hint="重新录入后按下新的组合键。"
-                    action={
-                      <div className="flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
-                        <Keyboard className="h-4 w-4 text-[var(--text-secondary)]" />
-                        <span className="text-sm font-medium text-[var(--text-primary)]">{shortcut.binding}</span>
-                      </div>
-                    }
-                  />
-
-                  <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)]">
-                        来源：{shortcut.source === "default" ? "默认" : "用户"}
-                      </span>
-                      <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)]">
-                        {shortcut.isRegistered ? "已注册" : "待注册"}
-                      </span>
-                    </div>
-
-                    <div className="mt-4 flex flex-wrap gap-3">
-                      {!isShortcutRecording ? (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={readOnlyMode}
-                          onClick={async () => {
-                            await onShortcutStart();
-                            setIsShortcutRecording(true);
-                            setShortcutPreview(null);
-                            setShortcutError(null);
-                          }}
-                        >
-                          重新录入
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          disabled={readOnlyMode}
-                          onClick={async () => {
-                            await onShortcutCancel();
-                            setIsShortcutRecording(false);
-                            setShortcutPreview(null);
-                            setShortcutError(null);
-                          }}
-                        >
-                          取消
-                        </Button>
-                      )}
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={readOnlyMode}
-                        onClick={async () => {
-                          await onShortcutRestoreDefault();
-                          setIsShortcutRecording(false);
-                          setShortcutPreview(null);
-                          setShortcutError(null);
-                        }}
-                      >
-                        恢复默认
-                      </Button>
-                    </div>
-
-                    <div className="mt-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
-                      <p className="text-xs font-semibold uppercase text-[var(--text-tertiary)]">
-                        录入
-                      </p>
-                      <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">
-                        {isShortcutRecording
-                          ? shortcutPreview ?? "按下新的组合键，Esc 取消。"
-                          : shortcut.binding}
-                      </p>
-                      <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
-                        {isShortcutRecording
-                          ? "10 秒无输入自动退出。"
-                          : "录入后会先做冲突校验。"}
-                      </p>
-                    </div>
-
-                    {shortcutError ? (
-                      <div className="mt-3 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm leading-6 text-[var(--warning-text)]">
-                        {shortcutError}
-                      </div>
-                    ) : null}
-                  </div>
-                </SectionCard>
-              ) : null}
-
-              {activeSection === "pasteBehavior" ? (
-                <SectionCard
-                  title="粘贴行为"
-                  description="设置 Enter 默认执行直接粘贴还是仅复制。"
-                >
-                  <Row
-                    label="默认动作"
-                    hint="Enter 执行默认动作，Cmd+Enter 执行相反动作。"
-                    action={
-                      <div className="flex rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-1">
-                        {[
-                          { value: "direct_paste", label: "直接粘贴优先" },
-                          { value: "copy_only", label: "仅复制优先" },
-                        ].map((option) => (
+                <>
+                  <SectionCard
+                    title="主题"
+                    description="选择浅色、深色或跟随系统。"
+                  >
+                    <div className="flex gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-1">
+                      {[
+                        { value: "light", title: "浅色", icon: Sun },
+                        { value: "dark", title: "深色", icon: Moon },
+                        { value: "system", title: "跟随系统", icon: Monitor },
+                      ].map((option) => {
+                        const isActive = settings.themeMode === option.value;
+                        const Icon = option.icon;
+                        return (
                           <button
                             key={option.value}
                             type="button"
                             disabled={readOnlyMode}
                             onClick={() =>
                               void onUpdate({
-                                defaultAction: option.value as SettingsResponse["defaultAction"],
+                                themeMode: option.value as SettingsResponse["themeMode"],
                               })
                             }
                             className={cn(
-                              "rounded-[8px] px-3 py-1.5 text-xs font-medium transition-colors",
-                              settings.defaultAction === option.value
-                                ? "bg-[var(--accent)] text-[var(--accent-contrast)]"
-                                : "text-[var(--text-secondary)] hover:bg-[var(--surface-2)]",
+                              "flex flex-1 items-center justify-center gap-1.5 rounded-[8px] px-3 py-1.5 text-xs font-medium transition-colors",
                               readOnlyMode && "cursor-not-allowed opacity-60",
                             )}
+                            style={{
+                              border: `1px solid ${isActive ? "rgba(56, 189, 248, 0.3)" : "transparent"}`,
+                              background: isActive
+                                ? "var(--accent-soft)"
+                                : "transparent",
+                              color: isActive
+                                ? "var(--selection-accent)"
+                                : "var(--text-secondary)",
+                            }}
                           >
-                            {option.label}
+                            <Icon className="h-3.5 w-3.5" />
+                            {option.title}
                           </button>
-                        ))}
-                      </div>
-                    }
-                  />
+                        );
+                      })}
+                    </div>
+                  </SectionCard>
 
-                  <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-[12px] leading-5 text-[var(--text-secondary)]">
-                    失败回退始终开启；文件类型固定为仅复制，富文本和图片在目标应用不支持时会降级。
-                  </div>
-                </SectionCard>
+                  <SectionCard
+                    title="历史保留上限"
+                    description="超出上限时自动清理最早记录。"
+                  >
+                    <Row
+                      label="历史保留数量"
+                      hint="建议 100 到 5000。"
+                      action={
+                        <label className="inline-flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
+                          <input
+                            type="range"
+                            min={100}
+                            max={5000}
+                            step={100}
+                            disabled={readOnlyMode}
+                            value={settings.historyLimit}
+                            onChange={(event) => {
+                              const nextValue = Number(event.currentTarget.value);
+                              if (Number.isNaN(nextValue)) {
+                                return;
+                              }
+
+                              void onUpdate({
+                                historyLimit: Math.max(100, Math.min(5000, nextValue)),
+                              });
+                            }}
+                            className="slider-range w-44"
+                            style={
+                              {
+                                "--slider-fill": `${((settings.historyLimit - 100) / (5000 - 100)) * 100}%`,
+                              } as React.CSSProperties
+                            }
+                          />
+                          <span
+                            className="min-w-[44px] text-right text-sm font-semibold tabular-nums"
+                            style={{ color: "var(--selection-accent)" }}
+                          >
+                            {settings.historyLimit}
+                          </span>
+                          <span className="text-xs text-[var(--text-tertiary)]">条</span>
+                        </label>
+                      }
+                    />
+
+                    {pinnedCount > 50 ? (
+                      <div className="rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm leading-6 text-[var(--warning-text)]">
+                        置顶项较多，可能影响首屏检索效率。建议进入历史整理路径收敛置顶数量。
+                      </div>
+                    ) : null}
+                  </SectionCard>
+
+                  <SectionCard
+                    title="粘贴行为"
+                    description="设置 Enter 默认执行直接粘贴还是仅复制。"
+                  >
+                    <Row
+                      label="默认动作"
+                      hint="Enter 执行默认动作，Cmd+Enter 执行相反动作。"
+                      action={
+                        <div className="flex rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-1">
+                          {[
+                            { value: "direct_paste", label: "直接粘贴优先" },
+                            { value: "copy_only", label: "仅复制优先" },
+                          ].map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              disabled={readOnlyMode}
+                              onClick={() =>
+                                void onUpdate({
+                                  defaultAction: option.value as SettingsResponse["defaultAction"],
+                                })
+                              }
+                              className={cn(
+                                "rounded-[8px] px-3 py-1.5 text-xs font-medium transition-colors",
+                                settings.defaultAction === option.value
+                                  ? "bg-[var(--accent)] text-[var(--accent-contrast)]"
+                                  : "text-[var(--text-secondary)] hover:bg-[var(--surface-2)]",
+                                readOnlyMode && "cursor-not-allowed opacity-60",
+                              )}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      }
+                    />
+
+                    <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-[12px] leading-5 text-[var(--text-secondary)]">
+                      失败回退始终开启；文件类型固定为仅复制，富文本和图片在目标应用不支持时会降级。
+                    </div>
+                  </SectionCard>
+
+                  <SectionCard
+                    title="启动行为"
+                    description="管理登录启动与启动展示。"
+                  >
+                    <Row
+                      label="登录时启动"
+                      hint="失败时在本行提示并可重试。"
+                      action={
+                        <div className="flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
+                          <Switch
+                            checked={settings.launchAtLogin}
+                            disabled={readOnlyMode}
+                            onCheckedChange={(checked) => void handleStartupUpdate({ launchAtLogin: checked })}
+                          />
+                          <span className="text-xs font-medium text-[var(--text-secondary)]">
+                            {settings.launchAtLogin ? "已开启" : "已关闭"}
+                          </span>
+                        </div>
+                      }
+                    />
+
+                    <Row
+                      label="启动时自动显示"
+                      hint="开启后仍以空搜索打开。"
+                      action={
+                        <div className="flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
+                          <Switch
+                            checked={settings.showOnStartup}
+                            disabled={readOnlyMode}
+                            onCheckedChange={(checked) => void handleStartupUpdate({ showOnStartup: checked })}
+                          />
+                          <span className="text-xs font-medium text-[var(--text-secondary)]">
+                            {settings.showOnStartup ? "已开启" : "已关闭"}
+                          </span>
+                        </div>
+                      }
+                    />
+
+                    {startupError ? (
+                      <div className="flex flex-col gap-3 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm text-[var(--warning-text)] min-[820px]:flex-row min-[820px]:items-center min-[820px]:justify-between">
+                        <p>{startupError}</p>
+                        {startupRetryPatch ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={readOnlyMode}
+                            onClick={() => void handleStartupUpdate(startupRetryPatch)}
+                          >
+                            重试
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </SectionCard>
+                </>
               ) : null}
 
-              {activeSection === "startup" ? (
-                <SectionCard
-                  title="启动与更新"
-                  description="管理登录启动、启动展示和本地版本状态。"
-                >
-                  <Row
-                    label="登录时启动"
-                    hint="失败时在本行提示并可重试。"
-                    action={
-                      <div className="flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
-                        <Switch
-                          checked={settings.launchAtLogin}
-                          disabled={readOnlyMode}
-                          onCheckedChange={(checked) => void handleStartupUpdate({ launchAtLogin: checked })}
-                        />
-                        <span className="text-xs font-medium text-[var(--text-secondary)]">
-                          {settings.launchAtLogin ? "已开启" : "已关闭"}
+              {activeSection === "shortcuts" ? (
+                <>
+                  <SectionCard
+                    title="全局快捷键"
+                    description="这些快捷键在任意应用中均可使用。"
+                  >
+                    <Row
+                      label="当前全局快捷键"
+                      hint="重新录入后按下新的组合键。"
+                      action={
+                        <div className="flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
+                          <Keyboard className="h-4 w-4 text-[var(--text-secondary)]" />
+                          <span className="text-sm font-medium text-[var(--text-primary)]">{shortcut.binding}</span>
+                        </div>
+                      }
+                    />
+
+                    <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)]">
+                          来源：{shortcut.source === "default" ? "默认" : "用户"}
+                        </span>
+                        <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)]">
+                          {shortcut.isRegistered ? "已注册" : "待注册"}
                         </span>
                       </div>
-                    }
-                  />
 
-                  <Row
-                    label="启动时自动显示"
-                    hint="开启后仍以空搜索打开。"
-                    action={
-                      <div className="flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
-                        <Switch
-                          checked={settings.showOnStartup}
-                          disabled={readOnlyMode}
-                          onCheckedChange={(checked) => void handleStartupUpdate({ showOnStartup: checked })}
-                        />
-                        <span className="text-xs font-medium text-[var(--text-secondary)]">
-                          {settings.showOnStartup ? "已开启" : "已关闭"}
-                        </span>
-                      </div>
-                    }
-                  />
+                      <div className="mt-4 flex flex-wrap gap-3">
+                        {!isShortcutRecording ? (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={readOnlyMode}
+                            onClick={async () => {
+                              await onShortcutStart();
+                              setIsShortcutRecording(true);
+                              setShortcutPreview(null);
+                              setShortcutError(null);
+                            }}
+                          >
+                            重新录入
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={readOnlyMode}
+                            onClick={async () => {
+                              await onShortcutCancel();
+                              setIsShortcutRecording(false);
+                              setShortcutPreview(null);
+                              setShortcutError(null);
+                            }}
+                          >
+                            取消
+                          </Button>
+                        )}
 
-                  {startupError ? (
-                    <div className="flex flex-col gap-3 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm text-[var(--warning-text)] min-[820px]:flex-row min-[820px]:items-center min-[820px]:justify-between">
-                      <p>{startupError}</p>
-                      {startupRetryPatch ? (
                         <Button
-                          variant="secondary"
+                          variant="ghost"
                           size="sm"
                           disabled={readOnlyMode}
-                          onClick={() => void handleStartupUpdate(startupRetryPatch)}
+                          onClick={async () => {
+                            await onShortcutRestoreDefault();
+                            setIsShortcutRecording(false);
+                            setShortcutPreview(null);
+                            setShortcutError(null);
+                          }}
                         >
-                          重试
+                          恢复默认
                         </Button>
+                      </div>
+
+                      <div className="mt-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
+                        <p className="text-xs font-semibold uppercase text-[var(--text-tertiary)]">
+                          录入
+                        </p>
+                        <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">
+                          {isShortcutRecording
+                            ? shortcutPreview ?? "按下新的组合键，Esc 取消。"
+                            : shortcut.binding}
+                        </p>
+                        <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
+                          {isShortcutRecording
+                            ? "10 秒无输入自动退出。"
+                            : "录入后会先做冲突校验。"}
+                        </p>
+                      </div>
+
+                      {shortcutError ? (
+                        <div className="mt-3 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm leading-6 text-[var(--warning-text)]">
+                          {shortcutError}
+                        </div>
                       ) : null}
                     </div>
-                  ) : null}
+                  </SectionCard>
 
-                  <Row
-                    label="版本状态"
-                    hint="当前本地客户端版本。"
-                    action={
-                      <div className="inline-flex items-center rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)]">
-                        0.1.0
-                      </div>
-                    }
-                  />
-                </SectionCard>
+                  <SectionCard
+                    title="应用内快捷键"
+                    description="仅在 Main 窗口中可用。"
+                  >
+                    <Row label="切换列表/网格" hint="" action={<ShortcutBadge>⌘L</ShortcutBadge>} />
+                    <Row label="全选" hint="" action={<ShortcutBadge>⌘A</ShortcutBadge>} />
+                    <Row label="删除选中" hint="" action={<ShortcutBadge>⌘⌫</ShortcutBadge>} />
+                  </SectionCard>
+                </>
               ) : null}
-
 
               {activeSection === "privacy" ? (
                 <SectionCard
@@ -938,95 +989,78 @@ export function SettingsShell({
                 </SectionCard>
               ) : null}
 
-              {activeSection === "appearance" ? (
-                <SectionCard
-                  title="外观"
-                  description="选择浅色、深色或跟随系统。"
-                >
-                  <div className="grid grid-cols-1 gap-3 min-[760px]:grid-cols-3">
-                    {[
-                      { value: "light", title: "浅色", hint: "默认高级灰白基调" },
-                      { value: "dark", title: "深色", hint: "低饱和夜间模式" },
-                      { value: "system", title: "跟随系统", hint: "随 macOS 外观切换" },
-                    ].map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        disabled={readOnlyMode}
-                        onClick={() =>
-                          void onUpdate({
-                            themeMode: option.value as SettingsResponse["themeMode"],
-                          })
-                        }
-                        className={cn(
-                          "rounded-[10px] border px-3 py-3 text-left transition-colors",
-                          settings.themeMode === option.value
-                            ? "border-[var(--border-strong)] bg-[var(--surface)]"
-                            : "border-[var(--border)] bg-[var(--surface-2)]",
-                          readOnlyMode && "cursor-not-allowed opacity-60",
-                        )}
-                      >
-                        <p className="text-sm font-medium text-[var(--text-primary)]">{option.title}</p>
-                        <p className="mt-1 text-xs leading-5 text-[var(--text-secondary)]">{option.hint}</p>
-                      </button>
-                    ))}
-                  </div>
-                </SectionCard>
-              ) : null}
-
               {activeSection === "about" ? (
-                <SectionCard
-                  title="关于"
-                  description="版本、诊断和权限状态。"
-                >
-                  <Row
-                    label="当前版本"
-                    hint="SuperClip 本地客户端。"
-                    action={
-                      <div className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium text-[var(--text-secondary)]">
-                        superclip@0.1.0
-                      </div>
-                    }
-                  />
+                <>
+                  <SectionCard
+                    title="存储信息"
+                    description="数据库和配置文件位置。"
+                  >
+                    <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 font-mono text-[11px] leading-[1.8] text-[var(--text-secondary)]">
+                      <div>~/Library/Application Support/com.superclip/</div>
+                      <div className="text-[var(--text-tertiary)]">├── superclip.db (SQLite v3)</div>
+                      <div className="text-[var(--text-tertiary)]">├── config.json (Schema v1)</div>
+                      <div className="text-[var(--text-tertiary)]">└── logs/</div>
+                    </div>
+                  </SectionCard>
 
-                  <Row
-                    label="诊断导出"
-                    hint="导出本地排障信息，不包含剪贴板原文。"
-                    action={
-                      <Button variant="secondary" size="sm" onClick={onDiagnosticsClick}>
-                        <Download className="h-4 w-4" />
-                        导出诊断
-                      </Button>
-                    }
-                  />
-
-                  <Row
-                    label="Accessibility"
-                    hint={
-                      permissionTrusted
-                        ? "直接粘贴可用。"
-                        : "未授权时仅复制。"
-                    }
-                    action={
-                      <div className="flex flex-wrap items-center justify-end gap-3">
-                        <div
-                          className={cn(
-                            "inline-flex items-center rounded-full border px-3 py-2 text-xs font-medium",
-                            permissionTrusted
-                              ? "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
-                              : "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)]",
-                          )}
-                        >
-                          {permissionTrusted ? "已授权" : "未授权"}
-                        </div>
-                        <Button variant="secondary" size="sm" onClick={onPermissionGuideClick}>
-                          <Shield className="h-4 w-4" />
-                          打开系统设置
+                  <SectionCard
+                    title="诊断"
+                    description="用于排查问题的工具。"
+                  >
+                    <Row
+                      label="诊断导出"
+                      hint="导出本地排障信息，不包含剪贴板原文。"
+                      action={
+                        <Button variant="danger" size="sm" onClick={onDiagnosticsClick}>
+                          <Download className="h-4 w-4" />
+                          导出诊断
                         </Button>
-                      </div>
-                    }
-                  />
-                </SectionCard>
+                      }
+                    />
+                  </SectionCard>
+
+                  <SectionCard
+                    title="关于"
+                    description="版本与权限状态。"
+                  >
+                    <Row
+                      label="当前版本"
+                      hint="SuperClip 本地客户端。"
+                      action={
+                        <div className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium text-[var(--text-secondary)]">
+                          superclip@0.1.0
+                        </div>
+                      }
+                    />
+
+                    <Row
+                      label="Accessibility"
+                      hint={
+                        permissionTrusted
+                          ? "直接粘贴可用。"
+                          : "未授权时仅复制。"
+                      }
+                      action={
+                        <div className="flex flex-wrap items-center justify-end gap-3">
+                          <div
+                            className={cn(
+                              "inline-flex items-center rounded-full border px-3 py-2 text-xs font-medium",
+                              permissionTrusted
+                                ? "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
+                                : "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)]",
+                            )}
+                          >
+                            {permissionTrusted ? "已授权" : "未授权"}
+                          </div>
+                          <Button variant="secondary" size="sm" onClick={onPermissionGuideClick}>
+                            <Shield className="h-4 w-4" />
+                            打开系统设置
+                          </Button>
+                        </div>
+                      }
+                    />
+                  </SectionCard>
+                </>
               ) : null}
 
               <Separator />

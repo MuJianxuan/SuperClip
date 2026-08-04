@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { MainGridView } from "./MainGridView";
 import type { ClipboardItem } from "../../components/history-row";
 
@@ -13,6 +13,8 @@ describe("MainGridView", () => {
     items: mockItems,
     selectedId: "1",
     selectedIds: new Set<string>(),
+    hasQuery: false,
+    onClearSearch: vi.fn(),
     onSelect: vi.fn(),
     onToggleSelect: vi.fn(),
     onAction: vi.fn(),
@@ -28,8 +30,8 @@ describe("MainGridView", () => {
 
   it("renders source and time for each card", () => {
     render(<MainGridView {...defaultProps} />);
-    expect(screen.getByText("VSCode · 3s前")).toBeInTheDocument();
-    expect(screen.getByText("Finder · 1m前")).toBeInTheDocument();
+    expect(screen.getByText("VSCode")).toBeInTheDocument();
+    expect(screen.getByText("3s前")).toBeInTheDocument();
   });
 
   it("shows text preview for text items", () => {
@@ -39,18 +41,47 @@ describe("MainGridView", () => {
 
   it("shows empty state when no items", () => {
     render(<MainGridView {...defaultProps} items={[]} />);
-    expect(screen.getByText("暂无记录")).toBeInTheDocument();
+    expect(screen.getByText("剪贴板暂无记录")).toBeInTheDocument();
+  });
+
+  it("shows empty state with no-match copy when search has no results", () => {
+    render(<MainGridView {...defaultProps} items={[]} hasQuery />);
+    expect(screen.getByText("没有匹配的内容")).toBeInTheDocument();
+  });
+
+  it("shows clear-search button and calls onClearSearch when search has no results", () => {
+    const onClearSearch = vi.fn();
+    render(<MainGridView {...defaultProps} items={[]} hasQuery onClearSearch={onClearSearch} />);
+    const clearBtn = screen.getByRole("button", { name: "清空搜索" });
+    expect(clearBtn).toBeInTheDocument();
+    fireEvent.click(clearBtn);
+    expect(onClearSearch).toHaveBeenCalled();
+  });
+
+  it("does not show clear-search button in no-records empty state", () => {
+    render(<MainGridView {...defaultProps} items={[]} />);
+    expect(screen.queryByRole("button", { name: "清空搜索" })).not.toBeInTheDocument();
   });
 
   it("shows pin indicator for pinned items", () => {
     const { container } = render(<MainGridView {...defaultProps} />);
-    const pins = container.querySelectorAll(".lucide-pin");
-    expect(pins.length).toBeGreaterThan(0);
+    expect(container.querySelectorAll(".lucide-star").length).toBeGreaterThan(0);
   });
 
-  it("applies selected border to selected card", () => {
+  it("marks the selected card", () => {
     const { container } = render(<MainGridView {...defaultProps} />);
-    const selectedCard = container.querySelector("[class*='selection-accent']");
-    expect(selectedCard).toBeInTheDocument();
+    const selectedCard = container.querySelector('[data-clipboard-row-id="1"]');
+    expect(selectedCard?.getAttribute("data-selected")).not.toBeNull();
+    const otherCard = container.querySelector('[data-clipboard-row-id="2"]');
+    expect(otherCard?.getAttribute("data-selected")).toBeNull();
+  });
+
+  it("calls onToggleSelect when checkbox is clicked", () => {
+    const onToggleSelect = vi.fn();
+    const { container } = render(<MainGridView {...defaultProps} onToggleSelect={onToggleSelect} />);
+    const card = container.querySelector('[data-clipboard-row-id="1"]');
+    const checkbox = card!.querySelector("button[title='选择']");
+    fireEvent.click(checkbox!);
+    expect(onToggleSelect).toHaveBeenCalledWith("1");
   });
 });

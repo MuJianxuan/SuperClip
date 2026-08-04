@@ -13,12 +13,13 @@ const mockListen = vi.fn((event: string, handler: (e: unknown) => void) => {
 let listenHandler: ((e: unknown) => void) | null = null;
 
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: (...args: unknown[]) => mockListen(...(args as [string, (e: unknown) => void])),
+  listen: (...args: unknown[]) =>
+    mockListen(...(args as [string, (e: unknown) => void])),
   emit: (...args: unknown[]) => mockEmit(...(args as [string, unknown?])),
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: vi.fn(),
+  invoke: vi.fn().mockResolvedValue(null),
 }));
 
 Object.defineProperty(window, "__TAURI_INTERNALS__", {
@@ -27,140 +28,141 @@ Object.defineProperty(window, "__TAURI_INTERNALS__", {
   configurable: true,
 });
 
+function baseItem(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "clip-1",
+    kind: "text",
+    title: "Test Title",
+    preview: "Preview content here",
+    sourceApp: "Terminal",
+    meta: "",
+    timeLabel: "2s前",
+    isPinned: false,
+    matchType: null,
+    matchedFields: [],
+    highlightRanges: [],
+    ...overrides,
+  };
+}
+
+function emitShow(item: Record<string, unknown>) {
+  listenHandler!({ payload: { item } });
+}
+
 describe("PreviewApp", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listenHandler = null;
   });
 
-  it("renders empty state when no item", () => {
+  it("renders empty container when no item", () => {
     const { container } = render(<PreviewApp />);
     const root = container.firstElementChild;
+    expect(root).not.toBeNull();
     expect(root?.children.length).toBe(0);
   });
 
-  it("renders item content after preview:show event", async () => {
+  it("renders read-only G2 layout: type label, time, source, zero buttons", async () => {
     render(<PreviewApp />);
-
     await vi.waitFor(() => expect(listenHandler).not.toBeNull());
 
-    listenHandler!({
-      payload: {
-        item: {
-          id: "clip-1",
-          kind: "text",
-          title: "Test Title",
-          preview: "Preview content here",
-          sourceApp: "Terminal",
-          meta: "",
-          timeLabel: "2s前",
-          isPinned: false,
-          matchType: null,
-          matchedFields: [],
-          highlightRanges: [],
-        },
-      },
-    });
+    emitShow(baseItem());
 
-    await vi.waitFor(() => {
-      expect(screen.getByText("text")).toBeInTheDocument();
-    });
-    expect(screen.getByText("Terminal")).toBeInTheDocument();
-    expect(screen.getByText("Preview content here")).toBeInTheDocument();
+    await vi.waitFor(() =>
+      expect(screen.getByText("Preview content here")).toBeInTheDocument(),
+    );
+
+    // Header：类型标签 + 时间（footer 与 body 中不得出现按钮）
+    expect(screen.getByText("文本")).toBeInTheDocument();
     expect(screen.getByText("2s前")).toBeInTheDocument();
+    expect(screen.getByText(/来自/)).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("renders image placeholder for image kind", async () => {
+  it("renders code block distinctly with language line stripped", async () => {
     render(<PreviewApp />);
-
     await vi.waitFor(() => expect(listenHandler).not.toBeNull());
 
-    listenHandler!({
-      payload: {
-        item: {
-          id: "clip-2",
-          kind: "image",
-          title: "Screenshot",
-          preview: "",
-          sourceApp: "Finder",
-          meta: "1920x1080 PNG",
-          timeLabel: "5m前",
-          isPinned: false,
-          matchType: null,
-          matchedFields: [],
-          highlightRanges: [],
-        },
-      },
+    emitShow(
+      makeItem({
+        title: "Code",
+        preview:
+          "intro paragraph\n\n```tsx\nconst a = 1;\nexport default a;\n```\n\noutro",
+      }),
+    );
+
+    const root = await vi.waitFor(() => {
+      const r = screen.getByText(/outro/);
+      expect(r).toBeInTheDocument();
+      return r.closest("[class*='h-screen']") as HTMLElement;
     });
 
-    await vi.waitFor(() => {
-      expect(screen.getByText("1920x1080 PNG")).toBeInTheDocument();
-    });
+    const text = root.textContent ?? "";
+    // 代码内容存在且语言标注行 tsx 被剥离
+    expect(text).toContain("const a = 1;");
+    expect(text).not.toContain("```tsx");
+    // 两个 pre 块（含代码）存在，代码为等宽等宽样式
+    const preBlocks = root.querySelectorAll("pre");
+    expect(preBlocks.length).toBe(1);
+    expect(preBlocks[0].textContent).toContain("const a = 1;");
+  });
+
+  it("renders image placeholder with meta for image kind", async () => {
+    render(<PreviewApp />);
+    await vi.waitFor(() => expect(listenHandler).not.toBeNull());
+
+    emitShow(
+      makeItem({
+        id: "clip-2",
+        kind: "image",
+        title: "Screenshot",
+        preview: "",
+        meta: "1920x1080 PNG",
+        timeLabel: "5m前",
+      }),
+    );
+
+    await vi.waitFor(() =>
+      expect(screen.getByText("1920x1080 PNG")).toBeInTheDocument(),
+    );
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("emits preview:mouse-enter on mouse enter", async () => {
     render(<PreviewApp />);
-
     await vi.waitFor(() => expect(listenHandler).not.toBeNull());
+    emitShow(makeItem());
 
-    listenHandler!({
-      payload: {
-        item: {
-          id: "clip-1",
-          kind: "text",
-          title: "Test",
-          preview: "content",
-          sourceApp: "App",
-          meta: "",
-          timeLabel: "1s前",
-          isPinned: false,
-          matchType: null,
-          matchedFields: [],
-          highlightRanges: [],
-        },
-      },
-    });
+    const root = (await vi.waitFor(() => {
+      const el = screen.getByText("Preview content here").closest(
+        "[class*='h-screen']",
+      );
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    }));
 
-    await vi.waitFor(() => {
-      expect(screen.getByText("content")).toBeInTheDocument();
-    });
-
-    const container = screen.getByText("content").closest("[class*='h-screen']")!;
-    fireEvent.mouseEnter(container);
-
+    fireEvent.mouseEnter(root);
     expect(mockEmit).toHaveBeenCalledWith("preview:mouse-enter");
   });
 
   it("emits preview:mouse-leave on mouse leave", async () => {
     render(<PreviewApp />);
-
     await vi.waitFor(() => expect(listenHandler).not.toBeNull());
+    emitShow(makeItem());
 
-    listenHandler!({
-      payload: {
-        item: {
-          id: "clip-1",
-          kind: "text",
-          title: "Test",
-          preview: "content",
-          sourceApp: "App",
-          meta: "",
-          timeLabel: "1s前",
-          isPinned: false,
-          matchType: null,
-          matchedFields: [],
-          highlightRanges: [],
-        },
-      },
-    });
+    const root = (await vi.waitFor(() => {
+      const el = screen.getByText("Preview content here").closest(
+        "[class*='h-screen']",
+      );
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    }));
 
-    await vi.waitFor(() => {
-      expect(screen.getByText("content")).toBeInTheDocument();
-    });
-
-    const container = screen.getByText("content").closest("[class*='h-screen']")!;
-    fireEvent.mouseLeave(container);
-
+    fireEvent.mouseLeave(root);
     expect(mockEmit).toHaveBeenCalledWith("preview:mouse-leave");
   });
 });
+
+function makeItem(overrides: Record<string, unknown> = {}) {
+  return baseItem(overrides);
+}

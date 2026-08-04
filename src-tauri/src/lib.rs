@@ -11,7 +11,6 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{
     image::Image,
-    menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, State,
 };
@@ -34,14 +33,16 @@ const IMAGE_PAYLOAD_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 const IMAGE_PREVIEW_MAX_EDGE: usize = 360;
 const MONITOR_POLL_MS: u64 = 900;
 const DEFAULT_HISTORY_LIMIT: usize = 1000;
+/// 历史列表/搜索单次返回的最大条数（对应历史保留上限可配置的最高 5000 条）。
+const MAX_HISTORY_RESULTS: usize = 5000;
 const TRAY_ICON_BYTES: &[u8] = include_bytes!("../icons/tray-clipboard-list.png");
 const WINDOW_MODE_SMALL: &str = "small_window";
 const WINDOW_MODE_LARGE: &str = "large_window";
 const WINDOW_MODE_FALLBACK: &str = "fallback_window";
-const WINDOW_SMALL_WIDTH: f64 = 1120.0;
-const WINDOW_SMALL_HEIGHT: f64 = 760.0;
-const WINDOW_LARGE_WIDTH: f64 = 1120.0;
-const WINDOW_LARGE_HEIGHT: f64 = 760.0;
+const WINDOW_SMALL_WIDTH: f64 = 760.0;
+const WINDOW_SMALL_HEIGHT: f64 = 540.0;
+const WINDOW_LARGE_WIDTH: f64 = 760.0;
+const WINDOW_LARGE_HEIGHT: f64 = 540.0;
 const WINDOW_SAFE_AREA_MARGIN_X: f64 = 32.0;
 const WINDOW_SAFE_AREA_MARGIN_Y: f64 = 48.0;
 const WINDOW_RESIZE_SUPPRESSION_MS: u64 = 350;
@@ -1830,32 +1831,40 @@ fn list_clipboard_items(
     pinned_only: bool,
 ) -> Result<Vec<ClipboardItemSummary>, String> {
     let sql = match (kind_filter, pinned_only) {
-        (Some(_), true) => r#"
+        (Some(_), true) => format!(
+            r#"
             SELECT * FROM clipboard_items
             WHERE kind = ?1 AND is_pinned = 1
             ORDER BY is_pinned DESC, COALESCE(pinned_at, 0) DESC, last_seen_at DESC
-            LIMIT 250
-        "#,
-        (Some(_), false) => r#"
+            LIMIT {MAX_HISTORY_RESULTS}
+        "#
+        ),
+        (Some(_), false) => format!(
+            r#"
             SELECT * FROM clipboard_items
             WHERE kind = ?1
             ORDER BY is_pinned DESC, COALESCE(pinned_at, 0) DESC, last_seen_at DESC
-            LIMIT 250
-        "#,
-        (None, true) => r#"
+            LIMIT {MAX_HISTORY_RESULTS}
+        "#
+        ),
+        (None, true) => format!(
+            r#"
             SELECT * FROM clipboard_items
             WHERE is_pinned = 1
             ORDER BY COALESCE(pinned_at, 0) DESC, last_seen_at DESC
-            LIMIT 250
-        "#,
-        (None, false) => r#"
+            LIMIT {MAX_HISTORY_RESULTS}
+        "#
+        ),
+        (None, false) => format!(
+            r#"
             SELECT * FROM clipboard_items
             ORDER BY is_pinned DESC, COALESCE(pinned_at, 0) DESC, last_seen_at DESC
-            LIMIT 250
-        "#,
+            LIMIT {MAX_HISTORY_RESULTS}
+        "#
+        ),
     };
 
-    let mut statement = connection.prepare_cached(sql).map_err(map_db_error)?;
+    let mut statement = connection.prepare_cached(&sql).map_err(map_db_error)?;
     let rows = if let Some(kind) = kind_filter {
         statement.query_map(params![kind], row_to_summary).map_err(map_db_error)?
     } else {
@@ -1877,16 +1886,16 @@ fn like_search_items(
     let base_where = "(lower(title) LIKE ?1 OR lower(preview_text) LIKE ?1 OR lower(source_app) LIKE ?1 OR lower(meta) LIKE ?1)";
     let sql = match (kind_filter, pinned_only) {
         (Some(_), true) => format!(
-            "SELECT * FROM clipboard_items WHERE {base_where} AND kind = ?2 AND is_pinned = 1 ORDER BY is_pinned DESC, last_seen_at DESC LIMIT 250"
+            "SELECT * FROM clipboard_items WHERE {base_where} AND kind = ?2 AND is_pinned = 1 ORDER BY is_pinned DESC, last_seen_at DESC LIMIT {MAX_HISTORY_RESULTS}"
         ),
         (Some(_), false) => format!(
-            "SELECT * FROM clipboard_items WHERE {base_where} AND kind = ?2 ORDER BY is_pinned DESC, last_seen_at DESC LIMIT 250"
+            "SELECT * FROM clipboard_items WHERE {base_where} AND kind = ?2 ORDER BY is_pinned DESC, last_seen_at DESC LIMIT {MAX_HISTORY_RESULTS}"
         ),
         (None, true) => format!(
-            "SELECT * FROM clipboard_items WHERE {base_where} AND is_pinned = 1 ORDER BY is_pinned DESC, last_seen_at DESC LIMIT 250"
+            "SELECT * FROM clipboard_items WHERE {base_where} AND is_pinned = 1 ORDER BY is_pinned DESC, last_seen_at DESC LIMIT {MAX_HISTORY_RESULTS}"
         ),
         (None, false) => format!(
-            "SELECT * FROM clipboard_items WHERE {base_where} ORDER BY is_pinned DESC, last_seen_at DESC LIMIT 250"
+            "SELECT * FROM clipboard_items WHERE {base_where} ORDER BY is_pinned DESC, last_seen_at DESC LIMIT {MAX_HISTORY_RESULTS}"
         ),
     };
 
@@ -2008,41 +2017,49 @@ fn search_clipboard_items(
 
     if let Some(match_query) = fts_query(query) {
         let (sql, has_kind) = match (kind_filter, pinned_only) {
-            (Some(_), true) => (r#"
+            (Some(_), true) => (format!(
+                r#"
                 SELECT ci.*
                 FROM fts_clipboard_items fts
                 JOIN clipboard_items ci ON ci.id = fts.item_id
                 WHERE fts_clipboard_items MATCH ?1 AND ci.kind = ?2 AND ci.is_pinned = 1
                 ORDER BY ci.is_pinned DESC, rank, ci.last_seen_at DESC
-                LIMIT 250
-            "#, true),
-            (Some(_), false) => (r#"
+                LIMIT {MAX_HISTORY_RESULTS}
+            "#
+            ), true),
+            (Some(_), false) => (format!(
+                r#"
                 SELECT ci.*
                 FROM fts_clipboard_items fts
                 JOIN clipboard_items ci ON ci.id = fts.item_id
                 WHERE fts_clipboard_items MATCH ?1 AND ci.kind = ?2
                 ORDER BY ci.is_pinned DESC, rank, ci.last_seen_at DESC
-                LIMIT 250
-            "#, true),
-            (None, true) => (r#"
+                LIMIT {MAX_HISTORY_RESULTS}
+            "#
+            ), true),
+            (None, true) => (format!(
+                r#"
                 SELECT ci.*
                 FROM fts_clipboard_items fts
                 JOIN clipboard_items ci ON ci.id = fts.item_id
                 WHERE fts_clipboard_items MATCH ?1 AND ci.is_pinned = 1
                 ORDER BY ci.is_pinned DESC, rank, ci.last_seen_at DESC
-                LIMIT 250
-            "#, false),
-            (None, false) => (r#"
+                LIMIT {MAX_HISTORY_RESULTS}
+            "#
+            ), false),
+            (None, false) => (format!(
+                r#"
                 SELECT ci.*
                 FROM fts_clipboard_items fts
                 JOIN clipboard_items ci ON ci.id = fts.item_id
                 WHERE fts_clipboard_items MATCH ?1
                 ORDER BY ci.is_pinned DESC, rank, ci.last_seen_at DESC
-                LIMIT 250
-            "#, false),
+                LIMIT {MAX_HISTORY_RESULTS}
+            "#
+            ), false),
         };
 
-        let mut statement = connection.prepare_cached(sql).map_err(map_db_error)?;
+        let mut statement = connection.prepare_cached(&sql).map_err(map_db_error)?;
         let rows = if has_kind {
             statement.query_map(params![match_query, kind_filter.unwrap()], row_to_summary)
         } else {
@@ -2865,6 +2882,46 @@ fn toggle_popup_window(app: &tauri::AppHandle) {
     }
 }
 
+fn toggle_quick_panel_window(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("quick_panel") else {
+        return;
+    };
+
+    let is_visible = window.is_visible().unwrap_or(false);
+
+    if is_visible {
+        #[cfg(target_os = "macos")]
+        {
+            if let Ok(panel) = app.get_webview_panel("quick_panel") {
+                panel.hide();
+                return;
+            }
+        }
+        let _ = window.hide();
+    } else {
+        use tauri_plugin_positioner::WindowExt;
+        let _ = window.move_window(tauri_plugin_positioner::Position::TrayCenter);
+
+        #[cfg(target_os = "macos")]
+        {
+            unsafe {
+                let cls =
+                    tauri_nspanel::objc2::runtime::AnyClass::get(c"NSApplication").unwrap();
+                let ns_app: *mut tauri_nspanel::objc2::runtime::AnyObject =
+                    tauri_nspanel::objc2::msg_send![cls, sharedApplication];
+                let _: () =
+                    tauri_nspanel::objc2::msg_send![ns_app, activateIgnoringOtherApps: true];
+            }
+            if let Ok(panel) = app.get_webview_panel("quick_panel") {
+                panel.show_and_make_key();
+                return;
+            }
+        }
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
+}
+
 fn hide_popup_window(app: &tauri::AppHandle) {
     if let Some(state) = app.try_state::<AppState>() {
         if let Ok(mut flag) = state.preview_active.lock() {
@@ -2891,67 +2948,6 @@ fn hide_popup_window(app: &tauri::AppHandle) {
             let _ = window.hide();
         }
     }
-}
-
-fn pause_monitor_timed(app: &tauri::AppHandle, duration_secs: u64) {
-    let state: State<'_, AppState> = app.state();
-    if let Ok(mut monitoring) = state.is_monitoring.lock() {
-        *monitoring = false;
-    }
-    emit_superclip_event(
-        app,
-        "monitor-status-changed",
-        json!({ "is_monitoring": false, "source": "tray_pause_timed", "resume_after_secs": duration_secs }),
-    );
-
-    let app_handle = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_secs(duration_secs));
-        let state = app_handle.state::<AppState>();
-        let should_resume = {
-            let mut monitoring = match state.is_monitoring.lock() {
-                Ok(m) => m,
-                Err(_) => return,
-            };
-            if !*monitoring {
-                *monitoring = true;
-                true
-            } else {
-                false
-            }
-        };
-        if should_resume {
-            emit_superclip_event(
-                &app_handle,
-                "monitor-status-changed",
-                json!({ "is_monitoring": true, "source": "timed_resume" }),
-            );
-        }
-    });
-}
-
-fn pause_monitor_indefinite(app: &tauri::AppHandle) {
-    let state: State<'_, AppState> = app.state();
-    if let Ok(mut monitoring) = state.is_monitoring.lock() {
-        *monitoring = false;
-    }
-    emit_superclip_event(
-        app,
-        "monitor-status-changed",
-        json!({ "is_monitoring": false, "source": "tray_pause_indefinite" }),
-    );
-}
-
-fn resume_monitor(app: &tauri::AppHandle) {
-    let state: State<'_, AppState> = app.state();
-    if let Ok(mut monitoring) = state.is_monitoring.lock() {
-        *monitoring = true;
-    }
-    emit_superclip_event(
-        app,
-        "monitor-status-changed",
-        json!({ "is_monitoring": true, "source": "tray_resume" }),
-    );
 }
 
 fn show_main_window(
@@ -3004,10 +3000,6 @@ fn show_main_window(
     Ok(())
 }
 
-fn emit_settings_request(app: &tauri::AppHandle, source: &str) {
-    emit_superclip_event(app, "app:show-settings", json!({ "source": source }));
-}
-
 #[cfg(target_os = "macos")]
 tauri_panel! {
     panel!(SuperClipPanel {
@@ -3034,7 +3026,7 @@ fn create_popup_panel(app: &tauri::AppHandle) -> Result<(), String> {
         .hides_on_deactivate(false)
         .transparent(true)
         .floating(true)
-        .corner_radius(10.0)
+        .corner_radius(12.0)
         .with_window(|builder| {
             builder
                 .decorations(false)
@@ -3059,6 +3051,37 @@ fn create_popup_panel(app: &tauri::AppHandle) -> Result<(), String> {
 }
 
 #[cfg(target_os = "macos")]
+fn create_quick_panel_panel(app: &tauri::AppHandle) -> Result<(), String> {
+    use tauri::WebviewUrl;
+
+    let _panel = PanelBuilder::<_, SuperClipPanel>::new(app, "quick_panel")
+        .url(WebviewUrl::App("panel.html".into()))
+        .level(PanelLevel::MainMenu)
+        .collection_behavior(
+            CollectionBehavior::new()
+                .can_join_all_spaces()
+                .full_screen_auxiliary()
+                .transient(),
+        )
+        .hides_on_deactivate(false)
+        .transparent(true)
+        .floating(true)
+        .corner_radius(12.0)
+        .with_window(|builder| {
+            builder
+                .decorations(false)
+                .resizable(false)
+                .inner_size(232.0, 332.0)
+                .visible(false)
+                .skip_taskbar(true)
+        })
+        .build()
+        .map_err(|e| format!("Failed to create quick panel: {e}"))?;
+
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
 fn create_preview_panel(app: &tauri::AppHandle) -> Result<(), String> {
     use tauri::WebviewUrl;
 
@@ -3074,6 +3097,7 @@ fn create_preview_panel(app: &tauri::AppHandle) -> Result<(), String> {
         .hides_on_deactivate(false)
         .transparent(true)
         .floating(true)
+        .corner_radius(12.0)
         .with_window(|builder| {
             builder
                 .decorations(false)
@@ -3085,6 +3109,15 @@ fn create_preview_panel(app: &tauri::AppHandle) -> Result<(), String> {
         })
         .build()
         .map_err(|e| format!("Failed to create preview panel: {e}"))?;
+
+    if let Some(window) = app.get_webview_window("preview") {
+        let _ = apply_vibrancy(
+            &window,
+            NSVisualEffectMaterial::Menu,
+            Some(NSVisualEffectState::Active),
+            Some(10.0),
+        );
+    }
 
     drop(panel);
     Ok(())
@@ -3152,6 +3185,19 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
                         },
                     );
                 }
+                if let Err(error) = create_quick_panel_panel(app) {
+                    record_recent_error(
+                        state,
+                        RecentErrorRecord {
+                            error_code: "QUICK_PANEL_CREATE_FAILED".into(),
+                            context: format!("desktop-controls/nspanel/quick_panel/{error}"),
+                            occurred_at: build_runtime_timestamp()
+                                .unwrap_or_else(|_| "unknown".into()),
+                            startup_phase: Some("desktop_controls".into()),
+                            setting_value: None,
+                        },
+                    );
+                }
             }
         }
 
@@ -3210,57 +3256,7 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
             }
         };
 
-        let tray_menu_open = MenuItemBuilder::with_id("tray_open", "打开主界面").build(app);
-        let tray_menu_pause_1m =
-            MenuItemBuilder::with_id("tray_pause_1m", "暂停 1 分钟").build(app);
-        let tray_menu_pause_5m =
-            MenuItemBuilder::with_id("tray_pause_5m", "暂停 5 分钟").build(app);
-        let tray_menu_pause_until =
-            MenuItemBuilder::with_id("tray_pause_until", "暂停直到恢复").build(app);
-        let tray_menu_resume = MenuItemBuilder::with_id("tray_resume", "恢复监听").build(app);
-        let tray_menu_settings = MenuItemBuilder::with_id("tray_settings", "设置").build(app);
-        let tray_menu_quit = MenuItemBuilder::with_id("tray_quit", "退出").build(app);
-
-        match (
-            tray_menu_open,
-            tray_menu_pause_1m,
-            tray_menu_pause_5m,
-            tray_menu_pause_until,
-            tray_menu_resume,
-            tray_menu_settings,
-            tray_menu_quit,
-        ) {
-            (
-                Ok(tray_menu_open),
-                Ok(tray_menu_pause_1m),
-                Ok(tray_menu_pause_5m),
-                Ok(tray_menu_pause_until),
-                Ok(tray_menu_resume),
-                Ok(tray_menu_settings),
-                Ok(tray_menu_quit),
-            ) => {
-                let pause_submenu = tauri::menu::SubmenuBuilder::with_id(app, "tray_pause_sub", "暂停监听")
-                    .items(&[&tray_menu_pause_1m, &tray_menu_pause_5m, &tray_menu_pause_until])
-                    .build();
-
-                let tray_menu = match pause_submenu {
-                    Ok(pause_submenu) => MenuBuilder::new(app)
-                        .item(&tray_menu_open)
-                        .separator()
-                        .item(&pause_submenu)
-                        .item(&tray_menu_resume)
-                        .separator()
-                        .item(&tray_menu_settings)
-                        .item(&tray_menu_quit)
-                        .build(),
-                    Err(_) => MenuBuilder::new(app)
-                        .items(&[&tray_menu_open, &tray_menu_settings, &tray_menu_quit])
-                        .build(),
-                };
-
-                match tray_menu {
-                    Ok(menu) => {
-                        let tray_icon = Image::from_bytes(TRAY_ICON_BYTES)
+        let tray_icon = Image::from_bytes(TRAY_ICON_BYTES)
                             .map(|icon| (icon, true))
                             .ok()
                             .or_else(|| {
@@ -3274,43 +3270,7 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
                                 .icon(window_icon)
                                 .icon_as_template(icon_as_template)
                                 .tooltip("SuperClip")
-                                .menu(&menu)
                                 .show_menu_on_left_click(false)
-                                .on_menu_event(|app_handle, event| match event.id().as_ref() {
-                                    "tray_open" => {
-                                        let _ = show_main_window(
-                                            app_handle,
-                                            "tray_menu_open",
-                                            None,
-                                            None,
-                                        );
-                                    }
-                                    "tray_pause_1m" => {
-                                        pause_monitor_timed(app_handle, 60);
-                                    }
-                                    "tray_pause_5m" => {
-                                        pause_monitor_timed(app_handle, 300);
-                                    }
-                                    "tray_pause_until" => {
-                                        pause_monitor_indefinite(app_handle);
-                                    }
-                                    "tray_resume" => {
-                                        resume_monitor(app_handle);
-                                    }
-                                    "tray_settings" => {
-                                        let _ = show_main_window(
-                                            app_handle,
-                                            "tray_menu_settings",
-                                            None,
-                                            None,
-                                        );
-                                        emit_settings_request(app_handle, "tray_menu");
-                                    }
-                                    "tray_quit" => {
-                                        app_handle.exit(0);
-                                    }
-                                    _ => {}
-                                })
                                 .on_tray_icon_event(|tray, event| {
                                     tauri_plugin_positioner::on_tray_event(
                                         tray.app_handle(),
@@ -3323,6 +3283,14 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
                                     } = event
                                     {
                                         toggle_popup_window(tray.app_handle());
+                                    }
+                                    if let TrayIconEvent::Click {
+                                        button: MouseButton::Right,
+                                        button_state: MouseButtonState::Up,
+                                        ..
+                                    } = event
+                                    {
+                                        toggle_quick_panel_window(tray.app_handle());
                                     }
                                 })
                                 .build(app);
@@ -3374,35 +3342,6 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
                                 },
                             );
                         }
-                    }
-                    Err(error) => {
-                        record_recent_error(
-                            state,
-                            RecentErrorRecord {
-                                error_code: "TRAY_MENU_BUILD_FAILED".into(),
-                                context: format!("desktop-controls/tray-menu/{error}"),
-                                occurred_at: build_runtime_timestamp()
-                                    .unwrap_or_else(|_| "unknown".into()),
-                                startup_phase: Some("desktop_controls".into()),
-                                setting_value: None,
-                            },
-                        );
-                    }
-                }
-            }
-            _ => {
-                record_recent_error(
-                    state,
-                    RecentErrorRecord {
-                        error_code: "TRAY_MENU_ITEM_BUILD_FAILED".into(),
-                        context: "desktop-controls/tray-menu-item-build".into(),
-                        occurred_at: build_runtime_timestamp().unwrap_or_else(|_| "unknown".into()),
-                        startup_phase: Some("desktop_controls".into()),
-                        setting_value: None,
-                    },
-                );
-            }
-        }
     }
 }
 
@@ -4434,6 +4373,39 @@ fn popup_ready(state: State<'_, AppState>) {
     if let Ok(mut flag) = state.popup_ready.lock() {
         *flag = true;
     }
+}
+
+#[tauri::command]
+fn monitor_status_get(state: State<'_, AppState>) -> Result<MonitorStatus, String> {
+    let monitoring = state
+        .is_monitoring
+        .lock()
+        .map_err(|_| "monitor state unavailable".to_string())?;
+    Ok(MonitorStatus {
+        is_monitoring: *monitoring,
+    })
+}
+
+#[tauri::command]
+fn app_quit(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+#[tauri::command]
+fn quick_panel_hide(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(panel) = app.get_webview_panel("quick_panel") {
+            panel.hide();
+            return Ok(());
+        }
+    }
+
+    let Some(window) = app.get_webview_window("quick_panel") else {
+        return Err("quick_panel window not found".into());
+    };
+    let _ = window.hide();
+    Ok(())
 }
 
 #[tauri::command]
@@ -5484,6 +5456,9 @@ pub fn run() {
             preview_hide,
             popup_ready,
             monitor_toggle,
+            monitor_status_get,
+            app_quit,
+            quick_panel_hide,
             clipboard_copy,
             clipboard_paste,
             clipboard_pin,
@@ -5551,6 +5526,43 @@ pub fn run() {
                 .unwrap_or(false);
             if !preview_active {
                 hide_popup_window(app_handle);
+            }
+        }
+        tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::CloseRequested { api, .. },
+            ..
+        } if label == "quick_panel" => {
+            api.prevent_close();
+            #[cfg(target_os = "macos")]
+            {
+                if let Ok(panel) = app_handle.get_webview_panel("quick_panel") {
+                    panel.hide();
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                if let Some(window) = app_handle.get_webview_window("quick_panel") {
+                    let _ = window.hide();
+                }
+            }
+        }
+        tauri::RunEvent::WindowEvent {
+            label,
+            event: tauri::WindowEvent::Focused(false),
+            ..
+        } if label == "quick_panel" => {
+            #[cfg(target_os = "macos")]
+            {
+                if let Ok(panel) = app_handle.get_webview_panel("quick_panel") {
+                    panel.hide();
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                if let Some(window) = app_handle.get_webview_window("quick_panel") {
+                    let _ = window.hide();
+                }
             }
         }
         tauri::RunEvent::WindowEvent {

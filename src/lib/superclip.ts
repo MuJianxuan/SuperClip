@@ -36,6 +36,9 @@ interface CommandMap {
   previewHide: "preview_hide";
   popupReady: "popup_ready";
   monitorToggle: "monitor_toggle";
+  monitorStatusGet: "monitor_status_get";
+  appQuit: "app_quit";
+  quickPanelHide: "quick_panel_hide";
 }
 
 const COMMANDS: CommandMap = {
@@ -73,6 +76,9 @@ const COMMANDS: CommandMap = {
   previewHide: "preview_hide",
   popupReady: "popup_ready",
   monitorToggle: "monitor_toggle",
+  monitorStatusGet: "monitor_status_get",
+  appQuit: "app_quit",
+  quickPanelHide: "quick_panel_hide",
 };
 
 export interface ClipboardSearchResponse {
@@ -1282,6 +1288,20 @@ export async function monitorToggle(nextState?: boolean) {
     fallbackMonitoring = nextState ?? !fallbackMonitoring;
     return { isMonitoring: fallbackMonitoring };
   });
+}
+
+export async function monitorStatusGet() {
+  return invokeOrFallback<MonitorStatus>("monitorStatusGet", {}, () => ({
+    isMonitoring: fallbackMonitoring,
+  }));
+}
+
+export async function appQuit() {
+  return invokeOrFallback<void>("appQuit", {}, () => {});
+}
+
+export async function quickPanelHide() {
+  return invokeOrFallback<void>("quickPanelHide", {}, () => {});
 }
 
 export async function clipboardCopy(id: string) {

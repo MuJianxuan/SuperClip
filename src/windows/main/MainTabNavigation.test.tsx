@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MainTabNavigation } from "./MainTabNavigation";
 
+const counts = { all: 12, text: 6, image: 3, file: 2, pinned: 1 };
+
 describe("MainTabNavigation", () => {
-  it("renders all 5 tabs", () => {
-    render(<MainTabNavigation activeTab="all" onTabChange={() => {}} />);
+  it("renders all 5 chips with labels", () => {
+    render(<MainTabNavigation activeTab="all" counts={counts} onTabChange={() => {}} />);
 
     expect(screen.getByText("全部")).toBeInTheDocument();
     expect(screen.getByText("文本")).toBeInTheDocument();
@@ -13,26 +15,40 @@ describe("MainTabNavigation", () => {
     expect(screen.getByText("置顶")).toBeInTheDocument();
   });
 
-  it("highlights the active tab", () => {
-    render(<MainTabNavigation activeTab="image" onTabChange={() => {}} />);
+  it("renders count badges", () => {
+    render(<MainTabNavigation activeTab="all" counts={counts} onTabChange={() => {}} />);
 
-    const imageTab = screen.getByText("图片");
-    expect(imageTab.className).toContain("bg-[var(--surface)]");
+    expect(screen.getByText("12")).toBeInTheDocument();
+    expect(screen.getByText("6")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getByText("1")).toBeInTheDocument();
   });
 
-  it("calls onTabChange when a tab is clicked", () => {
+  it("highlights the active chip with accent color", () => {
+    render(<MainTabNavigation activeTab="image" counts={counts} onTabChange={() => {}} />);
+
+    const imageTab = screen.getByText("图片");
+    expect(imageTab.style.color).toBe("var(--selection-accent)");
+  });
+
+  it("uses amber accent for active pinned chip", () => {
+    render(<MainTabNavigation activeTab="pinned" counts={counts} onTabChange={() => {}} />);
+
+    const pinnedTab = screen.getByText("置顶");
+    expect(pinnedTab.style.color).toBe("rgb(251, 191, 36)");
+  });
+
+  it("shows pinned star icon", () => {
+    render(<MainTabNavigation activeTab="all" counts={counts} onTabChange={() => {}} />);
+    expect(document.querySelector(".lucide-star")).toBeInTheDocument();
+  });
+
+  it("calls onTabChange when a chip is clicked", () => {
     const onTabChange = vi.fn();
-    render(<MainTabNavigation activeTab="all" onTabChange={onTabChange} />);
+    render(<MainTabNavigation activeTab="all" counts={counts} onTabChange={onTabChange} />);
 
     fireEvent.click(screen.getByText("文件"));
     expect(onTabChange).toHaveBeenCalledWith("file");
-  });
-
-  it("does not call onTabChange for already active tab click", () => {
-    const onTabChange = vi.fn();
-    render(<MainTabNavigation activeTab="text" onTabChange={onTabChange} />);
-
-    fireEvent.click(screen.getByText("文本"));
-    expect(onTabChange).toHaveBeenCalledWith("text");
   });
 });

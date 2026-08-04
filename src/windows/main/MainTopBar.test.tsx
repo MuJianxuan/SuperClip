@@ -4,10 +4,8 @@ import { MainTopBar } from "./MainTopBar";
 
 describe("MainTopBar", () => {
   const defaultProps = {
-    activeTab: "all" as const,
     viewMode: "list" as const,
     query: "",
-    onTabChange: vi.fn(),
     onViewModeChange: vi.fn(),
     onQueryChange: vi.fn(),
     onSettingsClick: vi.fn(),
@@ -20,23 +18,32 @@ describe("MainTopBar", () => {
 
   it("renders search input", () => {
     render(<MainTopBar {...defaultProps} />);
-    expect(screen.getByPlaceholderText("搜索...")).toBeInTheDocument();
-  });
-
-  it("renders tab navigation", () => {
-    render(<MainTopBar {...defaultProps} />);
-    expect(screen.getByText("全部")).toBeInTheDocument();
-    expect(screen.getByText("置顶")).toBeInTheDocument();
-  });
-
-  it("renders view toggle buttons", () => {
-    render(<MainTopBar {...defaultProps} />);
-    const buttons = screen.getAllByRole("button");
-    expect(buttons.length).toBeGreaterThanOrEqual(7);
+    expect(screen.getByPlaceholderText("搜索剪贴板...")).toBeInTheDocument();
   });
 
   it("shows query value in search input", () => {
     render(<MainTopBar {...defaultProps} query="hello" />);
     expect(screen.getByDisplayValue("hello")).toBeInTheDocument();
+  });
+
+  it("shows clear button when query is non-empty", () => {
+    render(<MainTopBar {...defaultProps} query="hello" />);
+    expect(screen.getByTitle("清空")).toBeInTheDocument();
+  });
+
+  it("does not show clear button when query is empty", () => {
+    render(<MainTopBar {...defaultProps} />);
+    expect(screen.queryByTitle("清空")).not.toBeInTheDocument();
+  });
+
+  it("renders view toggle buttons", () => {
+    render(<MainTopBar {...defaultProps} />);
+    expect(screen.getByTitle("列表视图")).toBeInTheDocument();
+    expect(screen.getByTitle("网格视图")).toBeInTheDocument();
+  });
+
+  it("renders settings button", () => {
+    render(<MainTopBar {...defaultProps} />);
+    expect(screen.getByTitle("设置")).toBeInTheDocument();
   });
 });

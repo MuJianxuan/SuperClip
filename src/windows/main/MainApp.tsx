@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useMemo, useState } from "react";
 import { Copy, LockKeyhole, MonitorCog, ShieldCheck, TriangleAlert } from "lucide-react";
 import { MainTopBar } from "./MainTopBar";
+import { MainTabNavigation } from "./MainTabNavigation";
+import type { TabId } from "./MainTabNavigation";
 import { MainListView } from "./MainListView";
 import { MainGridView } from "./MainGridView";
 import { MainBulkActionBar } from "./MainBulkActionBar";
 import { SettingsShell } from "../../components/settings-shell";
 import { useClipboardData } from "../../hooks/useClipboardData";
-import type { TabId } from "./MainTabNavigation";
 import {
   clipboardCopy,
   clipboardPaste,
@@ -86,18 +87,24 @@ export function MainApp() {
   const readOnlyRef = useRef({ isRecoveryMode, isMigrationBlocking });
   readOnlyRef.current = { isRecoveryMode, isMigrationBlocking };
 
-  const kindFilter = activeTab === "all" || activeTab === "pinned" ? undefined : activeTab;
-  const pinnedOnly = activeTab === "pinned";
+  const { query, setQuery, items, itemsRef, selectedId, setSelectedId, enqueueRefresh } = useClipboardData();
 
-  const {
-    query,
-    setQuery,
-    items,
-    itemsRef,
-    selectedId,
-    setSelectedId,
-    enqueueRefresh,
-  } = useClipboardData({ kindFilter, pinnedOnly });
+  // E2：chips 计数基于当前数据集的分布；前端按 tab 过滤（后端不再传 kindFilter）
+  const counts = useMemo(() => {
+    return {
+      all: items.length,
+      text: items.filter((i) => i.kind === "text").length,
+      image: items.filter((i) => i.kind === "image").length,
+      file: items.filter((i) => i.kind === "file").length,
+      pinned: items.filter((i) => i.isPinned).length,
+    };
+  }, [items]);
+
+  const visibleItems = useMemo(() => {
+    if (activeTab === "all") return items;
+    if (activeTab === "pinned") return items.filter((i) => i.isPinned);
+    return items.filter((i) => i.kind === activeTab);
+  }, [items, activeTab]);
 
   const pinnedCount = useMemo(() => items.filter((i) => i.isPinned).length, [items]);
 
@@ -171,13 +178,13 @@ export function MainApp() {
   // Keyboard shortcuts
   const keyStateRef = useRef<{
     isSettingsOpen: boolean;
-    items: typeof items;
+    items: typeof visibleItems;
     selectedId: string;
     handlePin: (id: string) => void;
     handleDelete: (id: string) => void;
-  }>({ isSettingsOpen, items, selectedId, handlePin: () => {}, handleDelete: () => {} });
+  }>({ isSettingsOpen, items: visibleItems, selectedId, handlePin: () => {}, handleDelete: () => {} });
   useEffect(() => {
-    keyStateRef.current = { isSettingsOpen, items, selectedId, handlePin, handleDelete };
+    keyStateRef.current = { isSettingsOpen, items: visibleItems, selectedId, handlePin, handleDelete };
   });
 
   useEffect(() => {
@@ -187,6 +194,8 @@ export function MainApp() {
 
       const isInput = event.target instanceof HTMLInputElement ||
         event.target instanceof HTMLTextAreaElement;
+      // 输入态下全部放行，让浏览器默认行为（如 ⌘A 全选搜索文本）正常工作，避免误触全局快捷键
+      if (isInput) return;
 
       if (event.metaKey && event.key >= "1" && event.key <= "5") {
         event.preventDefault();
@@ -209,7 +218,7 @@ export function MainApp() {
         if (currentSelectedId) void pin(currentSelectedId);
         return;
       }
-      if ((event.key === "Delete" || event.key === "Backspace") && !isInput) {
+      if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
         if (currentSelectedId) void del(currentSelectedId);
         return;
@@ -342,15 +351,45 @@ export function MainApp() {
 
   return (
     <main className="relative flex h-screen flex-col overflow-hidden bg-[var(--bg)] text-[var(--text-primary)]">
-      <MainTopBar
-        activeTab={activeTab}
-        viewMode={viewMode}
-        query={query}
-        onTabChange={setActiveTab}
-        onViewModeChange={setViewMode}
-        onQueryChange={setQuery}
-        onSettingsClick={() => setIsSettingsOpen(true)}
-      />
+      {/* F2：settings 打开时 MainTopBar 隐藏，由 SettingsShell 的 header 作为唯一工具条（identity + 返回列表） */}
+      {!isSettingsOpen && (
+        <MainTopBar
+          viewMode={viewMode}
+          query={query}
+          onViewModeChange={setViewMode}
+          onQueryChange={setQuery}
+          onSettingsClick={() => setIsSettingsOpen(true)}
+        />
+      )}
+
+      {/* 主体分区：剪贴板列表 或 设置分区（Settings 为 Main 内分区视图） */}
+      {isSettingsOpen ? (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <SettingsShell
+            settings={settings}
+            shortcut={shortcut}
+            rules={rules}
+            pinnedCount={pinnedCount}
+            permissionTrusted={permissionTrusted}
+            readOnlyMode={isRecoveryMode || isMigrationBlocking}
+            onClose={() => setIsSettingsOpen(false)}
+            onUpdate={handleSettingsUpdate}
+            onDiagnosticsClick={handleDiagnosticsClick}
+            onPermissionGuideClick={handlePermissionGuideClick}
+            onRuleUpsert={handleRuleUpsert}
+            onRuleDelete={handleRuleDelete}
+            onRulesClear={handleRulesClear}
+            onShortcutStart={handleShortcutStart}
+            onShortcutCancel={handleShortcutCancel}
+            onShortcutValidate={handleShortcutValidate}
+            onShortcutUpdate={handleShortcutUpdate}
+            onShortcutRestoreDefault={handleShortcutRestoreDefault}
+          />
+        </div>
+      ) : (
+        <>
+          {/* E2 过滤 chips 行（独立于工具条） */}
+          <MainTabNavigation activeTab={activeTab} counts={counts} onTabChange={setActiveTab} />
 
       {/* Status Banners */}
       {(!permissionTrusted || isRecoveryMode) && (
@@ -390,13 +429,13 @@ export function MainApp() {
       <div className="relative flex min-h-0 flex-1 flex-col">
         {viewMode === "list" ? (
           <MainListView
-            items={items}
+            items={visibleItems}
             selectedId={selectedId}
             selectedIds={selectedIds}
+            hasQuery={!!query.trim()}
+            onClearSearch={() => setQuery("")}
             onSelect={setSelectedId}
             onToggleSelect={handleToggleSelect}
-            onSelectAll={() => setSelectedIds(new Set(items.map((i) => i.id)))}
-            onDeselectAll={() => setSelectedIds(new Set())}
             onAction={handleAction}
             onCopy={handleCopy}
             onPin={handlePin}
@@ -404,9 +443,11 @@ export function MainApp() {
           />
         ) : (
           <MainGridView
-            items={items}
+            items={visibleItems}
             selectedId={selectedId}
             selectedIds={selectedIds}
+            hasQuery={!!query.trim()}
+            onClearSearch={() => setQuery("")}
             onSelect={setSelectedId}
             onToggleSelect={handleToggleSelect}
             onAction={handleAction}
@@ -415,16 +456,18 @@ export function MainApp() {
           />
         )}
 
-        <MainBulkActionBar
-          selectedCount={selectedIds.size}
-          totalCount={items.length}
-          onSelectAll={() => setSelectedIds(new Set(items.map((i) => i.id)))}
-          onDeselectAll={() => setSelectedIds(new Set())}
-          onBulkCopy={handleBulkCopy}
-          onBulkPin={handleBulkPin}
-          onBulkDelete={handleBulkDelete}
-        />
-      </div>
+          <MainBulkActionBar
+            selectedCount={selectedIds.size}
+            totalCount={visibleItems.length}
+            onSelectAll={() => setSelectedIds(new Set(visibleItems.map((i) => i.id)))}
+            onDeselectAll={() => setSelectedIds(new Set())}
+            onBulkCopy={handleBulkCopy}
+            onBulkPin={handleBulkPin}
+            onBulkDelete={handleBulkDelete}
+          />
+        </div>
+        </>
+      )}
 
       {/* Migration Blocking Overlay */}
       {isMigrationBlocking && (
@@ -437,30 +480,6 @@ export function MainApp() {
             <p className="mt-2 text-sm text-[var(--text-secondary)]">完成前暂不开放写操作。</p>
           </div>
         </div>
-      )}
-
-      {/* Settings Shell */}
-      {isSettingsOpen && (
-        <SettingsShell
-          settings={settings}
-          shortcut={shortcut}
-          rules={rules}
-          pinnedCount={pinnedCount}
-          permissionTrusted={permissionTrusted}
-          readOnlyMode={isRecoveryMode || isMigrationBlocking}
-          onClose={() => setIsSettingsOpen(false)}
-          onUpdate={handleSettingsUpdate}
-          onDiagnosticsClick={handleDiagnosticsClick}
-          onPermissionGuideClick={handlePermissionGuideClick}
-          onRuleUpsert={handleRuleUpsert}
-          onRuleDelete={handleRuleDelete}
-          onRulesClear={handleRulesClear}
-          onShortcutStart={handleShortcutStart}
-          onShortcutCancel={handleShortcutCancel}
-          onShortcutValidate={handleShortcutValidate}
-          onShortcutUpdate={handleShortcutUpdate}
-          onShortcutRestoreDefault={handleShortcutRestoreDefault}
-        />
       )}
 
       {/* Feedback Toast */}

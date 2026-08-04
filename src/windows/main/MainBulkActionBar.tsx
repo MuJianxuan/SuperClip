@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Copy, Pin, Trash2, X } from "lucide-react";
 
 interface MainBulkActionBarProps {
@@ -11,6 +11,10 @@ interface MainBulkActionBarProps {
   onBulkDelete: () => void;
 }
 
+/**
+ * E2 批量操作栏：有选中时自底部滑入（translateY + fade），蓝色计数高亮，
+ * 复制 / 置顶 / 删除 + 取消。始终渲染以保留滑入动画，隐藏时不可交互。
+ */
 export const MainBulkActionBar = memo(function MainBulkActionBar({
   selectedCount,
   totalCount,
@@ -20,60 +24,91 @@ export const MainBulkActionBar = memo(function MainBulkActionBar({
   onBulkPin,
   onBulkDelete,
 }: MainBulkActionBarProps) {
-  if (selectedCount === 0) return null;
+  const visible = selectedCount > 0;
+  const allSelected = selectedCount > 0 && selectedCount === totalCount;
 
   return (
-    <div className="absolute bottom-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 shadow-[0_8px_32px_rgba(0,0,0,0.12)] backdrop-blur-xl">
-      <span className="text-[13px] font-medium text-[var(--text-primary)]">
-        已选 {selectedCount} 项
-      </span>
+    <div
+      data-testid="main-bulk-action-bar"
+      aria-hidden={!visible}
+      className="relative z-30 shrink-0 border-t px-4 py-2 transition-[transform,opacity] duration-200 ease-out"
+      style={{
+        transform: visible ? "translateY(0)" : "translateY(100%)",
+        opacity: visible ? 1 : 0,
+        pointerEvents: visible ? "auto" : "none",
+        borderColor: "var(--border)",
+        background: "var(--surface-raised)",
+      }}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="text-[12px] text-[var(--text-secondary)]">
+            已选 <span className="font-semibold tabular-nums text-[var(--selection-accent)]">{selectedCount}</span> 项
+          </span>
+          <button
+            type="button"
+            onClick={allSelected ? onDeselectAll : onSelectAll}
+            disabled={allSelected}
+            className="rounded-md px-1.5 py-0.5 text-[11px] transition-colors disabled:cursor-default"
+            style={{
+              color: allSelected ? "var(--text-tertiary)" : "var(--selection-accent)",
+            }}
+          >
+            {allSelected ? "已全选" : "全选可见"}
+          </button>
+        </div>
 
-      <div className="h-4 w-px bg-[var(--border)]" />
-
-      <button
-        type="button"
-        onClick={selectedCount === totalCount ? onDeselectAll : onSelectAll}
-        className="text-[12px] text-[var(--selection-accent)] hover:underline"
-      >
-        {selectedCount === totalCount ? "取消全选" : "全选"}
-      </button>
-
-      <div className="h-4 w-px bg-[var(--border)]" />
-
-      <button
-        type="button"
-        onClick={onBulkCopy}
-        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--tab-hover-bg)]"
-      >
-        <Copy className="h-3.5 w-3.5" />
-        复制
-      </button>
-      <button
-        type="button"
-        onClick={onBulkPin}
-        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--tab-hover-bg)]"
-      >
-        <Pin className="h-3.5 w-3.5" />
-        置顶
-      </button>
-      <button
-        type="button"
-        onClick={onBulkDelete}
-        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-[var(--danger-text)] transition-colors hover:bg-[var(--danger-bg)]"
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-        删除
-      </button>
-
-      <div className="h-4 w-px bg-[var(--border)]" />
-
-      <button
-        type="button"
-        onClick={onDeselectAll}
-        className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-tertiary)] hover:bg-[var(--tab-hover-bg)] hover:text-[var(--text-primary)]"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
+        <div className="flex items-center gap-1.5">
+          <BulkBtn icon={<Copy className="h-3 w-3" />} label="复制" onClick={onBulkCopy} />
+          <BulkBtn icon={<Pin className="h-3 w-3" />} label="置顶" onClick={onBulkPin} />
+          <BulkBtn icon={<Trash2 className="h-3 w-3" />} label="删除" danger onClick={onBulkDelete} />
+          <button
+            type="button"
+            title="取消选择"
+            onClick={onDeselectAll}
+            className="ml-1 flex h-6 w-6 items-center justify-center rounded-md text-[var(--text-tertiary)] transition-colors hover:bg-[var(--tab-hover-bg)] hover:text-[var(--text-primary)]"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 });
+
+function BulkBtn({
+  icon,
+  label,
+  danger,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  danger?: boolean;
+  onClick: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition-all"
+      style={{
+        borderColor: danger ? (hovered ? "rgba(239,68,68,0.35)" : "var(--border)") : "var(--border)",
+        background: hovered ? (danger ? "var(--danger-bg)" : "var(--tab-hover-bg)") : "var(--surface-2)",
+        color: hovered
+          ? danger
+            ? "var(--danger-text)"
+            : "var(--text-primary)"
+          : danger
+            ? "var(--danger-text)"
+            : "var(--text-secondary)",
+      }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}

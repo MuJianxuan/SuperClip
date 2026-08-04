@@ -17,79 +17,71 @@ const mockItem: ClipboardItem = {
   highlightRanges: [],
 };
 
+function renderRow(overrides: Partial<typeof mockItem> = {}, props: Record<string, unknown> = {}) {
+  return render(
+    <PopupHistoryRow
+      item={{ ...mockItem, ...overrides }}
+      isSelected={false}
+      onSelect={() => {}}
+      onClick={() => {}}
+      onMouseEnter={() => {}}
+      onMouseLeave={() => {}}
+      {...props}
+    />,
+  );
+}
+
 describe("PopupHistoryRow", () => {
-  it("renders item title", () => {
-    render(
-      <PopupHistoryRow
-        item={mockItem}
-        isSelected={false}
-        onSelect={() => {}}
-        onClick={() => {}}
-        onMouseEnter={() => {}}
-        onMouseLeave={() => {}}
-      />,
-    );
+  it("renders title and preview lines (two-line row)", () => {
+    renderRow();
     expect(screen.getByText("Hello World")).toBeInTheDocument();
+    expect(screen.getByText("Hello World preview")).toBeInTheDocument();
   });
 
-  it("shows pin indicator when pinned", () => {
-    const pinnedItem = { ...mockItem, isPinned: true };
-    const { container } = render(
-      <PopupHistoryRow
-        item={pinnedItem}
-        isSelected={false}
-        onSelect={() => {}}
-        onClick={() => {}}
-        onMouseEnter={() => {}}
-        onMouseLeave={() => {}}
-      />,
-    );
-    expect(container.querySelector(".lucide-pin")).toBeInTheDocument();
+  it("renders time label", () => {
+    renderRow();
+    expect(screen.getByText("3s前")).toBeInTheDocument();
+  });
+
+  it("shows amber star when pinned", () => {
+    const { container } = renderRow({ isPinned: true });
+    expect(container.querySelector(".lucide-star")).toBeInTheDocument();
+  });
+
+  it("does not show star when not pinned", () => {
+    const { container } = renderRow();
+    expect(container.querySelector(".lucide-star")).not.toBeInTheDocument();
   });
 
   it("applies selected styles when isSelected", () => {
-    const { container } = render(
-      <PopupHistoryRow
-        item={mockItem}
-        isSelected={true}
-        onSelect={() => {}}
-        onClick={() => {}}
-        onMouseEnter={() => {}}
-        onMouseLeave={() => {}}
-      />,
-    );
+    const { container } = renderRow({}, { isSelected: true });
     const button = container.querySelector("button");
-    expect(button?.className).toContain("selection-accent");
+    expect(button?.className).toContain("row-selected");
+  });
+
+  it("calls onSelect and onMouseEnter with rect on mouse enter", () => {
+    const onSelect = vi.fn();
+    const onMouseEnter = vi.fn();
+    const { container } = renderRow({}, { onSelect, onMouseEnter });
+    const button = container.querySelector("button")!;
+    fireEvent.mouseEnter(button);
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onMouseEnter).toHaveBeenCalledTimes(1);
+    // jsdom 的 getBoundingClientRect 与全局 DOMRect 构造器不同 realm，断言结构而非实例
+    expect(onMouseEnter.mock.calls[0][0]).toHaveProperty("top");
+    expect(onMouseEnter.mock.calls[0][0]).toHaveProperty("left");
   });
 
   it("calls onClick when clicked", () => {
     const onClick = vi.fn();
-    render(
-      <PopupHistoryRow
-        item={mockItem}
-        isSelected={false}
-        onSelect={() => {}}
-        onClick={onClick}
-        onMouseEnter={() => {}}
-        onMouseLeave={() => {}}
-      />,
-    );
+    renderRow({}, { onClick });
     screen.getByText("Hello World").closest("button")?.click();
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   it("calls onMouseLeave on mouse leave", () => {
     const onMouseLeave = vi.fn();
-    const { container } = render(
-      <PopupHistoryRow
-        item={mockItem}
-        isSelected={false}
-        onSelect={() => {}}
-        onClick={() => {}}
-        onMouseEnter={() => {}}
-        onMouseLeave={onMouseLeave}
-      />,
-    );
+    const { container } = renderRow({}, { onMouseLeave });
     const button = container.querySelector("button")!;
     fireEvent.mouseLeave(button);
     expect(onMouseLeave).toHaveBeenCalled();
