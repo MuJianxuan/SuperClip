@@ -156,12 +156,11 @@ export function QuickPanelApp() {
 
   return (
     <div
+      className="frost-window"
       style={{
         width: 232,
         borderRadius: 12,
         background: "rgba(18, 23, 30, 0.82)",
-        backdropFilter: "blur(36px) saturate(1.6)",
-        WebkitBackdropFilter: "blur(36px) saturate(1.6)",
         border: "1px solid rgba(255,255,255,0.06)",
         boxShadow:
           "0 20px 60px rgba(0,0,0,0.45), 0 0 0 0.5px rgba(255,255,255,0.04)",

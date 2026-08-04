@@ -160,6 +160,17 @@ export function MainApp() {
       .then(({ listen }) =>
         Promise.all([
           listen("app:show-settings", () => { if (!disposed) setIsSettingsOpen(true); }),
+          // 主题/设置外部变更（如 QuickPanel）时保持 Main 本地状态与 data-theme-mode 同步
+          listen<{ theme_mode?: string; default_action?: SettingsResponse["defaultAction"] }>("settings-updated", (event) => {
+            if (disposed) return;
+            const payload = event.payload;
+            if (payload.theme_mode) {
+              setSettings((prev) => ({ ...prev, themeMode: payload.theme_mode as SettingsResponse["themeMode"] }));
+            }
+            if (payload.default_action) {
+              setSettings((prev) => ({ ...prev, defaultAction: payload.default_action as SettingsResponse["defaultAction"] }));
+            }
+          }),
         ]),
       )
       .then((fns) => { if (disposed) fns.forEach((f) => void f()); else unlisten = fns; })
