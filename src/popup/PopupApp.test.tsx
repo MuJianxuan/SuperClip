@@ -31,7 +31,7 @@ describe("PopupApp", () => {
 
   it("renders shortcut badge", () => {
     render(<PopupApp />);
-    expect(screen.getByText("Cmd+Shift+V")).toBeInTheDocument();
+    expect(screen.getByText("⌘⇧V")).toBeInTheDocument();
   });
 
   it("renders info-only footer with item count and preview hint", () => {
@@ -57,6 +57,11 @@ describe("PopupApp", () => {
   it("shows empty-state text on first render before data loads", () => {
     render(<PopupApp />);
     expect(screen.getByText("剪贴板暂无记录")).toBeInTheDocument();
+  });
+
+  it("shows empty-state icon alongside empty text", () => {
+    const { container } = render(<PopupApp />);
+    expect(container.querySelector(".lucide-file-text")).toBeInTheDocument();
   });
 
   it("shows no-match empty state when query has no results", async () => {

@@ -90,4 +90,46 @@ describe("MainApp", () => {
     // SettingsShell header present
     expect(screen.getByText("返回列表")).toBeInTheDocument();
   });
+
+  it("row click selects item into batch set (checkbox + highlight coupling)", async () => {
+    render(<MainApp />);
+    // fallback 数据异步加载出历史行
+    const row = await screen.findByText("发布命令片段");
+    fireEvent.click(row);
+    // 单击行 → 计入批量集合：批量操作栏从底部滑入可见
+    const bar = screen.getByTestId("main-bulk-action-bar");
+    expect(bar.getAttribute("aria-hidden")).toBe("false");
+    expect(bar.textContent).toContain("已选 1 项");
+    // 勾选框出现（行被选中）
+    expect(bar.textContent).toContain("全选可见");
+    // 行呈现浅蓝选中底（selectedId 联动）
+    const rowEl = screen.getByText("发布命令片段").closest("[data-clipboard-row-id]");
+    expect(rowEl).not.toBeNull();
+  });
+
+  it("wraps window in frosted 18px radius chrome", () => {
+    const { container } = render(<MainApp />);
+    const main = container.querySelector("main");
+    expect(main).not.toBeNull();
+    expect(main!.className).toContain("rounded-[18px]");
+    expect(main!.className).toContain("frost-window");
+  });
+
+  it("renders status banner slot styling for permission banner", async () => {
+    // 启用 Tauri 运行时，让 bootstrap 走 invoke 路径（fallback 默认 trusted=true）
+    (window as unknown as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__ = {};
+    const { invoke } = await import("@tauri-apps/api/core");
+    (invoke as ReturnType<typeof vi.fn>).mockImplementation(async (cmd: string) => {
+      if (cmd === "clipboard_search") return { query: "", normalizedQuery: "", results: [], total: 0, searchTimeMs: 2, version: 1 };
+      if (cmd === "permission_check_accessibility") return { accessibilityTrusted: false, checkedAt: "2026-04-25T19:40:00+08:00" };
+      if (cmd === "settings_get") return { schemaVersion: 1, exposedKeys: [], reservedKeys: [], defaultAction: "direct_paste", themeMode: "system", historyLimit: 1000, launchAtLogin: false, showOnStartup: false };
+      if (cmd === "rules_list") return { rules: [] };
+      if (cmd === "shortcut_get") return { binding: "Cmd+Shift+V", isRegistered: true, source: "default", version: 1 };
+      if (cmd === "runtime_state_get") return { isRecoveryMode: false, migrationPhase: "idle", presentationReason: "manual_open", lastDisplayId: "main", lastWindowMode: "small_window", fallbackReason: null, restoredFromSession: false, updatedAt: "2026-04-25T20:10:00+08:00" };
+      return {};
+    });
+    render(<MainApp />);
+    expect(await screen.findByText(/仅复制模式/)).toBeInTheDocument();
+    expect(screen.getByText(/仅复制模式/).closest("div")?.parentElement?.className).toContain("mx-4");
+  });
 });

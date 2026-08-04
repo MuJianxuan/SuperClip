@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import { CheckSquare, Copy, Pin, Square, Star, Trash2 } from "lucide-react";
+import { CheckSquare, Inbox, Pin, Square, Star, Trash2 } from "lucide-react";
 import type { ClipboardItem } from "../../components/history-row";
 import { KIND_META } from "./kind-meta";
 
@@ -91,7 +91,7 @@ function GridCard({
       onMouseLeave={() => setHovered(false)}
       onClick={() => onSelect(item.id)}
       onDoubleClick={() => onAction(item.id)}
-      className="relative flex min-h-[118px] cursor-pointer flex-col overflow-hidden rounded-xl border p-3 transition-all"
+      className="relative flex min-h-[118px] cursor-pointer flex-col overflow-hidden rounded-xl border p-3 transition-all animate-[rowSlideIn_0.2s_ease-out]"
       style={{
         background: selected ? "var(--row-selected)" : hovered ? "var(--row-hover)" : "var(--grid-card-bg)",
         borderColor: selected ? "rgba(56,189,248,0.35)" : hovered ? `${meta.color}33` : "var(--border)",
@@ -184,7 +184,7 @@ function EmptyState({ hasQuery, onClearSearch }: { hasQuery: boolean; onClearSea
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 py-10">
       <div className="flex h-11 w-11 items-center justify-center rounded-[14px] bg-[var(--surface-2)] text-[var(--text-tertiary)]">
-        <Copy className="h-5 w-5" />
+        <Inbox className="h-5 w-5" />
       </div>
       <span className="text-[12.5px] font-medium text-[var(--text-secondary)]">
         {hasQuery ? "没有匹配的内容" : "剪贴板暂无记录"}

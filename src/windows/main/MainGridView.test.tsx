@@ -84,4 +84,19 @@ describe("MainGridView", () => {
     fireEvent.click(checkbox!);
     expect(onToggleSelect).toHaveBeenCalledWith("1");
   });
+
+  it("applies rowSlideIn enter animation to cards", () => {
+    const { container } = render(<MainGridView {...defaultProps} />);
+    const cards = container.querySelectorAll('[data-clipboard-row-id]');
+    expect(cards.length).toBeGreaterThan(0);
+    cards.forEach((card) => {
+      expect((card as HTMLElement).className).toContain("animate-[rowSlideIn_0.2s_ease-out]");
+    });
+  });
+
+  it("uses minmax(160px,1fr) grid template", () => {
+    const { container } = render(<MainGridView {...defaultProps} />);
+    const grid = container.querySelector('[data-testid="main-grid-view"]');
+    expect((grid as HTMLElement).style.gridTemplateColumns).toContain("minmax(160px, 1fr)");
+  });
 });

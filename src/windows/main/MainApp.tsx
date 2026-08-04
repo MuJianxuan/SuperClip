@@ -247,6 +247,17 @@ export function MainApp() {
     });
   }, []);
 
+  // E2：单击行 = 单选（驱动 ⌘P/⌘⌫）+ 计入批量集合，使「勾选框 + 浅蓝底」联动
+  const handleSelect = useCallback((id: string) => {
+    setSelectedId(id);
+    setSelectedIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
+
   const blockIfReadOnly = useCallback((label: string): boolean => {
     if (readOnlyRef.current.isMigrationBlocking) {
       setFeedback({ createdAtMs: Date.now(), title: `${label}已禁用`, message: "迁移完成前暂不开放写操作。", tone: "warning", timeoutMs: 4000 });
@@ -361,7 +372,7 @@ export function MainApp() {
   }
 
   return (
-    <main className="relative flex h-screen flex-col overflow-hidden bg-[var(--bg)] text-[var(--text-primary)]">
+    <main className="frost-window relative flex h-screen w-screen flex-col overflow-hidden rounded-[18px] border border-[var(--window-inset-border)] bg-[var(--bg)] text-[var(--text-primary)] shadow-[var(--window-drop-shadow)]">
       {/* F2：settings 打开时 MainTopBar 隐藏，由 SettingsShell 的 header 作为唯一工具条（identity + 返回列表） */}
       {!isSettingsOpen && (
         <MainTopBar
@@ -402,9 +413,9 @@ export function MainApp() {
           {/* E2 过滤 chips 行（独立于工具条） */}
           <MainTabNavigation activeTab={activeTab} counts={counts} onTabChange={setActiveTab} />
 
-      {/* Status Banners */}
+      {/* Status Banners（E2 保留槽位：工具条/列表之间的浮动圆角横幅卡） */}
       {(!permissionTrusted || isRecoveryMode) && (
-        <div className="space-y-2 border-b border-[var(--border)] bg-[var(--surface-raised)] px-4 py-2.5">
+        <div className="mx-4 mb-2 space-y-2">
           {!permissionTrusted && (
             <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2">
               <p className="text-xs font-medium text-[var(--warning-text)]">仅复制模式 — 辅助功能权限未授权</p>
@@ -445,7 +456,7 @@ export function MainApp() {
             selectedIds={selectedIds}
             hasQuery={!!query.trim()}
             onClearSearch={() => setQuery("")}
-            onSelect={setSelectedId}
+            onSelect={handleSelect}
             onToggleSelect={handleToggleSelect}
             onAction={handleAction}
             onCopy={handleCopy}
@@ -459,7 +470,7 @@ export function MainApp() {
             selectedIds={selectedIds}
             hasQuery={!!query.trim()}
             onClearSearch={() => setQuery("")}
-            onSelect={setSelectedId}
+            onSelect={handleSelect}
             onToggleSelect={handleToggleSelect}
             onAction={handleAction}
             onPin={handlePin}

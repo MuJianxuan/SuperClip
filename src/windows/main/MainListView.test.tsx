@@ -102,4 +102,13 @@ describe("MainListView", () => {
     fireEvent.click(checkbox!);
     expect(onToggleSelect).toHaveBeenCalledWith("1");
   });
+
+  it("applies rowSlideIn enter animation to rows", () => {
+    const { container } = render(<MainListView {...defaultProps} />);
+    const rows = container.querySelectorAll('[data-clipboard-row-id]');
+    expect(rows.length).toBeGreaterThan(0);
+    rows.forEach((row) => {
+      expect((row as HTMLElement).className).toContain("animate-[rowSlideIn_0.2s_ease-out]");
+    });
+  });
 });

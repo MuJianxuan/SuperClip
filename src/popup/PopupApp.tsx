@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Search, X } from "lucide-react";
+import { FileText, Search, X } from "lucide-react";
 import { useClipboardData } from "../hooks/useClipboardData";
 import { useHoverPreview } from "../hooks/useHoverPreview";
 import { PopupHistoryRow } from "./PopupHistoryRow";
@@ -32,6 +32,39 @@ function applyThemeMode(mode: string) {
   }
 }
 
+/**
+ * 快捷键徽标字形：把 Rust 绑定串（如 Cmd+Shift+V）转成原型一致的 ⌘⇧V 徽标。
+ * 保持实际绑定联动，仅做展示层转换。
+ */
+function formatShortcutGlyph(binding: string): string {
+  if (!binding) return "";
+  const glyph: Record<string, string> = {
+    Cmd: "⌘",
+    Command: "⌘",
+    Shift: "⇧",
+    Option: "⌥",
+    Alt: "⌥",
+    Ctrl: "⌃",
+    Control: "⌃",
+    Caps: "⇪",
+    Return: "⏎",
+    Enter: "⏎",
+    Tab: "⇥",
+    Space: "␣",
+    Escape: "⎋",
+    Esc: "⎋",
+    Delete: "⌫",
+    Backspace: "⌫",
+  };
+  return binding
+    .split("+")
+    .map((part) => {
+      const p = part.trim();
+      return glyph[p] ?? (p.length === 1 ? p.toUpperCase() : p);
+    })
+    .join("");
+}
+
 export function PopupApp() {
   const { query, setQuery, items, selectedId, setSelectedId, selectedItem } =
     useClipboardData();
@@ -56,11 +89,10 @@ export function PopupApp() {
           const logicalX = pos.x / scale;
           const logicalY = pos.y / scale;
 
-          // B2：文本 280 / 图片 240 宽；右侧优先定位（gap 8），越界切左与视口 clamp 由 Rust preview_show 兜底
+          // G2：独立 Preview 浮窗统一 320 宽；右侧优先定位（gap 8），越界切左与视口 clamp 由 Rust preview_show 兜底
           const isImage = item.kind === "image";
-          const previewW = isImage ? 240 : 280;
-          const previewH = isImage ? 200 : 220;
-
+          const previewW = 320;
+          const previewH = isImage ? 280 : 360;
           const previewX = logicalX + POPUP_WIDTH + 8;
           const previewY = logicalY + rect.top;
 
@@ -264,7 +296,7 @@ export function PopupApp() {
       <div data-tauri-drag-region className="flex h-12 shrink-0 cursor-grab items-center gap-2 px-3 active:cursor-grabbing">
         <div
           data-tauri-drag-region
-          className="flex h-8 w-full items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--accent)_45%,transparent)] focus-within:border-[var(--selection-accent)]"
+          className="flex h-8 w-full items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--text-primary)_6%,transparent)] px-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--accent)_30%,transparent)] focus-within:border-[var(--selection-accent)]"
         >
           <Search className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
           <input
@@ -284,8 +316,8 @@ export function PopupApp() {
               <X className="h-2.5 w-2.5" />
             </button>
           ) : null}
-          <span className="shrink-0 rounded-md border border-[var(--border)] bg-[var(--surface)] px-1.5 py-0.5 font-mono text-[9px] font-semibold text-[var(--text-tertiary)]">
-            {shortcutBinding}
+          <span className="shrink-0 rounded-md border border-[var(--border)] bg-[color-mix(in_srgb,var(--text-primary)_5%,transparent)] px-1.5 py-0.5 font-mono text-[9px] font-semibold text-[var(--text-tertiary)]">
+            {formatShortcutGlyph(shortcutBinding)}
           </span>
         </div>
       </div>
@@ -320,7 +352,8 @@ export function PopupApp() {
           </div>
         </div>
       ) : (
-        <div className="flex h-[calc(100vh-80px)] items-center justify-center px-4">
+        <div className="flex h-[calc(100vh-80px)] flex-col items-center justify-center gap-2 px-4">
+          <FileText aria-hidden className="h-[26px] w-[26px] opacity-15" />
           <p className="text-[13px] text-[var(--text-tertiary)]">
             {query ? "没有匹配的内容" : "剪贴板暂无记录"}
           </p>

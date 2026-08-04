@@ -155,4 +155,25 @@ describe("SettingsShell (F2 分区化)", () => {
     const themeDark = screen.getByText("深色").closest("button");
     expect(themeDark).toBeDisabled();
   });
+
+  it("Toggle 为真实开关语义（role=switch + 可见文字标签）", () => {
+    const onUpdate = vi.fn(async () => {
+      /* no-op */
+    });
+    render(<SettingsShell {...makeProps({ onUpdate })} />);
+    const switchEl = screen.getByRole("switch", { name: "登录时启动" });
+    expect(switchEl).toBeInTheDocument();
+    expect(switchEl).toHaveAttribute("data-state", "unchecked");
+    // 开关点击触发设置写入（受控组件状态由外部 settings 驱动）
+    fireEvent.click(switchEl);
+    expect(onUpdate).toHaveBeenCalledWith({ launchAtLogin: true });
+  });
+
+  it("高级分区的危险按钮为红底样式", () => {
+    render(<SettingsShell {...makeProps()} />);
+    fireEvent.click(screen.getByText("高级"));
+    const dangerBtn = screen.getAllByText("导出诊断")[0].closest("button");
+    expect(dangerBtn).toBeInTheDocument();
+    expect(dangerBtn).toHaveClass("bg-[var(--danger-bg)]");
+  });
 });

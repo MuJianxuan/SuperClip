@@ -63,7 +63,7 @@ describe("PreviewApp", () => {
   });
 
   it("renders read-only G2 layout: type label, time, source, zero buttons", async () => {
-    render(<PreviewApp />);
+    const { container } = render(<PreviewApp />);
     await vi.waitFor(() => expect(listenHandler).not.toBeNull());
 
     emitShow(baseItem());
@@ -77,6 +77,11 @@ describe("PreviewApp", () => {
     expect(screen.getByText("2s前")).toBeInTheDocument();
     expect(screen.getByText(/来自/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
+
+    // Footer：Clock 图标 + 「来自 · App」单行
+    const clock = container.querySelector(".lucide-clock");
+    expect(clock).not.toBeNull();
+    expect(container.textContent).toContain("来自 · Terminal");
   });
 
   it("renders code block distinctly with language line stripped", async () => {
@@ -125,7 +130,23 @@ describe("PreviewApp", () => {
     await vi.waitFor(() =>
       expect(screen.getByText("1920x1080 PNG")).toBeInTheDocument(),
     );
+    // 图片占位包含标题行（G2：描述 + 标题两行）
+    expect(screen.getByText("Screenshot")).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("renders G2 window material: rounded 14px + previewFadeIn entry", async () => {
+    const { container } = render(<PreviewApp />);
+    await vi.waitFor(() => expect(listenHandler).not.toBeNull());
+    emitShow(makeItem());
+
+    await vi.waitFor(() =>
+      expect(screen.getByText("Preview content here")).toBeInTheDocument(),
+    );
+    const root = container.firstElementChild as HTMLElement;
+    expect(root.className).toContain("rounded-[14px]");
+    expect(root.className).toContain("frost-window");
+    expect(root.style.animation).toContain("previewFadeIn");
   });
 
   it("emits preview:mouse-enter on mouse enter", async () => {

@@ -31,6 +31,18 @@ const kindBarClasses: Record<string, string> = {
   file: "bg-[var(--type-file)]",
 };
 
+/**
+ * 选中态图标容器底：原型为类型色 8% 淡底（${accent}14）。
+ * rtf 复用 text 类型色。
+ */
+const kindBgClasses: Record<string, string> = {
+  text: "bg-[color-mix(in_srgb,var(--type-text)_8%,transparent)]",
+  html: "bg-[color-mix(in_srgb,var(--type-html)_8%,transparent)]",
+  rtf: "bg-[color-mix(in_srgb,var(--type-text)_8%,transparent)]",
+  image: "bg-[color-mix(in_srgb,var(--type-image)_8%,transparent)]",
+  file: "bg-[color-mix(in_srgb,var(--type-file)_8%,transparent)]",
+};
+
 function KindIcon({ kind }: { kind: string }) {
   switch (kind) {
     case "image":
@@ -53,6 +65,7 @@ export const PopupHistoryRow = memo(function PopupHistoryRow({
   const rowRef = useRef<HTMLButtonElement>(null);
   const accentTextClass = kindTextClasses[item.kind] ?? "text-[var(--accent)]";
   const accentBarClass = kindBarClasses[item.kind] ?? "bg-[var(--accent)]";
+  const accentBgClass = kindBgClasses[item.kind] ?? "bg-[var(--bg-accent)]";
 
   return (
     <button
@@ -83,7 +96,7 @@ export const PopupHistoryRow = memo(function PopupHistoryRow({
       <span
         className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 ${
           isSelected
-            ? `bg-[var(--bg-accent)] ${accentTextClass}`
+            ? `${accentBgClass} ${accentTextClass}`
             : "bg-[var(--border)] text-[var(--text-tertiary)]"
         }`}
       >

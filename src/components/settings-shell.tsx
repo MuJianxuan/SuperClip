@@ -2,7 +2,6 @@ import * as React from "react";
 import {
   ArrowLeft,
   Download,
-  Info,
   Keyboard,
   Monitor,
   Moon,
@@ -59,7 +58,7 @@ const sections: Array<{
   { key: "general", label: "通用", icon: Settings2 },
   { key: "shortcuts", label: "快捷键", icon: Keyboard },
   { key: "privacy", label: "排除规则", icon: Shield },
-  { key: "about", label: "高级", icon: Info },
+  { key: "about", label: "高级", icon: Settings2 },
 ];
 
 const ruleKindLabels: Record<ExclusionRuleKind, string> = {
@@ -75,6 +74,85 @@ const contentKindOptions = [
   { value: "image", label: "Image" },
   { value: "file", label: "File" },
 ];
+
+/* 主题分段按钮 —— 同 Quick Panel 分段语言，hover 由 React state 驱动 */
+function ThemeSegButton({
+  active,
+  disabled,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  const [hovered, setHovered] = React.useState(false);
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={cn(
+        "flex flex-1 items-center justify-center gap-1.5 rounded-[8px] px-3 py-1.5 text-xs transition-all duration-150",
+        disabled && "cursor-not-allowed opacity-60",
+      )}
+      style={{
+        border: `1px solid ${active ? "rgba(56, 189, 248, 0.3)" : hovered ? "rgba(255, 255, 255, 0.1)" : "transparent"}`,
+        background: active ? "var(--accent-soft)" : hovered ? "var(--surface-2)" : "transparent",
+        color: active ? "var(--selection-accent)" : hovered ? "var(--text-primary)" : "var(--text-secondary)",
+        fontWeight: active ? 550 : 400,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* 粘贴行为分段按钮（默认动作） */
+function SegControlButton({
+  active,
+  disabled,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  const [hovered, setHovered] = React.useState(false);
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={cn(
+        "rounded-[8px] px-3 py-1.5 text-xs transition-colors duration-150",
+        disabled && "cursor-not-allowed opacity-60",
+      )}
+      style={{
+        background: active ? "var(--accent)" : hovered ? "var(--surface-2)" : "transparent",
+        color: active ? "var(--accent-contrast)" : hovered ? "var(--text-primary)" : "var(--text-secondary)",
+        fontWeight: active ? 550 : 400,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* macOS 原生滑动条配色：轨道底色 / 悬停 thumb / 拖拽 thumb 均按系统语义定义 */
+const sliderTrackColors =
+  typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? { bg: "rgba(255,255,255,0.14)", hover: "rgba(255,255,255,0.22)", active: "rgba(56,189,248,0.6)" }
+    : { bg: "rgba(15,23,42,0.14)", hover: "rgba(15,23,42,0.26)", active: "rgba(56,189,248,0.55)" };
 
 function SectionCard({
   title,
@@ -521,32 +599,19 @@ export function SettingsShell({
                         const isActive = settings.themeMode === option.value;
                         const Icon = option.icon;
                         return (
-                          <button
+                          <ThemeSegButton
                             key={option.value}
-                            type="button"
+                            active={isActive}
                             disabled={readOnlyMode}
                             onClick={() =>
                               void onUpdate({
                                 themeMode: option.value as SettingsResponse["themeMode"],
                               })
                             }
-                            className={cn(
-                              "flex flex-1 items-center justify-center gap-1.5 rounded-[8px] px-3 py-1.5 text-xs font-medium transition-colors",
-                              readOnlyMode && "cursor-not-allowed opacity-60",
-                            )}
-                            style={{
-                              border: `1px solid ${isActive ? "rgba(56, 189, 248, 0.3)" : "transparent"}`,
-                              background: isActive
-                                ? "var(--accent-soft)"
-                                : "transparent",
-                              color: isActive
-                                ? "var(--selection-accent)"
-                                : "var(--text-secondary)",
-                            }}
                           >
                             <Icon className="h-3.5 w-3.5" />
                             {option.title}
-                          </button>
+                          </ThemeSegButton>
                         );
                       })}
                     </div>
@@ -582,6 +647,9 @@ export function SettingsShell({
                             style={
                               {
                                 "--slider-fill": `${((settings.historyLimit - 100) / (5000 - 100)) * 100}%`,
+                                "--slider-track-color": sliderTrackColors.bg,
+                                "--slider-hover-thumb-color": sliderTrackColors.hover,
+                                "--slider-active-thumb-color": sliderTrackColors.active,
                               } as React.CSSProperties
                             }
                           />
@@ -616,25 +684,18 @@ export function SettingsShell({
                             { value: "direct_paste", label: "直接粘贴优先" },
                             { value: "copy_only", label: "仅复制优先" },
                           ].map((option) => (
-                            <button
+                            <SegControlButton
                               key={option.value}
-                              type="button"
+                              active={settings.defaultAction === option.value}
                               disabled={readOnlyMode}
                               onClick={() =>
                                 void onUpdate({
                                   defaultAction: option.value as SettingsResponse["defaultAction"],
                                 })
                               }
-                              className={cn(
-                                "rounded-[8px] px-3 py-1.5 text-xs font-medium transition-colors",
-                                settings.defaultAction === option.value
-                                  ? "bg-[var(--accent)] text-[var(--accent-contrast)]"
-                                  : "text-[var(--text-secondary)] hover:bg-[var(--surface-2)]",
-                                readOnlyMode && "cursor-not-allowed opacity-60",
-                              )}
                             >
                               {option.label}
-                            </button>
+                            </SegControlButton>
                           ))}
                         </div>
                       }
@@ -657,6 +718,7 @@ export function SettingsShell({
                           <Switch
                             checked={settings.launchAtLogin}
                             disabled={readOnlyMode}
+                            aria-label="登录时启动"
                             onCheckedChange={(checked) => void handleStartupUpdate({ launchAtLogin: checked })}
                           />
                           <span className="text-xs font-medium text-[var(--text-secondary)]">
@@ -674,6 +736,7 @@ export function SettingsShell({
                           <Switch
                             checked={settings.showOnStartup}
                             disabled={readOnlyMode}
+                            aria-label="启动时自动显示"
                             onCheckedChange={(checked) => void handleStartupUpdate({ showOnStartup: checked })}
                           />
                           <span className="text-xs font-medium text-[var(--text-secondary)]">
@@ -886,6 +949,7 @@ export function SettingsShell({
                           <Switch
                             checked={ruleEnabled}
                             disabled={readOnlyMode}
+                            aria-label="规则启用状态"
                             onCheckedChange={setRuleEnabled}
                           />
                         </div>
@@ -948,6 +1012,7 @@ export function SettingsShell({
                               <Switch
                                 checked={rule.enabled}
                                 disabled={readOnlyMode}
+                                aria-label={`${rule.value} 规则开关`}
                                 onCheckedChange={() => void handleRuleToggle(rule)}
                               />
                               <span className="text-xs font-medium text-[var(--text-secondary)]">

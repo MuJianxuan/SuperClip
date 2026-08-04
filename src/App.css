@@ -313,6 +313,11 @@ input::placeholder {
   }
 }
 
+/* Main 列表行 / 网格卡片进入（E2） */
+.main-row-enter {
+  animation: rowSlideIn 0.2s ease-out;
+}
+
 /* Settings 渐变滑块（F2） */
 .slider-range {
   -webkit-appearance: none;
@@ -321,7 +326,7 @@ input::placeholder {
   border-radius: 2px;
   background:
     linear-gradient(90deg, rgba(56, 189, 248, 0.6), rgba(56, 189, 248, 0.6)) 0 / var(--slider-fill, 0%) 100% no-repeat,
-    var(--surface-2);
+    var(--slider-track-color, var(--surface-2));
   outline: none;
   cursor: pointer;
 }
@@ -338,10 +343,15 @@ input::placeholder {
   background: #fff;
   border: none;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
-  transition: transform 0.12s ease;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 .slider-range::-webkit-slider-thumb:hover {
   transform: scale(1.1);
+  box-shadow: 0 0 0 4px var(--slider-hover-thumb-color, rgba(15, 23, 42, 0.14));
+}
+.slider-range:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 6px var(--slider-active-thumb-color, rgba(56, 189, 248, 0.5));
 }
 
 /* Smooth transitions for interactive elements */
