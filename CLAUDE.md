@@ -17,6 +17,10 @@ npm run dev                    # Vite dev server, port 1420
 # 完整 Tauri 开发
 npm run tauri dev              # 同时启动 Vite + Rust 后端
 
+# 端口偏移（多个本地应用同时开发、避免 1420 端口冲突时使用）
+PORT_OFFSET=100 npm run tauri dev      # Vite/Tauri 使用 1420+100=1520
+npm run tauri dev -- --port-offset 100 # 等价写法（flag 优先级更高）
+
 # 构建
 npm run build                  # tsc + vite build (前端产物)
 npm run tauri build            # 完整 macOS .app 打包

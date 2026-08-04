@@ -21,3 +21,21 @@
 所以后续交互中：
 - Popup = 历史列表主面板
 - Popover = 右侧预览浮层
+
+## 开发：端口偏移
+
+默认开发端口为 `1420`。当多个本地 Tauri 应用同时开发时，可通过端口偏移避免冲突：
+
+```bash
+# 方式一：环境变量（推荐）
+PORT_OFFSET=100 npm run tauri dev   # 端口 = 1420 + 100 = 1520
+
+# 方式二：命令行 flag（优先级更高）
+npm run tauri dev -- --port-offset 100
+
+# 纯前端（仅 Vite，不启动 Tauri）同样支持
+PORT_OFFSET=100 npm run dev         # Vite 监听 1520
+```
+
+偏移会同时作用于 Vite dev server 和 Tauri 的 `build.devUrl`，
+因此 Rust 后端能正确加载偏移后的前端页面。
