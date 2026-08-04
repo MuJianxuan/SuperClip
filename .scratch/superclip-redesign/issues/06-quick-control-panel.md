@@ -7,7 +7,7 @@
 
 **Blocked by:** 01 — 设计 Token 与视觉基础
 
-**Status:** ready-for-agent
+**Status:** done (committed ce573ae + 3bc5bc4)
 
 - [ ] Tray 右键弹出面板窗口且定位正确，左键仍开 Popup
 - [ ] 视觉与 D2 原型一致（品牌 + 状态胶囊 + 分段控件 + 232px）

@@ -9,7 +9,7 @@
 
 **Blocked by:** 02 — Popup 重构（B2，提供浮窗尺寸与触发参数）
 
-**Status:** ready-for-agent
+**Status:** done (committed ce573ae + 3bc5bc4)
 
 - [ ] 视觉与 G2 原型一致，Header/Footer 信息完整
 - [ ] 无复制/查看/关闭等任何操作按钮

@@ -8,7 +8,7 @@
 
 **Blocked by:** 02 — Popup 重构, 03 — Preview 重构, 04 — Main 重构, 05 — Settings 分区化, 06 — Quick Control Panel, 07 — Popup 虚拟滚动
 
-**Status:** ready-for-agent
+**Status:** done (committed ce573ae + 3bc5bc4)
 
 - [ ] 五表面与原型逐项对照通过，无已知视觉/交互差异
 - [ ] 主题三模式切换无破损；快捷键、拖拽、多显示器回归通过

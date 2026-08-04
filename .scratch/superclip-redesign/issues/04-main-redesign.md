@@ -10,7 +10,7 @@
 
 **Blocked by:** 01 — 设计 Token 与视觉基础
 
-**Status:** ready-for-agent
+**Status:** done (committed ce573ae + 3bc5bc4)
 
 - [ ] 视觉与 E2 原型一致（单行工具条 + chips 独立行 + 日期分组）
 - [ ] 搜索 / 过滤 chips / 批量操作 / 网格视图全链路可用

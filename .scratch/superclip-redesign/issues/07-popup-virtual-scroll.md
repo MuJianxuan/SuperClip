@@ -8,7 +8,7 @@
 
 **Blocked by:** 02 — Popup 重构（B2）
 
-**Status:** ready-for-agent
+**Status:** done (committed ce573ae + 3bc5bc4)
 
 - [ ] 以 5000 条数据验证滚动流畅、无卡顿与白屏
 - [ ] 列表高度固定，虚拟滚动不破坏选中/悬停预览行为

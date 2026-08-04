@@ -9,7 +9,7 @@
 
 **Blocked by:** 04 — Main 重构（E2，提供窗口框架与工具条）
 
-**Status:** ready-for-agent
+**Status:** done (committed ce573ae + 3bc5bc4)
 
 - [ ] 视觉与 F2 原型一致；不再有全屏 overlay 盖层
 - [ ] 四个分区可切换且动画生效，「返回列表」恢复剪贴板视图

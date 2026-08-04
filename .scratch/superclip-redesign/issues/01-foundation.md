@@ -4,7 +4,7 @@
 
 **Blocked by:** None — can start immediately
 
-**Status:** ready-for-agent
+**Status:** done (committed ce573ae + 3bc5bc4)
 
 - [ ] 深色模式：Popup / Main / Preview 呈现磨砂玻璃材质、圆角 12-18px、蓝色强调，与 prototype 深色基准一致
 - [ ] 浅色模式：token 成对重设，浅/深/跟随系统三种模式切换无破损

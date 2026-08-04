@@ -10,7 +10,7 @@
 
 **Blocked by:** 01 — 设计 Token 与视觉基础
 
-**Status:** ready-for-agent
+**Status:** done (committed ce573ae + 3bc5bc4)
 
 - [ ] 底栏无任何按钮，视觉与 B2 原型一致
 - [ ] 悬停行 200ms 后 Preview 浮窗出现在列表右侧并垂直对齐该行；空间不足时切左侧且不越出视口
