@@ -30,7 +30,7 @@ import type {
 
 type SettingsSectionKey = "general" | "shortcuts" | "privacy" | "about";
 
-interface SettingsShellProps {
+export interface SettingsShellProps {
   settings: SettingsResponse;
   shortcut: ShortcutStateResponse;
   rules: ExclusionRule[];
