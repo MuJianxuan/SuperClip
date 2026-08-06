@@ -24,7 +24,6 @@ export default defineConfig(async () => ({
         popup: resolve(__dirname, "popup.html"),
         preview: resolve(__dirname, "preview.html"),
         panel: resolve(__dirname, "panel.html"),
-        prototype: resolve(__dirname, "prototype.html"),
       },
     },
   },

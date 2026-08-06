@@ -5,7 +5,7 @@ import { VariantD_QuickPanel } from "./variants/VariantD_QuickPanel";
 import { VariantE_Main } from "./variants/VariantE_Main";
 import { VariantF_Settings } from "./variants/VariantF_Settings";
 import { VariantG_Preview } from "./variants/VariantG_Preview";
-import type { ClipboardItem } from "../components/history-row";
+import type { ClipboardItem } from "./types";
 
 /** 原型用 mock 数据 */
 const MOCK_ITEMS: ClipboardItem[] = [

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Search, FileImage, FileText, LinkIcon, Clock, Star, X } from "lucide-react";
-import type { ClipboardItem } from "../../components/history-row";
+import type { ClipboardItem } from "../types";
 
 /* ================================================================
    Variant B2 — Popup (磨砂玻璃 · 重设计)

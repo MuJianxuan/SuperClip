@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Search, Pin, FileImage, FileText, LinkIcon } from "lucide-react";
-import type { ClipboardItem } from "../../components/history-row";
+import type { ClipboardItem } from "../types";
 
 /* ================================================================
    Variant A — "Frost" (磨砂玻璃)

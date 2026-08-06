@@ -1,0 +1,24 @@
+{
+  "name": "superclip-prototype",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "SuperClip UI 原型探索 — 独立于主项目，可单独预览变体页面",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-react": "^1.11.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  }
+}

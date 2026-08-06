@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Search, Pin, FileImage, FileText, LinkIcon, Copy } from "lucide-react";
-import type { ClipboardItem } from "../../components/history-row";
+import type { ClipboardItem } from "../types";
 
 /* ================================================================
    Variant C — "Split" (双栏分屏)
