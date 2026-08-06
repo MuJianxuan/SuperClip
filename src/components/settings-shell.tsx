@@ -1,20 +1,20 @@
 import * as React from "react";
 import {
   ArrowLeft,
-  Download,
+  Copy,
+  Database,
   Keyboard,
   Monitor,
   Moon,
   PencilLine,
   Plus,
-  Settings2,
   Shield,
+  Sliders,
   Sun,
   Trash2,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
-import { Separator } from "./ui/separator";
 import { Switch } from "./ui/switch";
 import { cn } from "../lib/utils";
 import type {
@@ -53,12 +53,12 @@ export interface SettingsShellProps {
 const sections: Array<{
   key: SettingsSectionKey;
   label: string;
-  icon: typeof Settings2;
+  icon: typeof Sliders;
 }> = [
-  { key: "general", label: "通用", icon: Settings2 },
+  { key: "general", label: "通用", icon: Sliders },
   { key: "shortcuts", label: "快捷键", icon: Keyboard },
   { key: "privacy", label: "排除规则", icon: Shield },
-  { key: "about", label: "高级", icon: Settings2 },
+  { key: "about", label: "高级", icon: Monitor },
 ];
 
 const ruleKindLabels: Record<ExclusionRuleKind, string> = {
@@ -75,7 +75,9 @@ const contentKindOptions = [
   { value: "file", label: "File" },
 ];
 
-/* 主题分段按钮 —— 同 Quick Panel 分段语言，hover 由 React state 驱动 */
+/* 主题分段按钮 —— F2 原型语言（与 Quick Panel 分段一致），hover 由 React state 驱动。
+   选中 = 蓝底 rgba(56,189,248,0.08) + 蓝边 0.22 + 蓝字；未选中 = 浅底。
+   注意：不套按钮容器底框（与 F2 一致）。 */
 function ThemeSegButton({
   active,
   disabled,
@@ -97,13 +99,27 @@ function ThemeSegButton({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       className={cn(
-        "flex flex-1 items-center justify-center gap-1.5 rounded-[8px] px-3 py-1.5 text-xs transition-all duration-150",
+        "flex flex-1 items-center justify-center gap-1.5 rounded-[9px] px-3 py-[7px] text-[12px] transition-all duration-150",
         disabled && "cursor-not-allowed opacity-60",
       )}
       style={{
-        border: `1px solid ${active ? "rgba(56, 189, 248, 0.3)" : hovered ? "rgba(255, 255, 255, 0.1)" : "transparent"}`,
-        background: active ? "var(--accent-soft)" : hovered ? "var(--surface-2)" : "transparent",
-        color: active ? "var(--selection-accent)" : hovered ? "var(--text-primary)" : "var(--text-secondary)",
+        border: `1px solid ${
+          active
+            ? "rgba(56, 189, 248, 0.22)"
+            : hovered
+              ? "var(--border-strong)"
+              : "var(--seg-border)"
+        }`,
+        background: active
+          ? "rgba(56, 189, 248, 0.08)"
+          : hovered
+            ? "var(--row-hover)"
+            : "var(--card-bg)",
+        color: active
+          ? "rgba(56, 189, 248, 0.9)"
+          : hovered
+            ? "var(--text-primary)"
+            : "var(--text-secondary)",
         fontWeight: active ? 550 : 400,
       }}
     >
@@ -112,7 +128,7 @@ function ThemeSegButton({
   );
 }
 
-/* 粘贴行为分段按钮（默认动作） */
+/* 粘贴行为分段按钮（默认动作）—— 与主题分段同一语言 */
 function SegControlButton({
   active,
   disabled,
@@ -134,12 +150,27 @@ function SegControlButton({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       className={cn(
-        "rounded-[8px] px-3 py-1.5 text-xs transition-colors duration-150",
+        "flex flex-1 items-center justify-center rounded-[9px] px-3 py-[7px] text-[12px] transition-all duration-150",
         disabled && "cursor-not-allowed opacity-60",
       )}
       style={{
-        background: active ? "var(--accent)" : hovered ? "var(--surface-2)" : "transparent",
-        color: active ? "var(--accent-contrast)" : hovered ? "var(--text-primary)" : "var(--text-secondary)",
+        border: `1px solid ${
+          active
+            ? "rgba(56, 189, 248, 0.22)"
+            : hovered
+              ? "var(--border-strong)"
+              : "var(--seg-border)"
+        }`,
+        background: active
+          ? "rgba(56, 189, 248, 0.08)"
+          : hovered
+            ? "var(--row-hover)"
+            : "var(--card-bg)",
+        color: active
+          ? "rgba(56, 189, 248, 0.9)"
+          : hovered
+            ? "var(--text-primary)"
+            : "var(--text-secondary)",
         fontWeight: active ? 550 : 400,
       }}
     >
@@ -148,34 +179,68 @@ function SegControlButton({
   );
 }
 
-/* macOS 原生滑动条配色：轨道底色 / 悬停 thumb / 拖拽 thumb 均按系统语义定义 */
-const sliderTrackColors =
-  typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? { bg: "rgba(255,255,255,0.14)", hover: "rgba(255,255,255,0.22)", active: "rgba(56,189,248,0.6)" }
+/* 滑块轨道底（F2 深色 = rgba(255,255,255,0.08)）+ hover/拖拽 thumb glow。
+   注意随 data-theme-mode 联动：用户切深色后即使系统浅色也用深色轨道。 */
+function readSliderTrackColors() {
+  if (typeof document === "undefined") {
+    return { bg: "rgba(255,255,255,0.08)", hover: "rgba(255,255,255,0.22)", active: "rgba(56,189,248,0.6)" };
+  }
+  const mode = document.documentElement.dataset.themeMode;
+  const dark =
+    mode === "dark" ||
+    (mode !== "light" &&
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches);
+  return dark
+    ? { bg: "rgba(255,255,255,0.08)", hover: "rgba(255,255,255,0.22)", active: "rgba(56,189,248,0.6)" }
     : { bg: "rgba(15,23,42,0.14)", hover: "rgba(15,23,42,0.26)", active: "rgba(56,189,248,0.55)" };
+}
 
+/* F2 分区大标题：通用 / 快捷键 / 排除规则 / 高级 */
+function PaneTitle({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <h2
+      className="text-[14px] font-semibold tracking-[-0.01em] text-[var(--text-primary)]"
+      style={{ margin: "0 0 14px", ...style }}
+    >
+      {children}
+    </h2>
+  );
+}
+
+/* F2 设置卡：浅底圆角卡片（r12 / padding 14px 16px），标题 12.5px/550 + 说明 10.5px 内嵌卡头 */
 function SectionCard({
   title,
   description,
   children,
+  style,
 }: {
   title: string;
   description: string;
   children: React.ReactNode;
+  style?: React.CSSProperties;
 }) {
   return (
-    <section className="rounded-[12px] border border-[var(--border)] bg-[var(--surface)] p-3">
-      <div>
-        <h3 className="text-[15px] font-semibold text-[var(--text-primary)]">{title}</h3>
-        <p className="mt-1 max-w-[38rem] text-[12px] leading-5 text-[var(--text-secondary)]">
-          {description}
-        </p>
+    <section
+      className="rounded-[12px] px-4 py-[14px]"
+      style={{
+        background: "var(--card-bg)",
+        border: "1px solid var(--divider)",
+        ...style,
+      }}
+    >
+      <div className="mb-2.5">
+        <h3 className="block text-[12.5px] font-[550] leading-snug text-[var(--text-primary)]">{title}</h3>
+        {description ? (
+          <p className="mt-0.5 block text-[10.5px] leading-snug text-[var(--text-tertiary)]">{description}</p>
+        ) : null}
       </div>
-      <div className="mt-3 space-y-2">{children}</div>
+      {children}
     </section>
   );
 }
 
+/* F2 卡内设置行：无壳，label 12.5px/500 + hint 10.5px，右侧控件，行间 RowDivider 分隔 */
 function Row({
   label,
   hint,
@@ -186,21 +251,296 @@ function Row({
   action: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 min-[820px]:flex-row min-[820px]:items-center min-[820px]:justify-between">
+    <div className="flex items-center justify-between gap-3 py-[7px]">
       <div className="min-w-0">
-        <p className="text-[13px] font-medium text-[var(--text-primary)]">{label}</p>
-        <p className="mt-1 text-[12px] leading-5 text-[var(--text-secondary)]">{hint}</p>
+        <p className="block text-[12.5px] font-medium text-[var(--text-primary)]">{label}</p>
+        {hint ? (
+          <p className="mt-px block text-[10.5px] leading-snug text-[var(--text-tertiary)]">{hint}</p>
+        ) : null}
       </div>
       <div className="shrink-0">{action}</div>
     </div>
   );
 }
 
+/* F2 行分隔线：1px、--divider（深色 rgba(255,255,255,0.03)）、上下 2px 呼吸 */
+function RowDivider() {
+  return <div className="my-0.5 h-px" style={{ background: "var(--divider)" }} />;
+}
+
+/* F2 快捷键行「更改」按钮：无框、蓝字，hover 浅蓝底（React state 驱动） */
+function ChangeButton({
+  onClick,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={cn(
+        "rounded-[6px] px-2 py-1 text-[11.5px] font-medium transition-all duration-150",
+        disabled && "cursor-not-allowed opacity-60",
+      )}
+      style={{
+        background: hovered ? "rgba(56,189,248,0.08)" : "transparent",
+        border: "none",
+        color: hovered ? "rgba(56,189,248,0.8)" : "rgba(56,189,248,0.45)",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* F2 快捷键徽标：等宽字体浅底块 */
 function ShortcutBadge({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 font-mono text-[11px] font-medium text-[var(--text-secondary)]">
+    <span
+      className="inline-flex items-center rounded-[6px] px-2.5 py-[3px] font-mono text-[11.5px] tracking-[0.02em]"
+      style={{
+        background: "var(--surface-2)",
+        border: "1px solid var(--border)",
+        color: "var(--text-secondary)",
+      }}
+    >
       {children}
     </span>
+  );
+}
+
+/* F2 顶部「返回列表」按钮：浅底 + 细边，hover 泛蓝（React state 驱动） */
+function BackButton({
+  onClick,
+  children,
+}: {
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="flex items-center gap-1.5 rounded-[9px] px-3 py-1.5 text-[12px] font-medium transition-all duration-150"
+      style={{
+        border: `1px solid ${hovered ? "rgba(56,189,248,0.2)" : "var(--border)"}`,
+        background: hovered ? "rgba(56,189,248,0.06)" : "var(--card-bg)",
+        color: hovered ? "rgba(56,189,248,0.8)" : "var(--text-secondary)",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* F2「添加规则」主按钮：蓝系描边，hover 加深（React state 驱动） */
+function PrimaryBtn({
+  onClick,
+  disabled,
+  type = "button",
+  children,
+}: {
+  onClick?: () => void;
+  disabled?: boolean;
+  type?: "button" | "submit";
+  children: React.ReactNode;
+}) {
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={cn(
+        "flex items-center gap-1.5 rounded-[8px] px-3 py-1.5 text-[12px] font-medium transition-all duration-150",
+        disabled && "cursor-not-allowed opacity-60",
+      )}
+      style={{
+        border: `1px solid ${hovered ? "rgba(56, 189, 248, 0.35)" : "rgba(56, 189, 248, 0.15)"}`,
+        background: hovered ? "rgba(56, 189, 248, 0.12)" : "rgba(56, 189, 248, 0.06)",
+        color: hovered ? "rgba(56, 189, 248, 0.9)" : "rgba(56, 189, 248, 0.7)",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* F2 危险按钮：红底红边（#ef4444 系），hover 加深（React state 驱动） */
+function DangerBtn({
+  onClick,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <button
+      type="button"
+      data-variant="danger"
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={cn(
+        "flex items-center gap-1.5 rounded-[8px] px-3.5 py-[7px] text-[12px] font-medium transition-all duration-150",
+        disabled && "cursor-not-allowed opacity-60",
+      )}
+      style={{
+        border: `1px solid ${hovered ? "rgba(239, 68, 68, 0.3)" : "rgba(239, 68, 68, 0.12)"}`,
+        background: hovered ? "rgba(239, 68, 68, 0.08)" : "rgba(239, 68, 68, 0.04)",
+        color: hovered ? "rgba(239, 68, 68, 0.85)" : "rgba(239, 68, 68, 0.6)",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* F2 侧栏分区项：选中 = 浅蓝底 rgba(56,189,248,0.07) + 左侧 3px 蓝条 + 蓝字；hover = 白 0.03 底。
+   hover 一律 React state 驱动，禁止 currentTarget.style。 */
+function SidebarNavItem({
+  icon,
+  label,
+  isActive,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  const [hovered, setHovered] = React.useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="relative flex w-full items-center gap-[9px] rounded-[9px] px-2.5 py-2 text-left text-[12px] transition-all duration-150"
+      style={{
+        border: "none",
+        background: isActive
+          ? "rgba(56, 189, 248, 0.07)"
+          : hovered
+            ? "var(--row-hover)"
+            : "transparent",
+        color: isActive
+          ? "rgba(56, 189, 248, 0.85)"
+          : hovered
+            ? "var(--text-primary)"
+            : "var(--text-tertiary)",
+        fontWeight: isActive ? 550 : 400,
+      }}
+    >
+      {/* 选中左侧色条（与 Main 列表选中同一语言） */}
+      <div
+        className="absolute left-0 top-1/2 w-[3px] -translate-y-1/2 rounded-[2px] transition-all duration-150"
+        data-active-bar="true"
+        style={{
+          height: isActive ? 16 : 0,
+          background: "#38bdf8",
+          opacity: isActive ? 0.85 : 0,
+        }}
+      />
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+/* F2 规则行：等宽值 + 类型/关键词 tag + 右侧开关/编辑/删除（删除 hover 红化，React state 驱动） */
+function RuleRow({
+  rule,
+  readOnlyMode,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  rule: ExclusionRule;
+  readOnlyMode: boolean;
+  onToggle: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [deleteHovered, setDeleteHovered] = React.useState(false);
+  const [editHovered, setEditHovered] = React.useState(false);
+  const kindText = rule.kind === "bundle_id" ? "bundle" : rule.kind === "content_kind" ? "类型" : "关键词";
+  return (
+    <div className="flex items-center justify-between gap-3 py-1.5">
+      <div className="min-w-0">
+        <div className="mb-0.5 flex flex-wrap items-center gap-1.5">
+          <span className="font-mono text-[11.5px] font-medium text-[var(--text-primary)]">{rule.value}</span>
+          <span className="text-[9px] text-[var(--text-tertiary)]">/</span>
+          <span className="rounded-[4px] px-1.5 py-px text-[9.5px]" style={{ background: "var(--surface-2)", color: "var(--text-tertiary)" }}>
+            {kindText}
+          </span>
+        </div>
+        <span className="text-[10.5px] text-[var(--text-tertiary)]">
+          {rule.kind === "bundle_id"
+            ? "命中该来源应用后跳过入库"
+            : rule.kind === "content_kind"
+              ? "命中该类型后跳过"
+              : "命中关键词后跳过"}
+        </span>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <Switch
+          checked={rule.enabled}
+          disabled={readOnlyMode}
+          aria-label={`${rule.value} 规则开关`}
+          onCheckedChange={onToggle}
+        />
+        <button
+          type="button"
+          aria-label={`编辑规则 ${rule.value}`}
+          onClick={onEdit}
+          disabled={readOnlyMode}
+          onMouseEnter={() => setEditHovered(true)}
+          onMouseLeave={() => setEditHovered(false)}
+          className="rounded-[6px] p-1.5 transition-all duration-150"
+          style={{
+            background: editHovered ? "rgba(56,189,248,0.08)" : "transparent",
+            border: "none",
+            color: editHovered ? "rgba(56,189,248,0.8)" : "var(--text-tertiary)",
+          }}
+        >
+          <PencilLine className="h-[13px] w-[13px]" />
+        </button>
+        <button
+          type="button"
+          aria-label={`删除规则 ${rule.value}`}
+          onClick={onDelete}
+          disabled={readOnlyMode}
+          onMouseEnter={() => setDeleteHovered(true)}
+          onMouseLeave={() => setDeleteHovered(false)}
+          className="rounded-[6px] p-1.5 transition-all duration-150"
+          style={{
+            background: deleteHovered ? "rgba(239, 68, 68, 0.07)" : "transparent",
+            border: "none",
+            color: deleteHovered ? "rgba(239, 68, 68, 0.6)" : "var(--text-tertiary)",
+          }}
+        >
+          <Trash2 className="h-[13px] w-[13px]" />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -277,7 +617,9 @@ export function SettingsShell({
   const [ruleValue, setRuleValue] = React.useState("");
   const [ruleEnabled, setRuleEnabled] = React.useState(true);
   const [ruleError, setRuleError] = React.useState<string | null>(null);
-  const activeSectionMeta = sections.find((section) => section.key === activeSection) ?? sections[0];
+  const [isRuleEditorOpen, setIsRuleEditorOpen] = React.useState(false);
+  // 滑块轨道色随 data-theme-mode 联动（settings.themeMode 变化即重渲染）
+  const sliderTrack = readSliderTrackColors();
 
   function resetRuleEditor() {
     setEditingRuleId(null);
@@ -338,6 +680,7 @@ export function SettingsShell({
     setRuleValue(rule.value);
     setRuleEnabled(rule.enabled);
     setRuleError(null);
+    setIsRuleEditorOpen(true);
   }
 
   async function handleRuleToggle(rule: ExclusionRule) {
@@ -501,100 +844,75 @@ export function SettingsShell({
   }, [activeSection, isShortcutRecording, onShortcutCancel]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[var(--bg)]">
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <aside className="flex w-[176px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface-raised)] p-2">
-          <div className="flex h-8 items-center gap-2 rounded-[10px] px-2">
-            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[8px] bg-[var(--accent-soft)] text-[var(--accent)]">
-              <Settings2 className="h-3.5 w-3.5" />
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {/* ================= F2 顶部 toolbar：identity + 返回列表（与 E2/F2 同位） ================= */}
+      <div className="shrink-0 px-4 pt-3.5">
+        <div className="flex items-center gap-2.5">
+          {/* Window identity：渐变图标 + 「设置」（与 Main 列表 toolbar 的 identity 语言一致） */}
+          <div className="flex shrink-0 items-center gap-[7px]">
+            <div
+              className="flex h-6 w-6 items-center justify-center rounded-[8px] bg-gradient-to-br from-[rgba(56,189,248,0.35)] to-[rgba(167,139,250,0.25)] shadow-[0_0_12px_rgba(56,189,248,0.2)]"
+              aria-hidden="true"
+            >
+              <Copy className="h-3 w-3 text-white/85" />
             </div>
-            <span className="text-[12px] font-semibold text-[var(--text-primary)]">设置</span>
+            <span className="text-[13px] font-semibold text-[var(--text-secondary)]">设置</span>
           </div>
 
-          <nav className="mt-2 space-y-1">
+          <div className="flex-1" />
+
+          {/* 返回列表（回到 Main 的剪贴板分区） */}
+          <BackButton onClick={() => void handleClose()}>
+            <ArrowLeft className="h-[13px] w-[13px]" />
+            <span>返回列表</span>
+          </BackButton>
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1 overflow-hidden pt-2.5">
+        {/* ================= F2 左侧分区导航 ================= */}
+        <aside
+          className="w-[168px] shrink-0 px-2 pb-2 pt-1"
+          style={{ borderRight: "1px solid var(--sidebar-border)" }}
+        >
+          <nav className="flex flex-col gap-0.5">
             {sections.map((section) => (
-              <button
+              <SidebarNavItem
                 key={section.key}
-                type="button"
+                icon={<section.icon className="h-[13px] w-[13px] shrink-0" />}
+                label={section.label}
+                isActive={activeSection === section.key}
                 onClick={() => setActiveSection(section.key)}
-                className={cn(
-                  "relative flex w-full items-center gap-2.5 rounded-[9px] border border-transparent px-2.5 py-2 text-left transition-colors",
-                  activeSection === section.key
-                    ? "bg-[var(--accent-soft)] text-[var(--accent)]"
-                    : "bg-transparent text-[var(--text-secondary)] hover:border-[var(--border)] hover:bg-[var(--surface-2)] hover:text-[var(--text-primary)]",
-                )}
-              >
-                {activeSection === section.key ? (
-                  <span
-                    className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-[var(--accent)]"
-                  />
-                ) : null}
-                <section.icon className="h-4 w-4 shrink-0" />
-                <span className="text-[12px] font-medium leading-4">{section.label}</span>
-              </button>
+              />
             ))}
           </nav>
-
-          <div className="mt-auto rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-2 py-2.5 text-center">
-            <p className="text-[10px] font-medium text-[var(--text-tertiary)]">SuperClip</p>
-            <p className="mt-1 text-[11px] font-semibold text-[var(--text-primary)]">0.1.0</p>
-          </div>
         </aside>
 
+        {/* ================= 内容区（分区切换 fadeSlideIn） ================= */}
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="border-b border-[var(--border)] bg-[var(--surface-raised)] px-3.5 py-2.5">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--accent-soft)] text-[var(--accent)]">
-                  <Settings2 className="h-3.5 w-3.5" />
-                </div>
-                <div>
-                  <h2 className="text-[14px] font-semibold leading-tight text-[var(--text-primary)]">
-                    设置
-                  </h2>
-                  <p className="text-[11px] leading-tight text-[var(--text-tertiary)]">{activeSectionMeta.label}</p>
-                </div>
-              </div>
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button variant="danger" size="sm" onClick={onDiagnosticsClick}>
-                  <Download className="h-4 w-4" />
-                  诊断
-                </Button>
-                <Button variant="secondary" size="sm" onClick={onPermissionGuideClick}>
-                  <Shield className="h-4 w-4" />
-                  权限
-                </Button>
-                <Button variant="default" size="sm" onClick={() => void handleClose()}>
-                  <ArrowLeft className="h-4 w-4" />
-                  返回列表
-                </Button>
-              </div>
-            </div>
-          </header>
-
           <ScrollArea className="min-h-0 flex-1">
             <div
               key={activeSection}
-              className="space-y-2.5 px-3.5 py-3"
+              className="px-5 pb-5 pt-3.5"
               style={{ animation: "fadeSlideIn 0.18s ease-out" }}
             >
               {readOnlyMode ? (
-                <div className="rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm text-[var(--warning-text)]">
+                <div className="mb-3.5 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-[12px] text-[var(--warning-text)]">
                   只读模式：修改类操作已禁用。
                 </div>
               ) : null}
 
               {activeSection === "general" ? (
-                <>
-                  <SectionCard
-                    title="主题"
-                    description="选择浅色、深色或跟随系统。"
-                  >
-                    <div className="flex gap-1.5 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-1">
+                <div>
+                  <PaneTitle>通用</PaneTitle>
+
+                  {/* 主题 */}
+                  <SectionCard title="主题" description="选择 SuperClip 的显示外观">
+                    <div className="flex gap-1.5">
                       {[
+                        { value: "system", title: "跟随系统", icon: Monitor },
                         { value: "light", title: "浅色", icon: Sun },
                         { value: "dark", title: "深色", icon: Moon },
-                        { value: "system", title: "跟随系统", icon: Monitor },
                       ].map((option) => {
                         const isActive = settings.themeMode === option.value;
                         const Icon = option.icon;
@@ -609,7 +927,7 @@ export function SettingsShell({
                               })
                             }
                           >
-                            <Icon className="h-3.5 w-3.5" />
+                            <Icon className="h-[13px] w-[13px]" />
                             {option.title}
                           </ThemeSegButton>
                         );
@@ -617,69 +935,63 @@ export function SettingsShell({
                     </div>
                   </SectionCard>
 
+                  {/* 历史保留上限 */}
                   <SectionCard
                     title="历史保留上限"
-                    description="超出上限时自动清理最早记录。"
+                    description="超出上限时自动清理最早记录"
+                    style={{ marginTop: 14 }}
                   >
-                    <Row
-                      label="历史保留数量"
-                      hint="建议 100 到 5000。"
-                      action={
-                        <label className="inline-flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
-                          <input
-                            type="range"
-                            min={100}
-                            max={5000}
-                            step={100}
-                            disabled={readOnlyMode}
-                            value={settings.historyLimit}
-                            onChange={(event) => {
-                              const nextValue = Number(event.currentTarget.value);
-                              if (Number.isNaN(nextValue)) {
-                                return;
-                              }
+                    <div className="flex items-center gap-3.5">
+                      <input
+                        type="range"
+                        min={100}
+                        max={5000}
+                        step={100}
+                        disabled={readOnlyMode}
+                        value={settings.historyLimit}
+                        onChange={(event) => {
+                          const nextValue = Number(event.currentTarget.value);
+                          if (Number.isNaN(nextValue)) {
+                            return;
+                          }
 
-                              void onUpdate({
-                                historyLimit: Math.max(100, Math.min(5000, nextValue)),
-                              });
-                            }}
-                            className="slider-range w-44"
-                            style={
-                              {
-                                "--slider-fill": `${((settings.historyLimit - 100) / (5000 - 100)) * 100}%`,
-                                "--slider-track-color": sliderTrackColors.bg,
-                                "--slider-hover-thumb-color": sliderTrackColors.hover,
-                                "--slider-active-thumb-color": sliderTrackColors.active,
-                              } as React.CSSProperties
-                            }
-                          />
-                          <span
-                            className="min-w-[44px] text-right text-sm font-semibold tabular-nums"
-                            style={{ color: "var(--selection-accent)" }}
-                          >
-                            {settings.historyLimit}
-                          </span>
-                          <span className="text-xs text-[var(--text-tertiary)]">条</span>
-                        </label>
-                      }
-                    />
-
+                          void onUpdate({
+                            historyLimit: Math.max(100, Math.min(5000, nextValue)),
+                          });
+                        }}
+                        className="slider-range flex-1"
+                        style={
+                          {
+                            "--slider-fill": `${((settings.historyLimit - 100) / (5000 - 100)) * 100}%`,
+                            "--slider-track-color": sliderTrack.bg,
+                            "--slider-hover-thumb-color": sliderTrack.hover,
+                            "--slider-active-thumb-color": sliderTrack.active,
+                          } as React.CSSProperties
+                        }
+                      />
+                      <span className="min-w-[44px] text-right text-[13px] font-semibold tabular-nums" style={{ color: "rgba(56,189,248,0.85)" }}>
+                        {settings.historyLimit}
+                      </span>
+                      <span className="min-w-[32px] text-[10.5px] text-[var(--text-tertiary)]">条</span>
+                    </div>
                     {pinnedCount > 50 ? (
-                      <div className="rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm leading-6 text-[var(--warning-text)]">
+                      <div className="mt-2 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-[12px] leading-5 text-[var(--warning-text)]">
                         置顶项较多，可能影响首屏检索效率。建议进入历史整理路径收敛置顶数量。
                       </div>
                     ) : null}
                   </SectionCard>
 
+                  {/* 粘贴行为（真实设置项：F2 原型未含，结构沿用通用卡 + 分段语言） */}
                   <SectionCard
                     title="粘贴行为"
-                    description="设置 Enter 默认执行直接粘贴还是仅复制。"
+                    description="设置 Enter 默认执行直接粘贴还是仅复制"
+                    style={{ marginTop: 14 }}
                   >
                     <Row
                       label="默认动作"
-                      hint="Enter 执行默认动作，Cmd+Enter 执行相反动作。"
+                      hint="Enter 执行默认动作，Cmd+Enter 执行相反动作"
                       action={
-                        <div className="flex rounded-[10px] border border-[var(--border)] bg-[var(--surface)] p-1">
+                        <div className="flex w-[240px] gap-1.5">
                           {[
                             { value: "direct_paste", label: "直接粘贴优先" },
                             { value: "copy_only", label: "仅复制优先" },
@@ -701,53 +1013,41 @@ export function SettingsShell({
                       }
                     />
 
-                    <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-[12px] leading-5 text-[var(--text-secondary)]">
+                    <div className="mt-1 text-[10.5px] leading-5 text-[var(--text-tertiary)]">
                       失败回退始终开启；文件类型固定为仅复制，富文本和图片在目标应用不支持时会降级。
                     </div>
                   </SectionCard>
 
-                  <SectionCard
-                    title="启动行为"
-                    description="管理登录启动与启动展示。"
-                  >
+                  {/* 启动行为 */}
+                  <SectionCard title="启动行为" description="" style={{ marginTop: 14 }}>
                     <Row
                       label="登录时启动"
-                      hint="失败时在本行提示并可重试。"
+                      hint="登录 macOS 时自动启动 SuperClip"
                       action={
-                        <div className="flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
-                          <Switch
-                            checked={settings.launchAtLogin}
-                            disabled={readOnlyMode}
-                            aria-label="登录时启动"
-                            onCheckedChange={(checked) => void handleStartupUpdate({ launchAtLogin: checked })}
-                          />
-                          <span className="text-xs font-medium text-[var(--text-secondary)]">
-                            {settings.launchAtLogin ? "已开启" : "已关闭"}
-                          </span>
-                        </div>
+                        <Switch
+                          checked={settings.launchAtLogin}
+                          disabled={readOnlyMode}
+                          aria-label="登录时启动"
+                          onCheckedChange={(checked) => void handleStartupUpdate({ launchAtLogin: checked })}
+                        />
                       }
                     />
-
+                    <RowDivider />
                     <Row
                       label="启动时自动显示"
-                      hint="开启后仍以空搜索打开。"
+                      hint="启动后自动打开 Main 窗口"
                       action={
-                        <div className="flex items-center gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
-                          <Switch
-                            checked={settings.showOnStartup}
-                            disabled={readOnlyMode}
-                            aria-label="启动时自动显示"
-                            onCheckedChange={(checked) => void handleStartupUpdate({ showOnStartup: checked })}
-                          />
-                          <span className="text-xs font-medium text-[var(--text-secondary)]">
-                            {settings.showOnStartup ? "已开启" : "已关闭"}
-                          </span>
-                        </div>
+                        <Switch
+                          checked={settings.showOnStartup}
+                          disabled={readOnlyMode}
+                          aria-label="启动时自动显示"
+                          onCheckedChange={(checked) => void handleStartupUpdate({ showOnStartup: checked })}
+                        />
                       }
                     />
 
                     {startupError ? (
-                      <div className="flex flex-col gap-3 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm text-[var(--warning-text)] min-[820px]:flex-row min-[820px]:items-center min-[820px]:justify-between">
+                      <div className="mt-2 flex items-center justify-between gap-3 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-[12px] text-[var(--warning-text)]">
                         <p>{startupError}</p>
                         {startupRetryPatch ? (
                           <Button
@@ -762,70 +1062,64 @@ export function SettingsShell({
                       </div>
                     ) : null}
                   </SectionCard>
-                </>
+                </div>
               ) : null}
 
               {activeSection === "shortcuts" ? (
-                <>
-                  <SectionCard
-                    title="全局快捷键"
-                    description="这些快捷键在任意应用中均可使用。"
-                  >
+                <div>
+                  <PaneTitle>快捷键</PaneTitle>
+
+                  {/* 全局快捷键：当前绑定行 + 录入操作（真实后端录制器，保留） */}
+                  <SectionCard title="全局快捷键" description="这些快捷键在任意应用中均可使用">
                     <Row
-                      label="当前全局快捷键"
-                      hint="重新录入后按下新的组合键。"
+                      label="唤出 Popup"
+                      hint=""
                       action={
-                        <div className="flex items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
-                          <Keyboard className="h-4 w-4 text-[var(--text-secondary)]" />
-                          <span className="text-sm font-medium text-[var(--text-primary)]">{shortcut.binding}</span>
+                        <div className="flex items-center gap-2">
+                          <ShortcutBadge>{shortcut.binding}</ShortcutBadge>
+                          {!isShortcutRecording ? (
+                            <ChangeButton
+                              disabled={readOnlyMode}
+                              onClick={async () => {
+                                await onShortcutStart();
+                                setIsShortcutRecording(true);
+                                setShortcutPreview(null);
+                                setShortcutError(null);
+                              }}
+                            >
+                              更改
+                            </ChangeButton>
+                          ) : (
+                            <ChangeButton
+                              disabled={readOnlyMode}
+                              onClick={async () => {
+                                await onShortcutCancel();
+                                setIsShortcutRecording(false);
+                                setShortcutPreview(null);
+                                setShortcutError(null);
+                              }}
+                            >
+                              取消
+                            </ChangeButton>
+                          )}
                         </div>
                       }
                     />
 
-                    <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3">
+                    {/* 录入状态块：录入中 / 错误提示时展开 */}
+                    <div
+                      className="mt-2 rounded-[8px] px-3 py-2.5"
+                      style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+                    >
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)]">
+                        <span className="inline-flex rounded-full px-2.5 py-1 text-[10.5px] font-medium" style={{ border: "1px solid var(--border)", background: "var(--card-bg)", color: "var(--text-secondary)" }}>
                           来源：{shortcut.source === "default" ? "默认" : "用户"}
                         </span>
-                        <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)]">
+                        <span className="inline-flex rounded-full px-2.5 py-1 text-[10.5px] font-medium" style={{ border: "1px solid var(--border)", background: "var(--card-bg)", color: "var(--text-secondary)" }}>
                           {shortcut.isRegistered ? "已注册" : "待注册"}
                         </span>
-                      </div>
-
-                      <div className="mt-4 flex flex-wrap gap-3">
-                        {!isShortcutRecording ? (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={readOnlyMode}
-                            onClick={async () => {
-                              await onShortcutStart();
-                              setIsShortcutRecording(true);
-                              setShortcutPreview(null);
-                              setShortcutError(null);
-                            }}
-                          >
-                            重新录入
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={readOnlyMode}
-                            onClick={async () => {
-                              await onShortcutCancel();
-                              setIsShortcutRecording(false);
-                              setShortcutPreview(null);
-                              setShortcutError(null);
-                            }}
-                          >
-                            取消
-                          </Button>
-                        )}
-
-                        <Button
-                          variant="ghost"
-                          size="sm"
+                        <span className="flex-1" />
+                        <ChangeButton
                           disabled={readOnlyMode}
                           onClick={async () => {
                             await onShortcutRestoreDefault();
@@ -835,232 +1129,213 @@ export function SettingsShell({
                           }}
                         >
                           恢复默认
-                        </Button>
+                        </ChangeButton>
                       </div>
-
-                      <div className="mt-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
-                        <p className="text-xs font-semibold uppercase text-[var(--text-tertiary)]">
-                          录入
-                        </p>
-                        <p className="mt-2 text-sm font-medium text-[var(--text-primary)]">
-                          {isShortcutRecording
-                            ? shortcutPreview ?? "按下新的组合键，Esc 取消。"
-                            : shortcut.binding}
-                        </p>
-                        <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
-                          {isShortcutRecording
-                            ? "10 秒无输入自动退出。"
-                            : "录入后会先做冲突校验。"}
-                        </p>
-                      </div>
+                      <p className="mt-2 text-[12px] font-medium text-[var(--text-primary)]">
+                        {isShortcutRecording
+                          ? shortcutPreview ?? "按下新的组合键，Esc 取消。"
+                          : shortcut.binding}
+                      </p>
+                      <p className="mt-0.5 text-[10.5px] leading-5 text-[var(--text-tertiary)]">
+                        {isShortcutRecording
+                          ? "10 秒无输入自动退出。"
+                          : "点击「更改」重新录入，录入后会先做冲突校验。"}
+                      </p>
 
                       {shortcutError ? (
-                        <div className="mt-3 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm leading-6 text-[var(--warning-text)]">
+                        <div className="mt-2 rounded-[8px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-[12px] leading-5 text-[var(--warning-text)]">
                           {shortcutError}
                         </div>
                       ) : null}
                     </div>
                   </SectionCard>
 
-                  <SectionCard
-                    title="应用内快捷键"
-                    description="仅在 Main 窗口中可用。"
-                  >
+                  <SectionCard title="应用内快捷键" description="仅在 Main 窗口中可用" style={{ marginTop: 14 }}>
                     <Row label="切换列表/网格" hint="" action={<ShortcutBadge>⌘L</ShortcutBadge>} />
+                    <RowDivider />
                     <Row label="全选" hint="" action={<ShortcutBadge>⌘A</ShortcutBadge>} />
+                    <RowDivider />
                     <Row label="删除选中" hint="" action={<ShortcutBadge>⌘⌫</ShortcutBadge>} />
                   </SectionCard>
-                </>
+                </div>
               ) : null}
 
               {activeSection === "privacy" ? (
-                <SectionCard
-                  title="隐私与排除规则"
-                  description="按来源、类型或关键词跳过入库。"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)]">
-                      共 {rules.length} 条
-                    </span>
-                    <span className="inline-flex rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-xs font-medium text-[var(--text-secondary)]">
-                      启用中 {rules.filter((rule) => rule.enabled).length} 条
-                    </span>
+                <div>
+                  <div className="mb-3.5 flex items-center justify-between">
+                    <PaneTitle style={{ margin: 0 }}>排除规则</PaneTitle>
+                    {!isRuleEditorOpen ? (
+                      <PrimaryBtn
+                        disabled={readOnlyMode}
+                        onClick={() => {
+                          resetRuleEditor();
+                          setIsRuleEditorOpen(true);
+                        }}
+                      >
+                        <Plus className="h-3 w-3" />
+                        添加规则
+                      </PrimaryBtn>
+                    ) : null}
                   </div>
 
-                  <form onSubmit={handleRuleSubmit} className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3">
-                    <div className="grid grid-cols-1 gap-3 min-[760px]:grid-cols-[160px_minmax(0,1fr)_120px]">
-                      <label className="space-y-2">
-                        <span className="text-xs font-medium text-[var(--text-secondary)]">规则类型</span>
-                        <select
-                          disabled={readOnlyMode}
-                          value={ruleKind}
-                          onChange={(event) => {
-                            const nextKind = event.currentTarget.value as ExclusionRuleKind;
-                            setRuleKind(nextKind);
-                            setRuleValue(nextKind === "content_kind" ? "text" : "");
-                            setRuleError(null);
-                          }}
-                          className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text-primary)] outline-none"
-                        >
-                          {Object.entries(ruleKindLabels).map(([value, label]) => (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
+                  {/* 规则编辑器：点击「添加规则 / 编辑」后展开（真实后端 upsert，保留） */}
+                  {isRuleEditorOpen ? (
+                    <SectionCard
+                      title={editingRuleId ? "编辑规则" : "添加规则"}
+                      description="符合任一启用规则的内容将被排除在历史记录之外"
+                    >
+                      <form onSubmit={handleRuleSubmit}>
+                        <div className="grid grid-cols-1 gap-3 min-[760px]:grid-cols-[160px_minmax(0,1fr)_120px]">
+                          <label className="space-y-1.5">
+                            <span className="text-[11px] font-medium text-[var(--text-secondary)]">规则类型</span>
+                            <select
+                              disabled={readOnlyMode}
+                              value={ruleKind}
+                              onChange={(event) => {
+                                const nextKind = event.currentTarget.value as ExclusionRuleKind;
+                                setRuleKind(nextKind);
+                                setRuleValue(nextKind === "content_kind" ? "text" : "");
+                                setRuleError(null);
+                              }}
+                              className="w-full rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-[12px] text-[var(--text-primary)] outline-none"
+                            >
+                              {Object.entries(ruleKindLabels).map(([value, label]) => (
+                                <option key={value} value={value}>
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
 
-                      <label className="space-y-2">
-                        <span className="text-xs font-medium text-[var(--text-secondary)]">规则值</span>
-                        {ruleKind === "content_kind" ? (
-                          <select
-                            disabled={readOnlyMode}
-                            value={ruleValue || "text"}
-                            onChange={(event) => {
-                              setRuleValue(event.currentTarget.value);
-                              setRuleError(null);
-                            }}
-                            className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text-primary)] outline-none"
-                          >
-                            {contentKindOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <input
-                            disabled={readOnlyMode}
-                            value={ruleValue}
-                            onChange={(event) => {
-                              setRuleValue(event.currentTarget.value);
-                              setRuleError(null);
-                            }}
-                            placeholder={ruleKind === "bundle_id" ? "如 com.apple.KeychainAccess" : "如 验证码"}
-                            className="w-full rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-sm text-[var(--text-primary)] outline-none"
-                          />
-                        )}
-                      </label>
-
-                      <label className="space-y-2">
-                        <span className="text-xs font-medium text-[var(--text-secondary)]">启用状态</span>
-                        <div className="flex items-center justify-between rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5">
-                          <span className="text-sm text-[var(--text-secondary)]">{ruleEnabled ? "启用" : "停用"}</span>
-                          <Switch
-                            checked={ruleEnabled}
-                            disabled={readOnlyMode}
-                            aria-label="规则启用状态"
-                            onCheckedChange={setRuleEnabled}
-                          />
-                        </div>
-                      </label>
-                    </div>
-
-                    {ruleError ? (
-                      <div className="mt-3 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-sm text-[var(--warning-text)]">
-                        {ruleError}
-                      </div>
-                    ) : null}
-
-                    <div className="mt-4 flex flex-wrap gap-3">
-                      <Button size="sm" type="submit" disabled={readOnlyMode}>
-                        <Plus className="h-4 w-4" />
-                        {editingRuleId ? "保存规则" : "新增规则"}
-                      </Button>
-                      {editingRuleId ? (
-                        <Button size="sm" variant="secondary" type="button" onClick={resetRuleEditor} disabled={readOnlyMode}>
-                          取消编辑
-                        </Button>
-                      ) : null}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        type="button"
-                        onClick={() => void handleRulesClearAction()}
-                        disabled={readOnlyMode || !rules.length}
-                      >
-                        清空全部规则
-                      </Button>
-                    </div>
-                  </form>
-
-                  <div className="space-y-3">
-                    {rules.length ? (
-                      rules.map((rule) => (
-                        <div
-                          key={rule.id}
-                          className="flex flex-col gap-3 rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-3 min-[860px]:flex-row min-[860px]:items-center min-[860px]:justify-between"
-                        >
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-[10px] font-semibold uppercase text-[var(--text-tertiary)]">
-                                {ruleKindLabels[rule.kind]}
-                              </span>
-                              <span className="text-sm font-medium text-[var(--text-primary)]">{rule.value}</span>
-                            </div>
-                            <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
-                              {rule.kind === "bundle_id"
-                                ? "命中该来源应用后，剪贴板内容将被跳过入库。"
-                                : rule.kind === "content_kind"
-                                  ? "命中该类型后跳过。"
-                                  : "命中关键词后跳过。"}
-                            </p>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-3">
-                            <div className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2">
-                              <Switch
-                                checked={rule.enabled}
+                          <label className="space-y-1.5">
+                            <span className="text-[11px] font-medium text-[var(--text-secondary)]">规则值</span>
+                            {ruleKind === "content_kind" ? (
+                              <select
                                 disabled={readOnlyMode}
-                                aria-label={`${rule.value} 规则开关`}
-                                onCheckedChange={() => void handleRuleToggle(rule)}
+                                value={ruleValue || "text"}
+                                onChange={(event) => {
+                                  setRuleValue(event.currentTarget.value);
+                                  setRuleError(null);
+                                }}
+                                className="w-full rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-[12px] text-[var(--text-primary)] outline-none"
+                              >
+                                {contentKindOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                disabled={readOnlyMode}
+                                value={ruleValue}
+                                onChange={(event) => {
+                                  setRuleValue(event.currentTarget.value);
+                                  setRuleError(null);
+                                }}
+                                placeholder={ruleKind === "bundle_id" ? "如 com.apple.KeychainAccess" : "如 验证码"}
+                                className="w-full rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5 text-[12px] text-[var(--text-primary)] outline-none"
                               />
-                              <span className="text-xs font-medium text-[var(--text-secondary)]">
-                                {rule.enabled ? "已启用" : "已停用"}
-                              </span>
+                            )}
+                          </label>
+
+                          <label className="space-y-1.5">
+                            <span className="text-[11px] font-medium text-[var(--text-secondary)]">启用状态</span>
+                            <div className="flex items-center justify-between rounded-[8px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-1.5">
+                              <span className="text-[12px] text-[var(--text-secondary)]">{ruleEnabled ? "启用" : "停用"}</span>
+                              <Switch
+                                checked={ruleEnabled}
+                                disabled={readOnlyMode}
+                                aria-label="规则启用状态"
+                                onCheckedChange={setRuleEnabled}
+                              />
                             </div>
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              type="button"
-                              onClick={() => handleRuleEdit(rule)}
-                              disabled={readOnlyMode}
-                            >
-                              <PencilLine className="h-4 w-4" />
-                              编辑
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              type="button"
-                              onClick={() => void handleRuleDeleteAction(rule.id)}
-                              disabled={readOnlyMode}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                              删除
-                            </Button>
-                          </div>
+                          </label>
                         </div>
+
+                        {ruleError ? (
+                          <div className="mt-3 rounded-[8px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2 text-[12px] text-[var(--warning-text)]">
+                            {ruleError}
+                          </div>
+                        ) : null}
+
+                        <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
+                          <PrimaryBtn disabled={readOnlyMode}>
+                            {editingRuleId ? "保存规则" : "新增规则"}
+                          </PrimaryBtn>
+                          <ChangeButton
+                            disabled={readOnlyMode}
+                            onClick={() => {
+                              resetRuleEditor();
+                              setIsRuleEditorOpen(false);
+                            }}
+                          >
+                            取消
+                          </ChangeButton>
+                          <span className="flex-1" />
+                          <ChangeButton
+                            disabled={readOnlyMode || !rules.length}
+                            onClick={() => void handleRulesClearAction()}
+                          >
+                            清空全部规则
+                          </ChangeButton>
+                        </div>
+                      </form>
+                    </SectionCard>
+                  ) : null}
+
+                  {/* 当前规则 */}
+                  <SectionCard
+                    title="当前规则"
+                    description="符合任一规则的内容将被排除在历史记录之外"
+                    style={{ marginTop: isRuleEditorOpen ? 14 : 0 }}
+                  >
+                    <div className="-mt-1 mb-2 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex rounded-[4px] px-1.5 py-0.5 text-[9.5px]" style={{ background: "var(--surface-2)", color: "var(--text-tertiary)" }}>
+                        共 {rules.length} 条
+                      </span>
+                      <span className="inline-flex rounded-[4px] px-1.5 py-0.5 text-[9.5px]" style={{ background: "var(--surface-2)", color: "var(--text-tertiary)" }}>
+                        启用中 {rules.filter((rule) => rule.enabled).length} 条
+                      </span>
+                    </div>
+
+                    {rules.length ? (
+                      rules.map((rule, index) => (
+                        <React.Fragment key={rule.id}>
+                          {index > 0 ? <RowDivider /> : null}
+                          <RuleRow
+                            rule={rule}
+                            readOnlyMode={readOnlyMode}
+                            onToggle={() => void handleRuleToggle(rule)}
+                            onEdit={() => {
+                              handleRuleEdit(rule);
+                              setIsRuleEditorOpen(true);
+                            }}
+                            onDelete={() => void handleRuleDeleteAction(rule.id)}
+                          />
+                        </React.Fragment>
                       ))
                     ) : (
-                      <div className="rounded-[10px] border border-dashed border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-7 text-center">
-                        <p className="text-sm font-medium text-[var(--text-primary)]">还没有排除规则</p>
-                        <p className="mt-2 text-sm leading-6 text-[var(--text-secondary)]">
+                      <div className="rounded-[8px] border border-dashed border-[var(--border-strong)] px-4 py-6 text-center">
+                        <p className="text-[12px] font-medium text-[var(--text-primary)]">还没有排除规则</p>
+                        <p className="mt-1.5 text-[10.5px] leading-5 text-[var(--text-tertiary)]">
                           先从最敏感的来源应用、关键词或内容类型开始，逐步收紧入库范围。
                         </p>
                       </div>
                     )}
-                  </div>
-                </SectionCard>
+                  </SectionCard>
+                </div>
               ) : null}
 
               {activeSection === "about" ? (
-                <>
-                  <SectionCard
-                    title="存储信息"
-                    description="数据库和配置文件位置。"
-                  >
-                    <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2.5 font-mono text-[11px] leading-[1.8] text-[var(--text-secondary)]">
+                <div>
+                  <PaneTitle>高级</PaneTitle>
+
+                  <SectionCard title="存储信息" description="数据库和配置文件位置">
+                    <div
+                      className="rounded-[8px] px-3 py-2.5 font-mono text-[11.5px] leading-[1.8] text-[var(--text-secondary)]"
+                      style={{ background: "var(--card-bg)", border: "1px solid var(--divider)" }}
+                    >
                       <div>~/Library/Application Support/com.superclip/</div>
                       <div className="text-[var(--text-tertiary)]">├── superclip.db (SQLite v3)</div>
                       <div className="text-[var(--text-tertiary)]">├── config.json (Schema v1)</div>
@@ -1068,71 +1343,46 @@ export function SettingsShell({
                     </div>
                   </SectionCard>
 
-                  <SectionCard
-                    title="诊断"
-                    description="用于排查问题的工具。"
-                  >
-                    <Row
-                      label="诊断导出"
-                      hint="导出本地排障信息，不包含剪贴板原文。"
-                      action={
-                        <Button variant="danger" size="sm" onClick={onDiagnosticsClick}>
-                          <Download className="h-4 w-4" />
-                          导出诊断
-                        </Button>
-                      }
-                    />
+                  <SectionCard title="诊断" description="用于排查问题的工具" style={{ marginTop: 14 }}>
+                    <DangerBtn onClick={() => void onDiagnosticsClick()}>
+                      <Database className="h-[13px] w-[13px]" />
+                      导出诊断数据
+                    </DangerBtn>
                   </SectionCard>
 
-                  <SectionCard
-                    title="关于"
-                    description="版本与权限状态。"
-                  >
+                  {/* 关于（真实版本 / 权限状态，合理扩展卡） */}
+                  <SectionCard title="关于" description="版本与权限状态" style={{ marginTop: 14 }}>
                     <Row
                       label="当前版本"
-                      hint="SuperClip 本地客户端。"
-                      action={
-                        <div className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-medium text-[var(--text-secondary)]">
-                          superclip@0.1.0
-                        </div>
-                      }
+                      hint="SuperClip 本地客户端"
+                      action={<ShortcutBadge>superclip@0.1.0</ShortcutBadge>}
                     />
-
+                    <RowDivider />
                     <Row
                       label="Accessibility"
-                      hint={
-                        permissionTrusted
-                          ? "直接粘贴可用。"
-                          : "未授权时仅复制。"
-                      }
+                      hint={permissionTrusted ? "直接粘贴可用" : "未授权时仅复制"}
                       action={
-                        <div className="flex flex-wrap items-center justify-end gap-3">
-                          <div
-                            className={cn(
-                              "inline-flex items-center rounded-full border px-3 py-2 text-xs font-medium",
+                        <div className="flex items-center justify-end gap-2.5">
+                          <span
+                            className="inline-flex items-center rounded-[4px] px-1.5 py-0.5 text-[9.5px]"
+                            style={
                               permissionTrusted
-                                ? "border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)]"
-                                : "border-[var(--warning-border)] bg-[var(--warning-bg)] text-[var(--warning-text)]",
-                            )}
+                                ? { background: "var(--surface-2)", color: "var(--text-secondary)" }
+                                : { background: "var(--warning-bg)", color: "var(--warning-text)", border: "1px solid var(--warning-border)" }
+                            }
                           >
                             {permissionTrusted ? "已授权" : "未授权"}
-                          </div>
-                          <Button variant="secondary" size="sm" onClick={onPermissionGuideClick}>
-                            <Shield className="h-4 w-4" />
+                          </span>
+                          <ChangeButton onClick={() => void onPermissionGuideClick()}>
                             打开系统设置
-                          </Button>
+                          </ChangeButton>
                         </div>
                       }
                     />
                   </SectionCard>
-                </>
+                </div>
               ) : null}
 
-              <Separator />
-
-              <div className="text-xs text-[var(--text-tertiary)]">
-                Esc 关闭，Tab 切换控件。
-              </div>
             </div>
           </ScrollArea>
         </div>

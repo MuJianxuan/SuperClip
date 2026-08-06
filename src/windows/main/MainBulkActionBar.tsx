@@ -31,12 +31,12 @@ export const MainBulkActionBar = memo(function MainBulkActionBar({
     <div
       data-testid="main-bulk-action-bar"
       aria-hidden={!visible}
-      className="relative z-30 shrink-0 border-t px-4 py-2 transition-[transform,opacity] duration-200 ease-out"
+      className="relative z-30 shrink-0 border-t px-4 py-2 transition-[transform,opacity] duration-[180ms] ease-out"
       style={{
         transform: visible ? "translateY(0)" : "translateY(100%)",
         opacity: visible ? 1 : 0,
         pointerEvents: visible ? "auto" : "none",
-        borderColor: "var(--border)",
+        borderColor: "var(--group-line, var(--border))",
         background: "var(--surface-raised)",
       }}
     >
@@ -62,6 +62,7 @@ export const MainBulkActionBar = memo(function MainBulkActionBar({
           <BulkBtn icon={<Copy className="h-3 w-3" />} label="复制" onClick={onBulkCopy} />
           <BulkBtn icon={<Pin className="h-3 w-3" />} label="置顶" onClick={onBulkPin} />
           <BulkBtn icon={<Trash2 className="h-3 w-3" />} label="删除" danger onClick={onBulkDelete} />
+          <CancelBtn onClick={onDeselectAll} />
           <button
             type="button"
             title="取消选择"
@@ -75,6 +76,26 @@ export const MainBulkActionBar = memo(function MainBulkActionBar({
     </div>
   );
 });
+
+function CancelBtn({ onClick }: { onClick: () => void }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="ml-0.5 rounded-lg border px-2.5 py-1 text-[11.5px] transition-all"
+      style={{
+        borderColor: "var(--border)",
+        background: hovered ? "var(--surface)" : "var(--chip-bg, transparent)",
+        color: hovered ? "var(--text-secondary)" : "var(--text-tertiary)",
+      }}
+    >
+      取消
+    </button>
+  );
+}
 
 function BulkBtn({
   icon,
@@ -94,17 +115,17 @@ function BulkBtn({
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition-all"
+      className="flex items-center gap-1.5 rounded-lg border px-3 py-[5px] text-[12px] font-medium transition-all"
       style={{
-        borderColor: danger ? (hovered ? "rgba(239,68,68,0.35)" : "var(--border)") : "var(--border)",
-        background: hovered ? (danger ? "var(--danger-bg)" : "var(--tab-hover-bg)") : "var(--surface-2)",
+        borderColor: danger ? "var(--danger-border)" : "var(--border)",
+        background: hovered ? (danger ? "var(--danger-hover-bg, var(--danger-bg))" : "var(--bulk-btn-hover, var(--tab-hover-bg))") : danger ? "var(--danger-btn-bg, var(--danger-bg))" : "var(--toggle-bg, var(--surface-2))",
         color: hovered
           ? danger
-            ? "var(--danger-text)"
-            : "var(--text-primary)"
+            ? "var(--danger-hover-text, var(--danger-text))"
+            : "var(--row-action-hover-text, var(--text-primary))"
           : danger
             ? "var(--danger-text)"
-            : "var(--text-secondary)",
+            : "var(--bulk-btn-text, var(--text-secondary))",
       }}
     >
       {icon}

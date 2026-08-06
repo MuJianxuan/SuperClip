@@ -18,7 +18,7 @@ const buttonVariants = cva(
           "border-[var(--danger-border)] bg-[var(--danger-bg)] text-[var(--danger-text)] hover:bg-[rgba(239,68,68,0.18)]",
       },
       size: {
-        default: "h-9 px-3.5 py-2",
+        default: "h-9 px-3.5 py-2 text-sm",
         sm: "h-8 px-3 py-1.5 text-xs",
       },
     },

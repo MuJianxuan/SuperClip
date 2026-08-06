@@ -46,11 +46,11 @@ const kindBgClasses: Record<string, string> = {
 function KindIcon({ kind }: { kind: string }) {
   switch (kind) {
     case "image":
-      return <FileImage className="h-3.5 w-3.5" />;
+      return <FileImage className="h-[13px] w-[13px]" />;
     case "html":
-      return <Link className="h-3.5 w-3.5" />;
+      return <Link className="h-[13px] w-[13px]" />;
     default:
-      return <FileText className="h-3.5 w-3.5" />;
+      return <FileText className="h-[13px] w-[13px]" />;
   }
 }
 
@@ -80,24 +80,24 @@ export const PopupHistoryRow = memo(function PopupHistoryRow({
         }
       }}
       onMouseLeave={onMouseLeave}
-      className={`relative mx-1.5 flex w-[calc(100%-12px)] items-center gap-2.5 rounded-[10px] px-2.5 py-[7px] text-left transition-colors ${
+      className={`relative mx-1.5 flex w-[calc(100%-12px)] items-center gap-[9px] rounded-[9px] px-[9px] py-[7px] text-left transition-colors ${
         isSelected ? "bg-[var(--row-selected)]" : "hover:bg-[var(--row-hover)]"
       }`}
     >
       {/* 左侧 3px 类型色条（仅选中态显示） */}
       <span
         aria-hidden
-        className={`absolute left-0 top-1/2 h-[18px] w-[3px] -translate-y-1/2 rounded-full transition-all duration-150 ${
-          isSelected ? `${accentBarClass} opacity-85` : "opacity-0"
+        className={`absolute left-0 top-1/2 w-[3px] -translate-y-1/2 rounded-[2px] transition-all duration-150 ${
+          isSelected ? `${accentBarClass} h-[18px] opacity-85` : "h-0 opacity-0"
         }`}
       />
 
       {/* 类型图标容器（选中时按类型色染色） */}
       <span
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors duration-150 ${
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] transition-colors duration-150 ${
           isSelected
             ? `${accentBgClass} ${accentTextClass}`
-            : "bg-[var(--border)] text-[var(--text-tertiary)]"
+            : "bg-[var(--icon-unselected-bg)] text-[var(--icon-unselected-text)]"
         }`}
       >
         <KindIcon kind={item.kind} />

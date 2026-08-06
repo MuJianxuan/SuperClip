@@ -60,7 +60,7 @@ function renderRichContent(content: string) {
           style={{
             background: "rgba(10, 14, 20, 0.6)",
             border: "1px solid rgba(255,255,255,0.04)",
-            color: "var(--type-text)",
+            color: "color-mix(in srgb, var(--type-text) 75%, transparent)",
             fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
             whiteSpace: "pre",
           }}
@@ -209,7 +209,7 @@ export function PreviewApp() {
         </div>
         <span
           className="text-[10px] tabular-nums"
-          style={{ color: "var(--text-tertiary)" }}
+          style={{ color: "rgba(255, 255, 255, 0.15)" }}
         >
           {item.timeLabel}
         </span>
@@ -224,7 +224,7 @@ export function PreviewApp() {
         }
       >
         {item.kind === "image" ? (
-          <div className="flex h-full min-h-[150px] w-full items-center justify-center">
+          <div className="flex w-full justify-center">
             {imageDataUrl ? (
               <img
                 src={imageDataUrl}
@@ -233,10 +233,11 @@ export function PreviewApp() {
               />
             ) : (
               <div
-                className="relative flex h-full min-h-[150px] w-full items-center justify-center overflow-hidden rounded-[10px] border border-[var(--border)]"
+                className="relative flex h-[190px] w-full items-center justify-center overflow-hidden rounded-[10px]"
                 style={{
                   background:
-                    "linear-gradient(135deg, color-mix(in_srgb, var(--type-image) 8%, transparent), color-mix(in_srgb, var(--type-image) 4%, transparent))",
+                    "linear-gradient(135deg, color-mix(in srgb, var(--type-image) 8%, transparent), color-mix(in srgb, var(--type-image) 2.4%, transparent))",
+                  border: "1px solid rgba(255, 255, 255, 0.04)",
                 }}
               >
                 {/* 径向光斑装饰（G2 占位语言） */}
@@ -252,15 +253,15 @@ export function PreviewApp() {
                 <div className="relative z-10 text-center">
                   <FileImage
                     className="mx-auto mb-2 h-[30px] w-[30px]"
-                    style={{ color: "color-mix(in_srgb, var(--type-image) 60%, transparent)" }}
+                    style={{ color: "rgba(255, 255, 255, 0.15)", opacity: 0.3 }}
                   />
-                  <span className="block text-[12px]" style={{ color: "var(--text-tertiary)" }}>
+                  <span className="block text-[12px]" style={{ color: "rgba(255, 255, 255, 0.18)" }}>
                     {item.meta || "图片"}
                   </span>
                   {item.title ? (
                     <span
                       className="mt-1 block text-[10px]"
-                      style={{ color: "var(--text-tertiary)", opacity: 0.7 }}
+                      style={{ color: "rgba(255, 255, 255, 0.1)" }}
                     >
                       {item.title}
                     </span>
@@ -270,7 +271,7 @@ export function PreviewApp() {
             )}
           </div>
         ) : (
-          <>
+          <div className="max-h-[300px] overflow-auto">
             {item.title ? (
               <h3
                 className="mb-2.5 text-[14px] font-semibold leading-[1.4]"
@@ -280,7 +281,7 @@ export function PreviewApp() {
               </h3>
             ) : null}
             {renderRichContent(previewText)}
-          </>
+          </div>
         )}
       </div>
 
@@ -289,8 +290,8 @@ export function PreviewApp() {
         className="flex items-center gap-1.5 px-3.5 py-2"
         style={{ borderTop: "1px solid rgba(255,255,255,0.03)" }}
       >
-        <Clock size={10} style={{ color: "var(--text-tertiary)", opacity: 0.6 }} />
-        <span className="text-[10px]" style={{ color: "var(--text-tertiary)" }}>
+        <Clock size={10} style={{ color: "rgba(255, 255, 255, 0.12)" }} />
+        <span className="text-[10px]" style={{ color: "rgba(255, 255, 255, 0.18)" }}>
           来自{item.sourceApp ? ` · ${item.sourceApp}` : ""}
         </span>
       </div>

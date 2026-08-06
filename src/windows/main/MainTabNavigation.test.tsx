@@ -12,7 +12,7 @@ describe("MainTabNavigation", () => {
     expect(screen.getByText("文本")).toBeInTheDocument();
     expect(screen.getByText("图片")).toBeInTheDocument();
     expect(screen.getByText("文件")).toBeInTheDocument();
-    expect(screen.getByText("置顶")).toBeInTheDocument();
+    expect(screen.getByText("已置顶")).toBeInTheDocument();
   });
 
   it("renders count badges", () => {
@@ -35,8 +35,8 @@ describe("MainTabNavigation", () => {
   it("uses amber accent for active pinned chip", () => {
     render(<MainTabNavigation activeTab="pinned" counts={counts} onTabChange={() => {}} />);
 
-    const pinnedTab = screen.getByText("置顶");
-    expect(pinnedTab.style.color).toBe("rgb(251, 191, 36)");
+    const pinnedTab = screen.getByText("已置顶");
+    expect(pinnedTab.style.color).toBe("rgba(251, 191, 36, 0.9)");
   });
 
   it("shows pinned star icon", () => {

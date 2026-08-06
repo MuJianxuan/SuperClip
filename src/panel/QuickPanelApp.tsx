@@ -507,6 +507,7 @@ function SegButton({
       <span
         style={{
           fontSize: 11.5,
+          lineHeight: 1,
           fontWeight: isActive ? 600 : 400,
           color: isActive
             ? "rgba(56, 189, 248, 0.9)"

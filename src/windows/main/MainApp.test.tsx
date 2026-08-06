@@ -25,7 +25,7 @@ describe("MainApp", () => {
 
   it("renders top bar with app title", () => {
     render(<MainApp />);
-    expect(screen.getByText("SuperClip")).toBeInTheDocument();
+    expect(screen.getByText("剪贴板")).toBeInTheDocument();
   });
 
   it("renders all filter chip labels", () => {
@@ -34,7 +34,7 @@ describe("MainApp", () => {
     expect(screen.getByText("文本")).toBeInTheDocument();
     expect(screen.getByText("图片")).toBeInTheDocument();
     expect(screen.getByText("文件")).toBeInTheDocument();
-    expect(screen.getAllByText("置顶").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("已置顶").length).toBeGreaterThan(0);
   });
 
   it("switches active chip on click", () => {

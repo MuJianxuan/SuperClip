@@ -13,7 +13,7 @@ describe("MainTopBar", () => {
 
   it("renders app title", () => {
     render(<MainTopBar {...defaultProps} />);
-    expect(screen.getByText("SuperClip")).toBeInTheDocument();
+    expect(screen.getByText("剪贴板")).toBeInTheDocument();
   });
 
   it("renders search input", () => {

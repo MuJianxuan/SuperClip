@@ -10,6 +10,24 @@
       html[data-quick-panel-window] #root {
         background: transparent !important;
       }
+      /* Quick Panel 视觉基准 = 原型 D2：对齐原型的排版基线
+         (Tailwind preflight 的 line-height:1.5 会撑高内联文本) */
+      html[data-quick-panel-window] {
+        line-height: normal;
+        font-family:
+          "Inter",
+          "SF Pro Text",
+          "SF Pro Display",
+          ui-sans-serif,
+          system-ui,
+          sans-serif;
+      }
+      /* 对齐原型 D2 的 UA button 基线: Arial 13.3333px。
+         App.css 的 button{font:inherit} 会继承 16px, 撑高分段按钮 (32 vs 30px)。
+         仅作用于此 232px 面板, 不影响其他表面。 */
+      html[data-quick-panel-window] button {
+        font-size: 13.3333px;
+      }
     </style>
   </head>
 

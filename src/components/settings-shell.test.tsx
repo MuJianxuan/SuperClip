@@ -83,8 +83,9 @@ describe("SettingsShell (F2 分区化)", () => {
     expect(screen.getByText("浅色")).toBeInTheDocument();
     expect(screen.getByText("深色")).toBeInTheDocument();
     expect(screen.getByText("跟随系统")).toBeInTheDocument();
-    // 历史保留上限滑块
-    expect(screen.getByText("历史保留数量")).toBeInTheDocument();
+    // 历史保留上限滑块（F2：渐变轨道 + 蓝色数值）
+    expect(screen.getByText("历史保留上限")).toBeInTheDocument();
+    expect(screen.getByText("1000")).toBeInTheDocument();
     // 粘贴行为
     expect(screen.getByText("直接粘贴优先")).toBeInTheDocument();
     expect(screen.getByText("仅复制优先")).toBeInTheDocument();
@@ -96,8 +97,8 @@ describe("SettingsShell (F2 分区化)", () => {
   it("切到快捷键分区：全局快捷键录入 + 应用内快捷键卡", () => {
     render(<SettingsShell {...makeProps()} />);
     fireEvent.click(screen.getByText("快捷键"));
-    // 全局快捷键
-    expect(screen.getByText("当前全局快捷键")).toBeInTheDocument();
+    // 全局快捷键（唤出 Popup 当前绑定）
+    expect(screen.getByText("唤出 Popup")).toBeInTheDocument();
     expect(screen.getAllByText("Cmd+Shift+V").length).toBeGreaterThanOrEqual(1);
     // 应用内快捷键
     expect(screen.getByText("应用内快捷键")).toBeInTheDocument();
@@ -112,6 +113,8 @@ describe("SettingsShell (F2 分区化)", () => {
     expect(screen.getByText("共 1 条")).toBeInTheDocument();
     expect(screen.getByText("启用中 1 条")).toBeInTheDocument();
     expect(screen.getByText("com.apple.KeychainAccess")).toBeInTheDocument();
+    // F2 右上角「添加规则」主按钮，点击后展开编辑器
+    fireEvent.click(screen.getByText("添加规则"));
     expect(screen.getByText("新增规则")).toBeInTheDocument();
   });
 
@@ -121,15 +124,15 @@ describe("SettingsShell (F2 分区化)", () => {
     // 存储信息卡
     expect(screen.getByText("存储信息")).toBeInTheDocument();
     expect(screen.getByText("~/Library/Application Support/com.superclip/")).toBeInTheDocument();
-    // 诊断
-    expect(screen.getByText("导出诊断")).toBeInTheDocument();
+    // 诊断（F2：导出诊断数据 红底按钮）
+    expect(screen.getByText("导出诊断数据")).toBeInTheDocument();
   });
 
   it("诊断导出按钮触发 onDiagnosticsClick", () => {
     const onDiagnosticsClick = vi.fn();
     render(<SettingsShell {...makeProps({ onDiagnosticsClick })} />);
     fireEvent.click(screen.getByText("高级"));
-    fireEvent.click(screen.getAllByText("导出诊断")[0]);
+    fireEvent.click(screen.getByText("导出诊断数据"));
     expect(onDiagnosticsClick).toHaveBeenCalled();
   });
 
@@ -169,11 +172,18 @@ describe("SettingsShell (F2 分区化)", () => {
     expect(onUpdate).toHaveBeenCalledWith({ launchAtLogin: true });
   });
 
-  it("高级分区的危险按钮为红底样式", () => {
+  it("高级分区的危险按钮为红底样式（#ef4444 系，hover 加深）", () => {
     render(<SettingsShell {...makeProps()} />);
     fireEvent.click(screen.getByText("高级"));
-    const dangerBtn = screen.getAllByText("导出诊断")[0].closest("button");
+    const dangerBtn = screen.getByText("导出诊断数据").closest("button");
     expect(dangerBtn).toBeInTheDocument();
-    expect(dangerBtn).toHaveClass("bg-[var(--danger-bg)]");
+    expect(dangerBtn).toHaveAttribute("data-variant", "danger");
+    // 非 hover 态：红底 0.04 + 红边 0.12
+    expect(dangerBtn!.style.background).toBe("rgba(239, 68, 68, 0.04)");
+    expect(dangerBtn!.style.border).toContain("rgba(239, 68, 68, 0.12)");
+    // hover 加深（React state 驱动）
+    fireEvent.mouseEnter(dangerBtn!);
+    expect(dangerBtn!.style.background).toBe("rgba(239, 68, 68, 0.08)");
+    expect(dangerBtn!.style.border).toContain("rgba(239, 68, 68, 0.3)");
   });
 });

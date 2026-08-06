@@ -291,20 +291,20 @@ export function PopupApp() {
   );
 
   return (
-    <div className={`popup-shell flex h-screen w-screen flex-col overflow-hidden rounded-[12px] border border-[var(--popup-border)] shadow-[var(--popup-shadow)] ${"__TAURI_INTERNALS__" in window ? "bg-transparent" : "bg-[var(--popup-bg)] frost-window"}`}>
+    <div className={`popup-shell flex h-screen w-screen flex-col overflow-hidden rounded-[14px] border border-[var(--popup-border)] shadow-[var(--popup-shadow)] ${"__TAURI_INTERNALS__" in window ? "bg-transparent" : "bg-[var(--popup-bg)] frost-window"}`}>
       {/* 单行紧凑搜索（含窗口拖拽区；输入框与清空按钮自身不可拖拽） */}
-      <div data-tauri-drag-region className="flex h-12 shrink-0 cursor-grab items-center gap-2 px-3 active:cursor-grabbing">
+      <div data-tauri-drag-region className="flex h-12 shrink-0 cursor-grab items-center px-[10px] pb-[2px] active:cursor-grabbing">
         <div
           data-tauri-drag-region
-          className="flex h-8 w-full items-center gap-2 rounded-[10px] border border-[var(--border)] bg-[color-mix(in_srgb,var(--text-primary)_6%,transparent)] px-2.5 transition-colors hover:border-[color-mix(in_srgb,var(--accent)_30%,transparent)] focus-within:border-[var(--selection-accent)]"
+          className="flex h-8 w-full items-center gap-[7px] rounded-[10px] border border-[var(--border)] bg-[var(--search-box-bg)] px-[10px] transition-colors hover:border-[color-mix(in_srgb,var(--accent)_30%,transparent)] focus-within:border-[var(--selection-accent)]"
         >
-          <Search className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
+          <Search className="h-[13px] w-[13px] shrink-0 text-[var(--text-tertiary)]" />
           <input
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.currentTarget.value)}
             placeholder="搜索..."
-            className="w-full bg-transparent text-[13px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
+            className="w-full bg-transparent text-[12.5px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-tertiary)]"
           />
           {query ? (
             <button
@@ -316,7 +316,7 @@ export function PopupApp() {
               <X className="h-2.5 w-2.5" />
             </button>
           ) : null}
-          <span className="shrink-0 rounded-md border border-[var(--border)] bg-[color-mix(in_srgb,var(--text-primary)_5%,transparent)] px-1.5 py-0.5 font-mono text-[9px] font-semibold text-[var(--text-tertiary)]">
+          <span className="shrink-0 rounded-[5px] border border-[var(--badge-border)] bg-[var(--badge-bg)] px-[5px] py-[2px] font-mono text-[9px] font-semibold text-[var(--badge-text)]">
             {formatShortcutGlyph(shortcutBinding)}
           </span>
         </div>
@@ -327,7 +327,7 @@ export function PopupApp() {
         <div
           ref={listRef}
           onScroll={setScroll}
-          className="animate-[rowSlideIn_0.2s_ease-out] flex-1 overflow-y-auto"
+          className="animate-[rowSlideIn_0.2s_ease-out] flex-1 overflow-y-auto pb-1"
           style={{ height: "calc(100vh - 80px)" }}
         >
           {/* 上下 spacer 占位保持滚动条比例 */}
@@ -361,9 +361,9 @@ export function PopupApp() {
       )}
 
       {/* 单行信息底栏（纯信息，无任何按钮） */}
-      <div className="flex h-8 shrink-0 items-center justify-between border-t border-[var(--border)] px-3">
+      <div className="flex h-[35px] shrink-0 items-center justify-between border-t border-[var(--footer-border)] px-3 pb-[2px]">
         <span className="text-[10.5px] text-[var(--text-tertiary)]">共 {items.length} 条</span>
-        <span className="rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-[10px] text-[var(--text-tertiary)]">
+        <span className="rounded-full bg-[var(--footer-chip-bg)] px-2 py-0.5 text-[10px] text-[var(--badge-text)]">
           悬停预览
         </span>
       </div>

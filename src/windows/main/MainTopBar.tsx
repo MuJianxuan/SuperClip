@@ -33,22 +33,21 @@ export const MainTopBar = memo(function MainTopBar({
         >
           <Copy className="h-3 w-3 text-white/85" />
         </div>
-        <span className="text-[13px] font-semibold text-[var(--text-primary)]">SuperClip</span>
+        <span className="text-[13px] font-semibold text-[var(--text-secondary)]">剪贴板</span>
       </div>
 
       {/* dominant search */}
       <label
-        className="flex min-w-0 flex-1 items-center gap-2 rounded-[11px] border bg-[var(--surface)] px-3 py-[7px] transition-[border-color,box-shadow] duration-150"
+        className="flex min-w-0 flex-1 items-center gap-2 rounded-[11px] border bg-[var(--surface)] px-3 py-[7px] shadow-[0_2px_12px_rgba(0,0,0,0.08)] transition-[border-color,box-shadow] duration-150"
         style={{
-          borderColor: searchActive ? "rgba(56,189,248,0.35)" : "var(--border)",
-          boxShadow: searchActive ? "0 2px 12px rgba(56,189,248,0.08)" : undefined,
+          borderColor: searchActive ? "rgba(56,189,248,0.25)" : "var(--search-border, var(--border))",
         }}
         onMouseEnter={() => setSearchHovered(true)}
         onMouseLeave={() => setSearchHovered(false)}
         onFocus={() => setSearchFocused(true)}
         onBlur={() => setSearchFocused(false)}
       >
-        <Search className="h-3.5 w-3.5 shrink-0 text-[var(--text-tertiary)]" />
+        <Search className="h-3.5 w-3.5 shrink-0 text-[var(--search-icon, var(--text-tertiary))]" />
         <input
           value={query}
           onChange={(e) => onQueryChange(e.currentTarget.value)}
@@ -68,12 +67,12 @@ export const MainTopBar = memo(function MainTopBar({
       </label>
 
       {/* view toggle */}
-      <div className="flex shrink-0 items-center gap-0.5 rounded-[9px] border border-[var(--border)] bg-[var(--surface-2)] p-0.5">
+      <div className="flex shrink-0 items-center gap-0.5 rounded-[9px] bg-[var(--toggle-bg,var(--surface-2))] p-0.5">
         <ViewButton active={viewMode === "list"} onClick={() => onViewModeChange("list")} title="列表视图">
-          <List className="h-3.5 w-3.5" />
+          <List className="h-[13px] w-[13px]" />
         </ViewButton>
         <ViewButton active={viewMode === "grid"} onClick={() => onViewModeChange("grid")} title="网格视图">
-          <Grid3X3 className="h-3.5 w-3.5" />
+          <Grid3X3 className="h-[13px] w-[13px]" />
         </ViewButton>
       </div>
 
@@ -84,14 +83,14 @@ export const MainTopBar = memo(function MainTopBar({
         onClick={onSettingsClick}
         onMouseEnter={() => setSettingsHovered(true)}
         onMouseLeave={() => setSettingsHovered(false)}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border transition-all"
+        className="flex h-[29px] w-[29px] shrink-0 items-center justify-center rounded-[9px] border transition-all"
         style={{
           borderColor: settingsHovered ? "rgba(56,189,248,0.3)" : "var(--border)",
-          background: settingsHovered ? "rgba(56,189,248,0.08)" : "var(--surface-2)",
-          color: settingsHovered ? "var(--selection-accent)" : "var(--text-secondary)",
+          background: settingsHovered ? "rgba(56,189,248,0.06)" : "var(--surface-2)",
+          color: settingsHovered ? "rgba(56,189,248,0.6)" : "var(--text-tertiary)",
         }}
       >
-        <Settings2 className="h-3.5 w-3.5" />
+        <Settings2 className="h-[13px] w-[13px]" />
       </button>
     </header>
   );
@@ -116,10 +115,10 @@ function ViewButton({
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className="flex h-7 w-7 items-center justify-center rounded-md transition-colors"
+      className="flex h-[21px] w-[25px] items-center justify-center rounded-[7px] transition-colors"
       style={{
         background: active ? "var(--tab-active-bg)" : "transparent",
-        color: active ? "var(--text-primary)" : hovered ? "var(--text-secondary)" : "var(--text-tertiary)",
+        color: active ? "var(--seg-active-text, var(--text-primary))" : hovered ? "var(--text-secondary)" : "var(--seg-text, var(--text-tertiary))",
       }}
     >
       {children}

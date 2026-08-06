@@ -14,7 +14,7 @@ const tabs: { id: TabId; label: string }[] = [
   { id: "text", label: "文本" },
   { id: "image", label: "图片" },
   { id: "file", label: "文件" },
-  { id: "pinned", label: "置顶" },
+  { id: "pinned", label: "已置顶" },
 ];
 
 /**
@@ -27,50 +27,46 @@ export const MainTabNavigation = memo(function MainTabNavigation({
   onTabChange,
 }: MainTabNavigationProps) {
   return (
-    <nav className="flex items-center gap-1.5 overflow-x-auto px-4 pb-3 pt-1" aria-label="内容过滤">
+    <nav className="flex items-center gap-[5px] overflow-x-auto px-4 pb-3 pt-2.5" aria-label="内容过滤">
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
         const isPinned = tab.id === "pinned";
-        const accent = isPinned ? "#fbbf24" : "var(--selection-accent)";
+        const accent = isPinned ? "rgba(251,191,36,0.9)" : "var(--selection-accent)";
         return (
           <button
             key={tab.id}
             type="button"
             onClick={() => onTabChange(tab.id)}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11.5px] transition-all"
+            className="flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-[5px] text-[11.5px] transition-all"
             style={{
               borderColor: isActive
                 ? isPinned
-                  ? "rgba(251,191,36,0.35)"
-                  : "rgba(56,189,248,0.3)"
+                  ? "rgba(251,191,36,0.25)"
+                  : "rgba(56,189,248,0.22)"
                 : "var(--border)",
               background: isActive
                 ? isPinned
-                  ? "rgba(251,191,36,0.1)"
-                  : "rgba(56,189,248,0.08)"
-                : "var(--surface-2)",
-              color: isActive ? accent : "var(--text-tertiary)",
+                  ? "rgba(251,191,36,0.08)"
+                  : "rgba(56,189,248,0.07)"
+                : "var(--chip-bg, transparent)",
+              color: isActive ? accent : "var(--chip-text, var(--text-tertiary))",
               fontWeight: isActive ? 500 : 400,
             }}
           >
             {isPinned && (
               <Star
                 className="h-2.5 w-2.5"
-                style={{ fill: isActive ? "#fbbf24" : "none", color: isActive ? "#fbbf24" : "var(--text-tertiary)" }}
+                style={{ fill: isActive ? "rgba(251,191,36,0.9)" : "none", color: isActive ? "rgba(251,191,36,0.9)" : "var(--chip-text, var(--text-tertiary))" }}
                 aria-hidden="true"
               />
             )}
             {tab.label}
             <span
-              className="rounded-full px-1.5 tabular-nums"
+              className="rounded-full px-[5px] tabular-nums"
               style={{
                 fontSize: 9.5,
-                background: isActive
-                  ? isPinned
-                    ? "rgba(251,191,36,0.16)"
-                    : "rgba(56,189,248,0.14)"
-                  : "var(--surface)",
-                color: isActive ? (isPinned ? "#fbbf24" : "var(--selection-accent)") : "var(--text-tertiary)",
+                background: isActive ? "var(--chip-badge-active-bg, rgba(255,255,255,0.1))" : "var(--chip-badge-bg, var(--surface-2))",
+                color: isActive ? "var(--chip-badge-active-text, var(--text-secondary))" : "var(--chip-badge-text, var(--text-tertiary))",
               }}
             >
               {counts[tab.id]}

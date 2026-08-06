@@ -40,7 +40,7 @@ describe("PopupApp", () => {
     expect(screen.getByText("悬停预览")).toBeInTheDocument();
     // 底栏（border-t）内无任何按钮
     const footer = Array.from(container.querySelectorAll("div")).find(
-      (el) => el.className.includes("border-t") && el.className.includes("h-8"),
+      (el) => el.className.includes("border-t") && el.className.includes("h-[35px]"),
     );
     expect(footer).toBeTruthy();
     expect(footer?.querySelectorAll("button").length).toBe(0);

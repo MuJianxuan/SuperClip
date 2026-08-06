@@ -65,15 +65,15 @@ export const MainListView = memo(function MainListView({
   }
 
   return (
-    <div data-testid="main-list-view" className="flex-1 overflow-y-auto px-2 pb-2 pt-1">
+    <div data-testid="main-list-view" className="flex-1 overflow-y-auto px-2.5 pb-2">
       {grouped.map(({ group, items: groupItems }) => (
         <section key={group} className="mb-1">
-          <div className="flex items-center gap-2 px-2 pb-1 pt-2.5">
-            <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--text-tertiary)]">
+          <div className="flex items-center gap-2 px-2 pb-1.5 pt-2.5">
+            <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-[var(--group-label,var(--text-tertiary))]">
               {GROUP_LABELS[group]}
             </span>
-            <span className="text-[10px] text-[var(--text-tertiary)]">{groupItems.length}</span>
-            <div className="h-px flex-1 bg-[var(--border)]" />
+            <span className="text-[10px] text-[var(--group-count,var(--text-tertiary))]">{groupItems.length}</span>
+            <div className="h-px flex-1 bg-[var(--group-line,var(--border))]" />
           </div>
           {groupItems.map((item) => (
             <Row
@@ -129,7 +129,7 @@ function Row({
       onMouseLeave={() => setHovered(false)}
       onClick={() => onSelect(item.id)}
       onDoubleClick={() => onAction(item.id)}
-      className="relative flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-2 transition-colors animate-[rowSlideIn_0.2s_ease-out]"
+      className="relative flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-[7px] transition-colors animate-[rowSlideIn_0.2s_ease-out]"
       style={{
         background: selected ? "var(--row-selected)" : hovered ? "var(--row-hover)" : "transparent",
       }}
@@ -153,14 +153,14 @@ function Row({
           e.stopPropagation();
           onToggleSelect(item.id);
         }}
-        className="flex h-4 w-4 shrink-0 items-center justify-center"
+        className="flex h-4 w-[18px] shrink-0 items-center justify-center"
       >
         {checked ? (
-          <CheckSquare className="h-3.5 w-3.5" style={{ color: "var(--selection-accent)" }} />
+          <CheckSquare className="h-[13px] w-[13px]" style={{ color: "rgba(56,189,248,0.7)" }} />
         ) : (
           <Square
-            className="h-3.5 w-3.5"
-            style={{ color: hovered ? "var(--text-secondary)" : "var(--text-tertiary)" }}
+            className="h-[13px] w-[13px]"
+            style={{ color: hovered ? "var(--checkbox-hover, var(--text-secondary))" : "var(--checkbox-idle, var(--text-tertiary))" }}
           />
         )}
       </button>
@@ -169,35 +169,36 @@ function Row({
       <div
         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors"
         style={{
-          background: selected ? `${meta.color}14` : "var(--surface-2)",
-          color: selected ? meta.color : "var(--text-tertiary)",
+          background: selected ? `${meta.color}14` : "var(--icon-box-bg, var(--surface-2))",
+          color: selected ? meta.color : "var(--icon-box-text, var(--text-tertiary))",
         }}
       >
-        <Icon className="h-3.5 w-3.5" />
+        <Icon className="h-3 w-3" />
       </div>
 
       {/* title + preview */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span
-            className={`truncate text-[13px] leading-5 ${selected ? "font-semibold" : "font-medium"} text-[var(--text-primary)]`}
+            className={`truncate text-[13px] font-medium`}
+            style={{ color: selected ? "var(--row-title-selected, var(--text-primary))" : "var(--row-title, var(--text-primary))" }}
           >
             {item.title}
           </span>
           {item.isPinned && (
             <Star
-              className="h-2.5 w-2.5 shrink-0"
-              style={{ fill: "#fbbf24", color: "#fbbf24" }}
+              className="h-[9px] w-[9px] shrink-0"
+              style={{ fill: "rgba(251,191,36,0.8)", color: "rgba(251,191,36,0.8)" }}
               aria-label="已置顶"
             />
           )}
         </div>
-        <span className="block truncate text-[11px] text-[var(--text-tertiary)]">{item.preview}</span>
+        <span className="block truncate text-[11px] text-[var(--row-preview,var(--text-tertiary))]">{item.preview}</span>
       </div>
 
-      {/* hover actions or meta */}
+      {/* hover actions or meta（占位等宽，避免 hover 时行跳动） */}
       {hovered && !selected ? (
-        <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        <div className="flex shrink-0 items-center gap-[2px]" onClick={(e) => e.stopPropagation()}>
           <RowAction title="复制" onClick={() => onCopy(item.id)}>
             <Copy className="h-3 w-3" />
           </RowAction>
@@ -209,9 +210,9 @@ function Row({
           </RowAction>
         </div>
       ) : (
-        <div className="flex shrink-0 items-center gap-2.5">
-          <span className="max-w-[110px] truncate text-[11px] text-[var(--text-tertiary)]">{item.sourceApp}</span>
-          <span className="text-[10.5px] text-[var(--text-tertiary)]">{item.timeLabel}</span>
+        <div className="flex h-[26px] shrink-0 items-center gap-2.5" style={{ minWidth: 86 }}>
+          <span className="truncate text-right text-[11px] text-[var(--row-meta,var(--text-tertiary))]">{item.sourceApp}</span>
+          <span className="shrink-0 text-[10.5px] text-[var(--row-time,var(--text-tertiary))]">{item.timeLabel}</span>
         </div>
       )}
     </div>
@@ -239,14 +240,14 @@ function RowAction({
       onMouseLeave={() => setHovered(false)}
       className="flex h-[26px] w-[26px] items-center justify-center rounded-[7px] transition-colors"
       style={{
-        background: hovered ? (danger ? "var(--danger-bg)" : "var(--tab-hover-bg)") : "var(--surface-2)",
+        background: hovered ? (danger ? "var(--danger-bg)" : "var(--row-action-hover-bg, var(--tab-hover-bg))") : "var(--surface-2)",
         color: hovered
           ? danger
             ? "var(--danger-text)"
-            : "var(--text-primary)"
+            : "var(--row-action-hover-text, var(--text-primary))"
           : danger
-            ? "var(--danger-text)"
-            : "var(--text-tertiary)",
+            ? "var(--danger-idle, var(--danger-text))"
+            : "var(--row-action-text, var(--text-tertiary))",
       }}
     >
       {children}

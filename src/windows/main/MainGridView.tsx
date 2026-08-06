@@ -40,8 +40,8 @@ export const MainGridView = memo(function MainGridView({
   return (
     <div
       data-testid="main-grid-view"
-      className="flex-1 overflow-y-auto px-4 py-5"
-      style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 8, alignContent: "start" }}
+      className="flex-1 overflow-y-auto px-2.5 pb-2"
+      style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 8, alignContent: "start", paddingTop: 6 }}
     >
       {items.map((item) => (
         <GridCard
@@ -91,10 +91,10 @@ function GridCard({
       onMouseLeave={() => setHovered(false)}
       onClick={() => onSelect(item.id)}
       onDoubleClick={() => onAction(item.id)}
-      className="relative flex min-h-[118px] cursor-pointer flex-col overflow-hidden rounded-xl border p-3 transition-all animate-[rowSlideIn_0.2s_ease-out]"
+      className="relative flex min-h-[118px] cursor-pointer flex-col overflow-hidden rounded-xl border p-[11px] transition-all animate-[rowSlideIn_0.2s_ease-out]"
       style={{
-        background: selected ? "var(--row-selected)" : hovered ? "var(--row-hover)" : "var(--grid-card-bg)",
-        borderColor: selected ? "rgba(56,189,248,0.35)" : hovered ? `${meta.color}33` : "var(--border)",
+        background: selected ? "var(--row-selected)" : hovered ? "var(--grid-card-hover, var(--row-hover))" : "var(--grid-card-bg)",
+        borderColor: selected ? "rgba(56,189,248,0.15)" : hovered ? `${meta.color}22` : "var(--border)",
       }}
     >
       {/* top type gradient bar */}
@@ -110,17 +110,17 @@ function GridCard({
       {/* header: icon + pin + checkbox */}
       <div className="mb-2 flex items-start justify-between">
         <div
-          className="flex h-[34px] w-[34px] items-center justify-center rounded-lg transition-colors"
+          className="flex h-[26px] w-[26px] items-center justify-center rounded-lg transition-colors"
           style={{
-            background: selected ? `${meta.color}14` : "var(--surface-2)",
-            color: selected ? meta.color : "var(--text-tertiary)",
+            background: selected ? `${meta.color}14` : "var(--icon-box-bg, var(--surface-2))",
+            color: selected ? meta.color : "var(--icon-box-text, var(--text-tertiary))",
           }}
         >
-          <Icon className="h-5 w-5" />
+          <Icon className="h-3 w-3" />
         </div>
         <div className="flex items-center gap-1.5">
           {item.isPinned && (
-            <Star className="h-2.5 w-2.5" style={{ fill: "#fbbf24", color: "#fbbf24" }} aria-label="已置顶" />
+            <Star className="h-2.5 w-2.5" style={{ fill: "rgba(251,191,36,0.8)", color: "rgba(251,191,36,0.8)" }} aria-label="已置顶" />
           )}
           <button
             type="button"
@@ -132,11 +132,11 @@ function GridCard({
             className="flex items-center justify-center"
           >
             {checked ? (
-              <CheckSquare className="h-3 w-3" style={{ color: "var(--selection-accent)" }} />
+              <CheckSquare className="h-3 w-3" style={{ color: "rgba(56,189,248,0.7)" }} />
             ) : (
               <Square
                 className="h-3 w-3"
-                style={{ color: hovered ? "var(--text-secondary)" : "var(--text-tertiary)" }}
+                style={{ color: hovered ? "var(--checkbox-hover, var(--text-secondary))" : "var(--checkbox-idle, var(--text-tertiary))" }}
               />
             )}
           </button>
@@ -145,13 +145,13 @@ function GridCard({
 
       {/* body */}
       <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-[12px] font-semibold leading-snug text-[var(--text-primary)]">{item.title}</p>
+        <p className="line-clamp-2 text-[12px] font-semibold leading-snug text-[var(--row-title,var(--text-primary))]">{item.title}</p>
         <p className="mt-1 truncate text-[10.5px] text-[var(--text-tertiary)]">{item.preview}</p>
       </div>
 
       {/* footer */}
-      <div className="mt-2 flex items-center justify-between gap-2 border-t pt-1.5 text-[10px] text-[var(--text-tertiary)]" style={{ borderColor: "var(--border)" }}>
-        <span className="truncate">{item.sourceApp}</span>
+      <div className="mt-2 flex items-center justify-between gap-2 border-t pt-1.5 text-[10px] text-[var(--row-time,var(--text-tertiary))]" style={{ borderColor: "var(--group-line, var(--border))" }}>
+        <span className="truncate text-[var(--row-meta,var(--text-tertiary))]">{item.sourceApp}</span>
         <span className="shrink-0">{item.timeLabel}</span>
       </div>
 
