@@ -158,7 +158,11 @@ export function QuickPanelApp() {
     <div
       className="frost-window"
       style={{
-        width: 232,
+        /* 铺满整个窗口（对齐 popup 的 h-screen w-screen 模式）：
+           内容高度与窗口 232x380 一致，任何亚像素差异都由本层覆盖，
+           不露出未填充区域 */
+        width: "100vw",
+        height: "100vh",
         borderRadius: 12,
         background: "rgba(18, 23, 30, 0.82)",
         backdropFilter: "blur(36px) saturate(1.6)",

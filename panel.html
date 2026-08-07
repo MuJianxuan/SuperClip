@@ -10,6 +10,19 @@
       html[data-quick-panel-window] #root {
         background: transparent !important;
       }
+      /* 固定尺寸面板不允许出现滚动条：系统"始终显示滚动条"或外接鼠标时，
+         经典滚动条会以浅色轨道显示为右/底"白边"；尺寸已按内容高度 380 对齐，
+         个别渲染差异只允许吃掉底部 padding，不允许滚动。 */
+      html[data-quick-panel-window],
+      html[data-quick-panel-window] body {
+        overflow: hidden;
+      }
+      /* 面板为纯指针交互（原型无焦点态）：WKWebView 在窗口成为 key 时会把
+         焦点给首个按钮，默认焦点环显示为蓝框，这里统一去掉。 */
+      html[data-quick-panel-window] button:focus,
+      html[data-quick-panel-window] button:focus-visible {
+        outline: none;
+      }
       /* Quick Panel 视觉基准 = 原型 D2：对齐原型的排版基线
          (Tailwind preflight 的 line-height:1.5 会撑高内联文本) */
       html[data-quick-panel-window] {

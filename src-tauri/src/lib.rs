@@ -2882,7 +2882,66 @@ fn toggle_popup_window(app: &tauri::AppHandle) {
     }
 }
 
-fn toggle_quick_panel_window(app: &tauri::AppHandle) {
+/// 快捷面板定位：水平居中于托盘图标，顶部与菜单栏保持小间距。
+/// positioner 的 TrayCenter 在 macOS 上 y=tray_y-window_h<0 时会贴到 y=0，
+/// 面板顶部嵌入菜单栏；这里改为图标底边 + 固定间距（业界惯例 ~5pt），
+/// 并 clamp 在图标所在显示器内（多屏时托盘不一定在主屏）。
+fn position_quick_panel_below_tray(
+    window: &tauri::WebviewWindow,
+    tray_rect: Option<tauri::Rect>,
+) {
+    const PANEL_W: f64 = 232.0;
+    const MENU_BAR_GAP: f64 = 5.0;
+    const SCREEN_MARGIN: f64 = 6.0;
+
+    let Some(rect) = tray_rect else {
+        use tauri_plugin_positioner::WindowExt;
+        let _ = window.move_window(tauri_plugin_positioner::Position::TrayCenter);
+        return;
+    };
+
+    // tray rect 为物理像素（参照 tauri-plugin-positioner 的处理），统一到逻辑坐标
+    let icon_pos = rect.position.to_physical::<f64>(1.0);
+    let icon_size = rect.size.to_physical::<f64>(1.0);
+    let icon_cx = icon_pos.x + icon_size.width / 2.0;
+    let icon_cy = icon_pos.y + icon_size.height / 2.0;
+
+    let monitor = window
+        .available_monitors()
+        .ok()
+        .and_then(|monitors| {
+            monitors.into_iter().find(|m| {
+                let p = m.position();
+                let s = m.size();
+                icon_cx >= p.x as f64
+                    && icon_cx < p.x as f64 + s.width as f64
+                    && icon_cy >= p.y as f64
+                    && icon_cy < p.y as f64 + s.height as f64
+            })
+        })
+        .or_else(|| window.current_monitor().ok().flatten())
+        .or_else(|| window.primary_monitor().ok().flatten());
+
+    let Some(monitor) = monitor else {
+        return;
+    };
+
+    let scale = monitor.scale_factor();
+    let mon_x = monitor.position().x as f64 / scale;
+    let mon_w = monitor.size().width as f64 / scale;
+
+    let icon_x = icon_pos.x / scale;
+    let icon_w = icon_size.width / scale;
+    let icon_bottom = (icon_pos.y + icon_size.height) / scale;
+
+    let x = (icon_x + icon_w / 2.0 - PANEL_W / 2.0)
+        .clamp(mon_x + SCREEN_MARGIN, mon_x + mon_w - PANEL_W - SCREEN_MARGIN);
+    let y = icon_bottom + MENU_BAR_GAP;
+
+    let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+}
+
+fn toggle_quick_panel_window(app: &tauri::AppHandle, tray_rect: Option<tauri::Rect>) {
     let Some(window) = app.get_webview_window("quick_panel") else {
         return;
     };
@@ -2899,8 +2958,7 @@ fn toggle_quick_panel_window(app: &tauri::AppHandle) {
         }
         let _ = window.hide();
     } else {
-        use tauri_plugin_positioner::WindowExt;
-        let _ = window.move_window(tauri_plugin_positioner::Position::TrayCenter);
+        position_quick_panel_below_tray(&window, tray_rect);
 
         #[cfg(target_os = "macos")]
         {
@@ -3079,6 +3137,16 @@ fn create_quick_panel_panel(app: &tauri::AppHandle) -> Result<(), String> {
         })
         .build()
         .map_err(|e| format!("Failed to create quick panel: {e}"))?;
+
+    // 与 popup/preview 一致的系统磨砂材质（NSVisualEffectView Menu）
+    if let Some(window) = app.get_webview_window("quick_panel") {
+        let _ = apply_vibrancy(
+            &window,
+            NSVisualEffectMaterial::Menu,
+            Some(NSVisualEffectState::Active),
+            Some(12.0),
+        );
+    }
 
     Ok(())
 }
@@ -3289,10 +3357,14 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
                                     if let TrayIconEvent::Click {
                                         button: MouseButton::Right,
                                         button_state: MouseButtonState::Up,
+                                        rect,
                                         ..
                                     } = event
                                     {
-                                        toggle_quick_panel_window(tray.app_handle());
+                                        toggle_quick_panel_window(
+                                            tray.app_handle(),
+                                            Some(rect),
+                                        );
                                     }
                                 })
                                 .build(app);
