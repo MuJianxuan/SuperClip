@@ -99,4 +99,38 @@ describe("PopupApp", () => {
     fireEvent.keyDown(window, { key: "ArrowDown" });
     expect(screen.getByPlaceholderText("搜索...")).toBeInTheDocument();
   });
+
+  describe("theme following", () => {
+    beforeEach(() => {
+      delete document.documentElement.dataset.themeMode;
+    });
+
+    it("writes concrete data-theme-mode derived from system appearance (dark)", async () => {
+      // jsdom setup 的 matchMedia 对 prefers-color-scheme: dark 返回 matches=true
+      render(<PopupApp />);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(document.documentElement.dataset.themeMode).toBe("dark");
+    });
+
+    it("derives light data-theme-mode when matchMedia reports light", async () => {
+      const matchMedia = window.matchMedia as unknown as ReturnType<typeof vi.fn>;
+      matchMedia.mockReturnValueOnce({
+        matches: false,
+        media: "(prefers-color-scheme: dark)",
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      });
+      render(<PopupApp />);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(document.documentElement.dataset.themeMode).toBe("light");
+    });
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { PreviewApp } from "./PreviewApp";
 
 const mockEmit = vi.fn((_event: string, _payload?: unknown) => Promise.resolve());
@@ -181,6 +181,38 @@ describe("PreviewApp", () => {
 
     fireEvent.mouseLeave(root);
     expect(mockEmit).toHaveBeenCalledWith("preview:mouse-leave");
+  });
+
+  describe("theme following", () => {
+    beforeEach(() => {
+      delete document.documentElement.dataset.themeMode;
+    });
+
+    it("writes concrete data-theme-mode derived from system appearance (dark)", async () => {
+      // PreviewApp 启用 Tauri 运行时：mock settings_get 返回 themeMode: "system"
+      const { invoke } = await import("@tauri-apps/api/core");
+      (invoke as ReturnType<typeof vi.fn>).mockImplementation(async (cmd: string) => {
+        if (cmd === "settings_get") {
+          return {
+            schemaVersion: 1,
+            exposedKeys: [],
+            reservedKeys: [],
+            defaultAction: "direct_paste",
+            themeMode: "system",
+            historyLimit: 1000,
+            launchAtLogin: false,
+            showOnStartup: false,
+          };
+        }
+        return null;
+      });
+      render(<PreviewApp />);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      // jsdom matchMedia 对 prefers-color-scheme: dark 返回 matches=true
+      expect(document.documentElement.dataset.themeMode).toBe("dark");
+    });
   });
 });
 

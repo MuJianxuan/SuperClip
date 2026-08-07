@@ -140,14 +140,22 @@ export function MainApp() {
     try { localStorage.setItem("superclip:viewMode", viewMode); } catch {}
   }, [viewMode]);
 
-  // Theme sync
+  // Theme sync：system 模式用 matchMedia 显式判断并写入具体 data-theme-mode，
+  // 不依赖 CSS @media (prefers-color-scheme) 的匹配行为（WKWebView 中该媒体查询
+  // 跟随窗口外观，不可靠）；监听系统外观变化实时更新，effect 清理时移除监听。
   useEffect(() => {
     const root = document.documentElement;
     if (settings.themeMode === "system") {
-      delete root.dataset.themeMode;
-    } else {
-      root.dataset.themeMode = settings.themeMode;
+      const media = window.matchMedia("(prefers-color-scheme: dark)");
+      const apply = () => {
+        root.dataset.themeMode = media.matches ? "dark" : "light";
+      };
+      apply();
+      media.addEventListener("change", apply);
+      return () => media.removeEventListener("change", apply);
     }
+    root.dataset.themeMode = settings.themeMode;
+    return undefined;
   }, [settings.themeMode]);
 
   // Tauri events

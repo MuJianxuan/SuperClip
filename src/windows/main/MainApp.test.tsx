@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { MainApp } from "./MainApp";
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -131,5 +131,21 @@ describe("MainApp", () => {
     render(<MainApp />);
     expect(await screen.findByText(/仅复制模式/)).toBeInTheDocument();
     expect(screen.getByText(/仅复制模式/).closest("div")?.parentElement?.className).toContain("mx-4");
+  });
+
+  describe("theme following", () => {
+    beforeEach(() => {
+      delete document.documentElement.dataset.themeMode;
+      delete (window as unknown as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__;
+    });
+
+    it("writes concrete data-theme-mode derived from system appearance (dark)", async () => {
+      // fallback settings 返回 themeMode: "system"; jsdom matchMedia 对 prefers-color-scheme 返回 matches=true
+      render(<MainApp />);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(document.documentElement.dataset.themeMode).toBe("dark");
+    });
   });
 });

@@ -451,6 +451,8 @@ struct AppState {
     tray_icon: Mutex<Option<TrayIcon<tauri::Wry>>>,
     preview_active: Mutex<bool>,
     popup_ready: Mutex<bool>,
+    /// 最近一次检测到的系统有效外观（"dark"/"light"/None），供主题跟随 watcher 差量检测
+    last_system_appearance: Mutex<Option<String>>,
 }
 
 impl AppState {
@@ -555,6 +557,7 @@ impl AppState {
             tray_icon: Mutex::new(None),
             preview_active: Mutex::new(false),
             popup_ready: Mutex::new(false),
+            last_system_appearance: Mutex::new(None),
         }
     }
 }
@@ -2955,12 +2958,73 @@ fn position_popup_centered(window: &tauri::WebviewWindow) {
     }
 }
 
+/// 解析三模式主题 → 具体 NSAppearance 名称（纯逻辑，可单测）。
+/// system 不返回 nil：macOS 上窗口一旦被 `setAppearance:` 显式锁定过，设 nil 后
+/// `prefers-color-scheme` 不会恢复跟随系统（Apple Forums 658818 / Sky.app #60），
+/// 因此 system 必须镜像系统当前有效外观的具体值，由 watcher 持续更新。
+fn resolve_panel_appearance_name(
+    theme_mode: &str,
+    system_is_dark: bool,
+) -> &'static std::ffi::CStr {
+    match theme_mode {
+        "light" => c"NSAppearanceNameAqua",
+        "dark" => c"NSAppearanceNameDarkAqua",
+        _ if system_is_dark => c"NSAppearanceNameDarkAqua",
+        _ => c"NSAppearanceNameAqua",
+    }
+}
+
+/// 读取当前系统有效外观（必须主线程调用）：返回 "dark"/"light"。
+/// 读 NSApp.effectiveAppearance.name——系统外观的实时快照，不受窗口显式外观影响。
+#[cfg(target_os = "macos")]
+fn current_system_appearance_name() -> Option<String> {
+    use tauri_nspanel::objc2::runtime::{AnyClass, AnyObject};
+
+    unsafe {
+        let app_cls = AnyClass::get(c"NSApplication")?;
+        let ns_app: *mut AnyObject = tauri_nspanel::objc2::msg_send![app_cls, sharedApplication];
+        if ns_app.is_null() {
+            return None;
+        }
+        let effective: *mut AnyObject = tauri_nspanel::objc2::msg_send![ns_app, effectiveAppearance];
+        if effective.is_null() {
+            return None;
+        }
+        let name: *mut AnyObject = tauri_nspanel::objc2::msg_send![effective, name];
+        if name.is_null() {
+            return None;
+        }
+        let utf8: *const std::os::raw::c_char = tauri_nspanel::objc2::msg_send![name, UTF8String];
+        if utf8.is_null() {
+            return None;
+        }
+        let name_str = std::ffi::CStr::from_ptr(utf8).to_string_lossy().into_owned();
+        Some(if name_str.contains("Dark") {
+            "dark".to_string()
+        } else {
+            "light".to_string()
+        })
+    }
+}
+
 /// 三模式主题的原生外观同步：显式 light/dark 时把三个磨砂 panel 的 NSAppearance 固定为
 /// Aqua/DarkAqua——NSVisualEffectView 材质只跟随 window appearance，否则 app 主题与系统
-/// 外观不一致时磨砂背景与前端 token 错配；system 置 nil 跟随系统。
+/// 外观不一致时磨砂背景与前端 token 错配；system 镜像 NSApp.effectiveAppearance 的具体值
+/// （不设 nil，见 resolve_panel_appearance_name 的注释）。
 #[cfg(target_os = "macos")]
 fn sync_vibrancy_panels_appearance(app: &tauri::AppHandle, theme_mode: &str) {
     use tauri_nspanel::objc2::runtime::{AnyClass, AnyObject};
+
+    let name = match theme_mode {
+        "light" | "dark" => resolve_panel_appearance_name(theme_mode, false),
+        _ => {
+            let Some(system_appearance) = current_system_appearance_name() else {
+                // 读取失败时保持现状，等 watcher 下一个 tick 重试
+                return;
+            };
+            resolve_panel_appearance_name("system", system_appearance == "dark")
+        }
+    };
 
     for label in ["popup", "preview", "quick_panel"] {
         let Some(window) = app.get_webview_window(label) else {
@@ -2971,31 +3035,56 @@ fn sync_vibrancy_panels_appearance(app: &tauri::AppHandle, theme_mode: &str) {
         };
         let ns_window = ns_window as *mut AnyObject;
         unsafe {
-            let appearance: *mut AnyObject = match theme_mode {
-                "light" | "dark" => {
-                    let (Some(appearance_cls), Some(string_cls)) = (
-                        AnyClass::get(c"NSAppearance"),
-                        AnyClass::get(c"NSString"),
-                    ) else {
-                        continue;
-                    };
-                    let name = if theme_mode == "dark" {
-                        c"NSAppearanceNameDarkAqua"
-                    } else {
-                        c"NSAppearanceNameAqua"
-                    };
-                    // stringWithUTF8String: 返回 autoreleased 对象，无需手动释放
-                    let name_str: *mut AnyObject = tauri_nspanel::objc2::msg_send![
-                        string_cls,
-                        stringWithUTF8String: name.as_ptr()
-                    ];
-                    tauri_nspanel::objc2::msg_send![appearance_cls, appearanceNamed: name_str]
-                }
-                _ => std::ptr::null_mut(),
+            let (Some(appearance_cls), Some(string_cls)) = (
+                AnyClass::get(c"NSAppearance"),
+                AnyClass::get(c"NSString"),
+            ) else {
+                continue;
             };
+            // stringWithUTF8String: 返回 autoreleased 对象，无需手动释放
+            let name_str: *mut AnyObject = tauri_nspanel::objc2::msg_send![
+                string_cls,
+                stringWithUTF8String: name.as_ptr()
+            ];
+            // appearanceNamed: 返回 autoreleased；setAppearance 会 retain
+            let appearance: *mut AnyObject =
+                tauri_nspanel::objc2::msg_send![appearance_cls, appearanceNamed: name_str];
             let () = tauri_nspanel::objc2::msg_send![ns_window, setAppearance: appearance];
         }
     }
+}
+
+/// 系统外观跟随 watcher：周期检测 NSApp.effectiveAppearance 变化，当前主题为 system 时
+/// 把三个磨砂 panel 镜像到系统最新外观（经由主线程执行 AppKit 调用）。
+#[cfg(target_os = "macos")]
+fn start_system_appearance_watcher(app: tauri::AppHandle) {
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_millis(MONITOR_POLL_MS));
+        // AppHandle 是 Send + Clone：run_on_main_thread 借用外层，闭包内用 clone 持有
+        let app_for_closure = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            let Some(current) = current_system_appearance_name() else {
+                return;
+            };
+            let state = app_for_closure.state::<AppState>();
+            let mut last = state
+                .last_system_appearance
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if last.as_deref() == Some(current.as_str()) {
+                return;
+            }
+            *last = Some(current.clone());
+            let theme_mode = state
+                .settings
+                .lock()
+                .map(|settings| settings.theme_mode.clone())
+                .unwrap_or_else(|_| "system".into());
+            if theme_mode == "system" {
+                sync_vibrancy_panels_appearance(&app_for_closure, "system");
+            }
+        });
+    });
 }
 
 /// 快捷面板定位：水平居中于托盘图标，顶部与菜单栏保持小间距。
@@ -3392,6 +3481,9 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
                     .map(|settings| settings.theme_mode.clone())
                     .unwrap_or_else(|_| "system".into());
                 sync_vibrancy_panels_appearance(app, &theme_mode);
+
+                // 系统外观跟随 watcher：system 模式下实时镜像到三个磨砂 panel
+                start_system_appearance_watcher(app.clone());
             }
         }
 
@@ -5258,6 +5350,7 @@ mod tests {
             tray_icon: Mutex::new(None),
             preview_active: Mutex::new(false),
             popup_ready: Mutex::new(false),
+            last_system_appearance: Mutex::new(None),
         }
     }
 
@@ -5544,6 +5637,41 @@ mod tests {
         assert_eq!(result.mode, "copy_only");
         assert!(result.fallback_used);
         assert_eq!(result.error_code.as_deref(), Some("PAYLOAD_UNSUPPORTED"));
+    }
+
+    #[test]
+    fn resolve_panel_appearance_name_maps_theme_modes() {
+        // 显式 light/dark：固定外观，与系统无关
+        assert_eq!(
+            resolve_panel_appearance_name("light", true).to_str().unwrap(),
+            "NSAppearanceNameAqua"
+        );
+        assert_eq!(
+            resolve_panel_appearance_name("dark", false).to_str().unwrap(),
+            "NSAppearanceNameDarkAqua"
+        );
+        // system：镜像系统当前有效外观（不返回 nil，避免锁定后无法恢复跟随系统）
+        assert_eq!(
+            resolve_panel_appearance_name("system", true).to_str().unwrap(),
+            "NSAppearanceNameDarkAqua"
+        );
+        assert_eq!(
+            resolve_panel_appearance_name("system", false).to_str().unwrap(),
+            "NSAppearanceNameAqua"
+        );
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn current_system_appearance_name_reads_effective_appearance() {
+        // 验证 objc 调用链（NSApp.effectiveAppearance.name → UTF8String）可用：
+        // 必须返回 dark/light 之一，不能 panic 或返回 None
+        let name = current_system_appearance_name()
+            .expect("system appearance name must be readable on macOS");
+        assert!(
+            name == "dark" || name == "light",
+            "expected \"dark\"/\"light\", got {name:?}"
+        );
     }
 
     #[test]

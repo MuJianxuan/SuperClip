@@ -24,12 +24,27 @@ const KIND_COLOR: Record<string, string> = {
   file: "var(--type-file)",
 };
 
-/** 三模式主题同步：浅/深/跟随系统 */
+/** 三模式主题同步：浅/深/跟随系统。
+ * system 模式用 matchMedia 显式判断并写入具体 data-theme-mode，不依赖 CSS
+ * @media (prefers-color-scheme) 的匹配行为——WKWebView 中该媒体查询跟随窗口外观，
+ * 当窗口被 Rust 侧 setAppearance 锁定后不可靠；同时监听系统外观变化实时更新。 */
+let systemAppearanceCleanup: (() => void) | null = null;
+
 function applyThemeMode(mode: string) {
   const root = document.documentElement;
   if (mode === "system") {
-    delete root.dataset.themeMode;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    root.dataset.themeMode = media.matches ? "dark" : "light";
+    if (!systemAppearanceCleanup) {
+      const listener = (event: MediaQueryListEvent) => {
+        root.dataset.themeMode = event.matches ? "dark" : "light";
+      };
+      media.addEventListener("change", listener);
+      systemAppearanceCleanup = () => media.removeEventListener("change", listener);
+    }
   } else {
+    systemAppearanceCleanup?.();
+    systemAppearanceCleanup = null;
     root.dataset.themeMode = mode;
   }
 }
@@ -137,7 +152,9 @@ export function PreviewApp() {
 
   // 三模式主题同步：挂载读一次 + 监听 settings-updated
   useEffect(() => {
-    settingsGet().then((s) => applyThemeMode(s.themeMode)).catch(() => {});
+    settingsGet()
+      .then((s) => applyThemeMode(s?.themeMode ?? "system"))
+      .catch(() => {});
 
     if (!("__TAURI_INTERNALS__" in window)) return;
     let unlisten: (() => void) | null = null;
