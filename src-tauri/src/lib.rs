@@ -3071,7 +3071,9 @@ fn create_quick_panel_panel(app: &tauri::AppHandle) -> Result<(), String> {
             builder
                 .decorations(false)
                 .resizable(false)
-                .inner_size(232.0, 332.0)
+                // 高度 380 = 原型 D2 实际渲染高度（header + 4 组内容）；
+                // 旧值 332 小于内容高度，会导致面板滚动/裁剪（底部“退出”不可见）。
+                .inner_size(232.0, 380.0)
                 .visible(false)
                 .skip_taskbar(true)
         })
