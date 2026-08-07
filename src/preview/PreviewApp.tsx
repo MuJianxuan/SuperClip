@@ -58,9 +58,9 @@ function renderRichContent(content: string) {
           key={idx}
           className="my-2 overflow-x-auto rounded-lg px-3 py-2.5 text-[11px] leading-[1.6]"
           style={{
-            background: "rgba(10, 14, 20, 0.6)",
-            border: "1px solid rgba(255,255,255,0.04)",
-            color: "color-mix(in srgb, var(--type-text) 75%, transparent)",
+            background: "var(--preview-code-bg)",
+            border: "1px solid var(--preview-divider)",
+            color: "var(--preview-code-text)",
             fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
             whiteSpace: "pre",
           }}
@@ -187,13 +187,13 @@ export function PreviewApp() {
       key={item.id}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className="flex h-screen w-screen flex-col overflow-hidden rounded-[14px] border border-[var(--popup-border)] bg-[var(--popup-bg)] shadow-[var(--popup-shadow)] frost-window"
+      className="preview-shell flex h-screen w-screen flex-col overflow-hidden rounded-[14px] border border-[var(--popup-border)] bg-[var(--popup-bg)] shadow-[var(--popup-shadow)] frost-window"
       style={{ animation: "previewFadeIn 0.22s ease-out" }}
     >
       {/* Header：类型色点 + 类型标签 + 时间 */}
       <div
         className="flex items-center justify-between px-3.5 py-2.5"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
+        style={{ borderBottom: "1px solid var(--preview-divider)" }}
       >
         <div className="flex items-center gap-[7px]">
           <span
@@ -209,7 +209,7 @@ export function PreviewApp() {
         </div>
         <span
           className="text-[10px] tabular-nums"
-          style={{ color: "rgba(255, 255, 255, 0.15)" }}
+          style={{ color: "var(--preview-header-time)" }}
         >
           {item.timeLabel}
         </span>
@@ -237,7 +237,7 @@ export function PreviewApp() {
                 style={{
                   background:
                     "linear-gradient(135deg, color-mix(in srgb, var(--type-image) 8%, transparent), color-mix(in srgb, var(--type-image) 2.4%, transparent))",
-                  border: "1px solid rgba(255, 255, 255, 0.04)",
+                  border: "1px solid var(--preview-divider)",
                 }}
               >
                 {/* 径向光斑装饰（G2 占位语言） */}
@@ -253,15 +253,15 @@ export function PreviewApp() {
                 <div className="relative z-10 text-center">
                   <FileImage
                     className="mx-auto mb-2 h-[30px] w-[30px]"
-                    style={{ color: "rgba(255, 255, 255, 0.15)", opacity: 0.3 }}
+                    style={{ color: "var(--preview-image-icon)", opacity: 0.3 }}
                   />
-                  <span className="block text-[12px]" style={{ color: "rgba(255, 255, 255, 0.18)" }}>
+                  <span className="block text-[12px]" style={{ color: "var(--preview-faint-text)" }}>
                     {item.meta || "图片"}
                   </span>
                   {item.title ? (
                     <span
                       className="mt-1 block text-[10px]"
-                      style={{ color: "rgba(255, 255, 255, 0.1)" }}
+                      style={{ color: "var(--preview-ghost-text)" }}
                     >
                       {item.title}
                     </span>
@@ -288,10 +288,10 @@ export function PreviewApp() {
       {/* Footer：来自 · App */}
       <div
         className="flex items-center gap-1.5 px-3.5 py-2"
-        style={{ borderTop: "1px solid rgba(255,255,255,0.03)" }}
+        style={{ borderTop: "1px solid var(--preview-divider-faint)" }}
       >
-        <Clock size={10} style={{ color: "rgba(255, 255, 255, 0.12)" }} />
-        <span className="text-[10px]" style={{ color: "rgba(255, 255, 255, 0.18)" }}>
+        <Clock size={10} style={{ color: "var(--preview-faint-icon)" }} />
+        <span className="text-[10px]" style={{ color: "var(--preview-faint-text)" }}>
           来自{item.sourceApp ? ` · ${item.sourceApp}` : ""}
         </span>
       </div>

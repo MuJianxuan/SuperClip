@@ -2842,25 +2842,7 @@ fn toggle_popup_window(app: &tauri::AppHandle) {
         }
         let _ = window.hide();
     } else {
-        if let Some(monitor) = window.current_monitor().ok().flatten().or_else(|| {
-            window.primary_monitor().ok().flatten()
-        }) {
-            let scale = monitor.scale_factor();
-            let monitor_pos = monitor.position();
-            let monitor_size = monitor.size();
-            let window_width = 320.0_f64;
-            let window_height = 480.0_f64;
-            let monitor_logical_w = monitor_size.width as f64 / scale;
-            let monitor_logical_h = monitor_size.height as f64 / scale;
-            let x = monitor_pos.x as f64 / scale + (monitor_logical_w - window_width) / 2.0;
-            let y = monitor_pos.y as f64 / scale + (monitor_logical_h - window_height) / 2.0;
-            let max_y = monitor_pos.y as f64 / scale + monitor_logical_h - window_height;
-            let y = y.min(max_y).max(monitor_pos.y as f64 / scale);
-            let _ = window.set_position(tauri::LogicalPosition::new(x, y));
-        } else {
-            use tauri_plugin_positioner::WindowExt;
-            let _ = window.move_window(tauri_plugin_positioner::Position::Center);
-        }
+        position_popup_window(app, &window);
 
         #[cfg(target_os = "macos")]
         {
@@ -2879,6 +2861,140 @@ fn toggle_popup_window(app: &tauri::AppHandle) {
         }
         let _ = window.show();
         let _ = window.set_focus();
+    }
+}
+
+/// Popup 定位：与快捷面板同一视觉锚点（托盘图标下方的菜单栏位置）。
+/// 快捷键唤起时贴「光标所在屏」：以托盘图标相对其屏幕右缘的距离与菜单栏厚度为基准，
+/// 转置到光标所在显示器的菜单栏下方；托盘左键点击时光标本就在图标处，行为与快捷面板一致。
+/// 无 tray rect 等异常时回退为屏幕居中（原行为）。
+fn position_popup_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
+    const POPUP_W: f64 = 320.0;
+    const POPUP_H: f64 = 480.0;
+    const MENU_BAR_GAP: f64 = 5.0;
+    const SCREEN_MARGIN: f64 = 6.0;
+
+    let tray_rect = app.try_state::<AppState>().and_then(|state| {
+        state
+            .tray_icon
+            .lock()
+            .ok()
+            .and_then(|guard| guard.as_ref().and_then(|tray| tray.rect().ok().flatten()))
+    });
+
+    let Some(tray_rect) = tray_rect else {
+        position_popup_centered(window);
+        return;
+    };
+
+    // tray rect 为物理像素（参照 position_quick_panel_below_tray 的处理），统一到逻辑坐标
+    let icon_pos = tray_rect.position.to_physical::<f64>(1.0);
+    let icon_size = tray_rect.size.to_physical::<f64>(1.0);
+    let icon_cx = icon_pos.x + icon_size.width / 2.0;
+    let icon_cy = icon_pos.y + icon_size.height / 2.0;
+
+    let Some(tray_monitor) = find_monitor_for_physical_point(window, icon_cx, icon_cy) else {
+        position_popup_centered(window);
+        return;
+    };
+
+    // 目标屏 = 光标所在屏；取不到光标位置时退回托盘图标所在屏
+    let target_monitor = window
+        .cursor_position()
+        .ok()
+        .and_then(|pos| find_monitor_for_physical_point(window, pos.x, pos.y))
+        .unwrap_or_else(|| tray_monitor.clone());
+
+    // 图标相对其屏幕右缘的距离、菜单栏厚度（图标底边即菜单栏底边），转置到目标屏；
+    // 单屏时完全等同于快捷面板的图标下定位
+    let tray_scale = tray_monitor.scale_factor();
+    let tray_right =
+        (tray_monitor.position().x as f64 + tray_monitor.size().width as f64) / tray_scale;
+    let tray_top = tray_monitor.position().y as f64 / tray_scale;
+    let right_delta = tray_right - icon_cx / tray_scale;
+    let menu_bar_thickness = (icon_pos.y + icon_size.height) / tray_scale - tray_top;
+
+    let scale = target_monitor.scale_factor();
+    let mon_x = target_monitor.position().x as f64 / scale;
+    let mon_y = target_monitor.position().y as f64 / scale;
+    let mon_w = target_monitor.size().width as f64 / scale;
+    let mon_h = target_monitor.size().height as f64 / scale;
+
+    let anchor_cx = mon_x + mon_w - right_delta;
+    let x = (anchor_cx - POPUP_W / 2.0)
+        .clamp(mon_x + SCREEN_MARGIN, mon_x + mon_w - POPUP_W - SCREEN_MARGIN);
+    let max_y = mon_y + (mon_h - POPUP_H - SCREEN_MARGIN).max(SCREEN_MARGIN);
+    let y = (mon_y + menu_bar_thickness + MENU_BAR_GAP).clamp(mon_y + SCREEN_MARGIN, max_y);
+
+    let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+}
+
+/// 居中 fallback：无 tray rect 等异常时保持原屏幕居中行为。
+fn position_popup_centered(window: &tauri::WebviewWindow) {
+    if let Some(monitor) = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .or_else(|| window.primary_monitor().ok().flatten())
+    {
+        let scale = monitor.scale_factor();
+        let monitor_pos = monitor.position();
+        let monitor_size = monitor.size();
+        let window_width = 320.0_f64;
+        let window_height = 480.0_f64;
+        let monitor_logical_w = monitor_size.width as f64 / scale;
+        let monitor_logical_h = monitor_size.height as f64 / scale;
+        let x = monitor_pos.x as f64 / scale + (monitor_logical_w - window_width) / 2.0;
+        let y = monitor_pos.y as f64 / scale + (monitor_logical_h - window_height) / 2.0;
+        let max_y = monitor_pos.y as f64 / scale + monitor_logical_h - window_height;
+        let y = y.min(max_y).max(monitor_pos.y as f64 / scale);
+        let _ = window.set_position(tauri::LogicalPosition::new(x, y));
+    } else {
+        use tauri_plugin_positioner::WindowExt;
+        let _ = window.move_window(tauri_plugin_positioner::Position::Center);
+    }
+}
+
+/// 三模式主题的原生外观同步：显式 light/dark 时把三个磨砂 panel 的 NSAppearance 固定为
+/// Aqua/DarkAqua——NSVisualEffectView 材质只跟随 window appearance，否则 app 主题与系统
+/// 外观不一致时磨砂背景与前端 token 错配；system 置 nil 跟随系统。
+#[cfg(target_os = "macos")]
+fn sync_vibrancy_panels_appearance(app: &tauri::AppHandle, theme_mode: &str) {
+    use tauri_nspanel::objc2::runtime::{AnyClass, AnyObject};
+
+    for label in ["popup", "preview", "quick_panel"] {
+        let Some(window) = app.get_webview_window(label) else {
+            continue;
+        };
+        let Ok(ns_window) = window.ns_window() else {
+            continue;
+        };
+        let ns_window = ns_window as *mut AnyObject;
+        unsafe {
+            let appearance: *mut AnyObject = match theme_mode {
+                "light" | "dark" => {
+                    let (Some(appearance_cls), Some(string_cls)) = (
+                        AnyClass::get(c"NSAppearance"),
+                        AnyClass::get(c"NSString"),
+                    ) else {
+                        continue;
+                    };
+                    let name = if theme_mode == "dark" {
+                        c"NSAppearanceNameDarkAqua"
+                    } else {
+                        c"NSAppearanceNameAqua"
+                    };
+                    // stringWithUTF8String: 返回 autoreleased 对象，无需手动释放
+                    let name_str: *mut AnyObject = tauri_nspanel::objc2::msg_send![
+                        string_cls,
+                        stringWithUTF8String: name.as_ptr()
+                    ];
+                    tauri_nspanel::objc2::msg_send![appearance_cls, appearanceNamed: name_str]
+                }
+                _ => std::ptr::null_mut(),
+            };
+            let () = tauri_nspanel::objc2::msg_send![ns_window, setAppearance: appearance];
+        }
     }
 }
 
@@ -3268,6 +3384,14 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
                         },
                     );
                 }
+
+                // 启动即按持久化主题同步三个磨砂 panel 的原生外观（后续变更由 settings_update 触发）
+                let theme_mode = state
+                    .settings
+                    .lock()
+                    .map(|settings| settings.theme_mode.clone())
+                    .unwrap_or_else(|_| "system".into());
+                sync_vibrancy_panels_appearance(app, &theme_mode);
             }
         }
 
@@ -3632,6 +3756,9 @@ fn settings_update(
         )?;
         cleanup_history(&db, response.history_limit as usize)?;
     }
+
+    #[cfg(target_os = "macos")]
+    sync_vibrancy_panels_appearance(&app, &response.theme_mode);
 
     emit_superclip_event(
         &app,

@@ -349,7 +349,19 @@ input::placeholder {
 .popup-shell {
   -webkit-app-region: no-drag;
 
-  /* B2 popup-scoped visual tokens (dark defaults; light overrides below) */
+  /* B2 popup-scoped visual tokens (light defaults; dark overrides below,
+     与 :root 变量同一模式：默认浅色 + 属性/媒体查询双 dark 分支) */
+  --search-box-bg: rgba(15, 23, 42, 0.06);
+  --badge-bg: rgba(15, 23, 42, 0.04);
+  --badge-border: rgba(15, 23, 42, 0.06);
+  --badge-text: var(--text-tertiary);
+  --footer-border: var(--border);
+  --icon-unselected-bg: var(--border);
+  --icon-unselected-text: var(--text-tertiary);
+  --footer-chip-bg: rgba(15, 23, 42, 0.02);
+}
+
+:root[data-theme-mode="dark"] .popup-shell {
   --search-box-bg: rgba(255, 255, 255, 0.06);
   --badge-bg: rgba(255, 255, 255, 0.04);
   --badge-border: rgba(255, 255, 255, 0.04);
@@ -360,15 +372,133 @@ input::placeholder {
   --footer-chip-bg: rgba(255, 255, 255, 0.02);
 }
 
-:root[data-theme-mode="light"] .popup-shell {
-  --search-box-bg: rgba(15, 23, 42, 0.06);
-  --badge-bg: rgba(15, 23, 42, 0.04);
-  --badge-border: rgba(15, 23, 42, 0.06);
-  --badge-text: var(--text-tertiary);
-  --footer-border: var(--border);
-  --icon-unselected-bg: var(--border);
-  --icon-unselected-text: var(--text-tertiary);
-  --footer-chip-bg: rgba(15, 23, 42, 0.02);
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme-mode="light"]) .popup-shell {
+    --search-box-bg: rgba(255, 255, 255, 0.06);
+    --badge-bg: rgba(255, 255, 255, 0.04);
+    --badge-border: rgba(255, 255, 255, 0.04);
+    --badge-text: rgba(255, 255, 255, 0.12);
+    --footer-border: rgba(255, 255, 255, 0.03);
+    --icon-unselected-bg: rgba(255, 255, 255, 0.04);
+    --icon-unselected-text: rgba(255, 255, 255, 0.28);
+    --footer-chip-bg: rgba(255, 255, 255, 0.02);
+  }
+}
+
+/* Preview floating window styles（G2 作用域 token，与 .popup-shell 同一三主题模式：
+   默认浅色 + 属性/媒体查询双 dark 分支；dark 值保留原硬编码原型值） */
+.preview-shell {
+  --preview-divider: rgba(15, 23, 42, 0.06);
+  --preview-divider-faint: rgba(15, 23, 42, 0.045);
+  --preview-header-time: rgba(15, 23, 42, 0.4);
+  --preview-faint-icon: rgba(15, 23, 42, 0.32);
+  --preview-faint-text: rgba(15, 23, 42, 0.45);
+  --preview-ghost-text: rgba(15, 23, 42, 0.3);
+  --preview-image-icon: rgba(15, 23, 42, 0.35);
+  --preview-code-bg: rgba(15, 23, 42, 0.055);
+  --preview-code-text: color-mix(in srgb, var(--type-text) 65%, var(--text-primary));
+}
+
+:root[data-theme-mode="dark"] .preview-shell {
+  --preview-divider: rgba(255, 255, 255, 0.04);
+  --preview-divider-faint: rgba(255, 255, 255, 0.03);
+  --preview-header-time: rgba(255, 255, 255, 0.15);
+  --preview-faint-icon: rgba(255, 255, 255, 0.12);
+  --preview-faint-text: rgba(255, 255, 255, 0.18);
+  --preview-ghost-text: rgba(255, 255, 255, 0.1);
+  --preview-image-icon: rgba(255, 255, 255, 0.15);
+  --preview-code-bg: rgba(10, 14, 20, 0.6);
+  --preview-code-text: color-mix(in srgb, var(--type-text) 75%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme-mode="light"]) .preview-shell {
+    --preview-divider: rgba(255, 255, 255, 0.04);
+    --preview-divider-faint: rgba(255, 255, 255, 0.03);
+    --preview-header-time: rgba(255, 255, 255, 0.15);
+    --preview-faint-icon: rgba(255, 255, 255, 0.12);
+    --preview-faint-text: rgba(255, 255, 255, 0.18);
+    --preview-ghost-text: rgba(255, 255, 255, 0.1);
+    --preview-image-icon: rgba(255, 255, 255, 0.15);
+    --preview-code-bg: rgba(10, 14, 20, 0.6);
+    --preview-code-text: color-mix(in srgb, var(--type-text) 75%, transparent);
+  }
+}
+
+/* Quick Control Panel styles（D2 作用域 token，与 .popup-shell 同一三主题模式：
+   默认浅色 + 属性/媒体查询双 dark 分支；dark 值保留原硬编码原型值） */
+.quick-panel-shell {
+  --panel-bg: rgba(255, 255, 255, 0.85);
+  --panel-shadow: 0 20px 60px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(255, 255, 255, 0.5);
+  --panel-icon-faint: rgba(15, 23, 42, 0.35);
+  --panel-group-label: rgba(15, 23, 42, 0.4);
+  --panel-desc: rgba(15, 23, 42, 0.5);
+  --panel-faint-text: rgba(15, 23, 42, 0.45);
+  --panel-divider: rgba(15, 23, 42, 0.05);
+  --panel-row-hover: rgba(15, 23, 42, 0.045);
+  --panel-label: rgba(15, 23, 42, 0.7);
+  --panel-label-hover: rgba(15, 23, 42, 0.88);
+  --panel-icon-bg: rgba(15, 23, 42, 0.05);
+  --panel-icon-text: rgba(15, 23, 42, 0.45);
+  --panel-shortcut-text: rgba(15, 23, 42, 0.4);
+  --panel-shortcut-bg: rgba(15, 23, 42, 0.04);
+  --panel-seg-border: rgba(15, 23, 42, 0.08);
+  --panel-seg-bg: rgba(15, 23, 42, 0.03);
+  --panel-seg-bg-hover: rgba(15, 23, 42, 0.05);
+  --panel-seg-text: rgba(15, 23, 42, 0.5);
+  --panel-seg-text-hover: rgba(15, 23, 42, 0.75);
+  --panel-status-on-text: color-mix(in srgb, #34d399 55%, #0f172a);
+  --panel-status-off-text: color-mix(in srgb, #fb923c 60%, #7c2d12);
+}
+
+:root[data-theme-mode="dark"] .quick-panel-shell {
+  --panel-bg: rgba(18, 23, 30, 0.82);
+  --panel-shadow: 0 20px 60px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+  --panel-icon-faint: rgba(255, 255, 255, 0.25);
+  --panel-group-label: rgba(255, 255, 255, 0.15);
+  --panel-desc: rgba(255, 255, 255, 0.22);
+  --panel-faint-text: rgba(255, 255, 255, 0.18);
+  --panel-divider: rgba(255, 255, 255, 0.035);
+  --panel-row-hover: rgba(255, 255, 255, 0.035);
+  --panel-label: rgba(255, 255, 255, 0.65);
+  --panel-label-hover: rgba(255, 255, 255, 0.85);
+  --panel-icon-bg: rgba(255, 255, 255, 0.04);
+  --panel-icon-text: rgba(255, 255, 255, 0.35);
+  --panel-shortcut-text: rgba(255, 255, 255, 0.2);
+  --panel-shortcut-bg: rgba(255, 255, 255, 0.03);
+  --panel-seg-border: rgba(255, 255, 255, 0.04);
+  --panel-seg-bg: rgba(255, 255, 255, 0.02);
+  --panel-seg-bg-hover: rgba(255, 255, 255, 0.04);
+  --panel-seg-text: rgba(255, 255, 255, 0.35);
+  --panel-seg-text-hover: rgba(255, 255, 255, 0.6);
+  --panel-status-on-text: rgba(52, 211, 153, 0.75);
+  --panel-status-off-text: rgba(251, 146, 60, 0.75);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme-mode="light"]) .quick-panel-shell {
+    --panel-bg: rgba(18, 23, 30, 0.82);
+    --panel-shadow: 0 20px 60px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+    --panel-icon-faint: rgba(255, 255, 255, 0.25);
+    --panel-group-label: rgba(255, 255, 255, 0.15);
+    --panel-desc: rgba(255, 255, 255, 0.22);
+    --panel-faint-text: rgba(255, 255, 255, 0.18);
+    --panel-divider: rgba(255, 255, 255, 0.035);
+    --panel-row-hover: rgba(255, 255, 255, 0.035);
+    --panel-label: rgba(255, 255, 255, 0.65);
+    --panel-label-hover: rgba(255, 255, 255, 0.85);
+    --panel-icon-bg: rgba(255, 255, 255, 0.04);
+    --panel-icon-text: rgba(255, 255, 255, 0.35);
+    --panel-shortcut-text: rgba(255, 255, 255, 0.2);
+    --panel-shortcut-bg: rgba(255, 255, 255, 0.03);
+    --panel-seg-border: rgba(255, 255, 255, 0.04);
+    --panel-seg-bg: rgba(255, 255, 255, 0.02);
+    --panel-seg-bg-hover: rgba(255, 255, 255, 0.04);
+    --panel-seg-text: rgba(255, 255, 255, 0.35);
+    --panel-seg-text-hover: rgba(255, 255, 255, 0.6);
+    --panel-status-on-text: rgba(52, 211, 153, 0.75);
+    --panel-status-off-text: rgba(251, 146, 60, 0.75);
+  }
 }
 
 /* Frosted glass window material（确认设计：blur 36-40px saturate 1.6，由 token 控制） */

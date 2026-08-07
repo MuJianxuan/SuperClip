@@ -327,7 +327,7 @@ export function PopupApp() {
         <div
           ref={listRef}
           onScroll={setScroll}
-          className="animate-[rowSlideIn_0.2s_ease-out] flex-1 overflow-y-auto pb-1"
+          className="flex-1 overflow-y-auto pb-1"
           style={{ height: "calc(100vh - 80px)" }}
         >
           {/* 上下 spacer 占位保持滚动条比例 */}
@@ -337,18 +337,31 @@ export function PopupApp() {
               paddingBottom: (renderedWindow.total - renderedWindow.endIndex) * ROW_HEIGHT_PX,
             }}
           >
-            {renderedWindow.items.map((item) => (
-              <div key={item.id} className="h-[46px]">
-                <PopupHistoryRow
-                  item={item}
-                  isSelected={item.id === selectedId}
-                  onSelect={() => setSelectedId(item.id)}
-                  onClick={() => handleRowClick(item)}
-                  onMouseEnter={(rect) => hoverPreview.handleRowEnter(item, rect)}
-                  onMouseLeave={hoverPreview.handleRowLeave}
-                />
-              </div>
-            ))}
+            {renderedWindow.items.map((item, rowOffset) => {
+              // B2 原型行进入 stagger：仅前 5 行（0.1+idx*0.025s），对齐 VariantB_Card
+              const rowIndex = renderedWindow.startIndex + rowOffset;
+              return (
+                <div
+                  key={item.id}
+                  className="h-[46px]"
+                  style={{
+                    animation:
+                      rowIndex < 5
+                        ? `rowSlideIn ${0.1 + rowIndex * 0.025}s ease-out both`
+                        : undefined,
+                  }}
+                >
+                  <PopupHistoryRow
+                    item={item}
+                    isSelected={item.id === selectedId}
+                    onSelect={() => setSelectedId(item.id)}
+                    onClick={() => handleRowClick(item)}
+                    onMouseEnter={(rect) => hoverPreview.handleRowEnter(item, rect)}
+                    onMouseLeave={hoverPreview.handleRowLeave}
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : (

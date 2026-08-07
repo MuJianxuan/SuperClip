@@ -156,7 +156,7 @@ export function QuickPanelApp() {
 
   return (
     <div
-      className="frost-window"
+      className="quick-panel-shell frost-window"
       style={{
         /* 铺满整个窗口（对齐 popup 的 h-screen w-screen 模式）：
            内容高度与窗口 232x380 一致，任何亚像素差异都由本层覆盖，
@@ -164,12 +164,11 @@ export function QuickPanelApp() {
         width: "100vw",
         height: "100vh",
         borderRadius: 12,
-        background: "rgba(18, 23, 30, 0.82)",
+        background: "var(--panel-bg)",
         backdropFilter: "blur(36px) saturate(1.6)",
         WebkitBackdropFilter: "blur(36px) saturate(1.6)",
-        border: "1px solid rgba(255,255,255,0.06)",
-        boxShadow:
-          "0 20px 60px rgba(0,0,0,0.45), 0 0 0 0.5px rgba(255,255,255,0.04)",
+        border: "1px solid var(--popup-border)",
+        boxShadow: "var(--panel-shadow)",
         overflow: "hidden",
         animation: "panelPopIn 0.16s ease-out",
       }}
@@ -184,12 +183,12 @@ export function QuickPanelApp() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <Monitor size={13} color="rgba(255,255,255,0.25)" />
+          <Monitor size={13} color="var(--panel-icon-faint)" />
           <span
             style={{
               fontSize: 12.5,
               fontWeight: 600,
-              color: "rgba(255,255,255,0.6)",
+              color: "var(--text-secondary)",
               letterSpacing: "-0.01em",
             }}
           >
@@ -241,7 +240,7 @@ export function QuickPanelApp() {
           <p
             style={{
               fontSize: 10,
-              color: "rgba(255,255,255,0.18)",
+              color: "var(--panel-faint-text)",
               margin: "5px 0 0",
               lineHeight: 1.4,
               paddingLeft: 2,
@@ -316,7 +315,7 @@ function StatusChip({ isMonitoring }: { isMonitoring: boolean }) {
         style={{
           fontSize: 10,
           fontWeight: 500,
-          color: isMonitoring ? "rgba(52,211,153,0.75)" : "rgba(251,146,60,0.75)",
+          color: isMonitoring ? "var(--panel-status-on-text)" : "var(--panel-status-off-text)",
         }}
       >
         {isMonitoring ? "监听中" : "已暂停"}
@@ -343,8 +342,8 @@ function IconBox({
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: bg || "rgba(255,255,255,0.04)",
-        color: color || "rgba(255,255,255,0.35)",
+        background: bg || "var(--panel-icon-bg)",
+        color: color || "var(--panel-icon-text)",
         flexShrink: 0,
       }}
     >
@@ -360,7 +359,7 @@ function GroupLabel({ text }: { text: string }) {
         style={{
           fontSize: 9.5,
           fontWeight: 600,
-          color: "rgba(255,255,255,0.15)",
+          color: "var(--panel-group-label)",
           textTransform: "uppercase",
           letterSpacing: "0.08em",
         }}
@@ -376,7 +375,7 @@ function Divider() {
     <div
       style={{
         height: 1,
-        background: "rgba(255,255,255,0.035)",
+        background: "var(--panel-divider)",
         margin: "5px 0",
       }}
     />
@@ -418,7 +417,7 @@ function MenuButton({
             ? "rgba(239, 68, 68, 0.07)"
             : "transparent"
           : hovered
-            ? "rgba(255,255,255,0.035)"
+            ? "var(--panel-row-hover)"
             : "transparent",
         cursor: "pointer",
         textAlign: "left",
@@ -436,8 +435,8 @@ function MenuButton({
                 ? "rgba(239, 68, 68, 0.85)"
                 : "rgba(239, 68, 68, 0.65)"
               : hovered
-                ? "rgba(255,255,255,0.85)"
-                : "rgba(255,255,255,0.65)",
+                ? "var(--panel-label-hover)"
+                : "var(--panel-label)",
             display: "block",
           }}
         >
@@ -447,7 +446,7 @@ function MenuButton({
           <span
             style={{
               fontSize: 10.5,
-              color: "rgba(255,255,255,0.22)",
+              color: "var(--panel-desc)",
               display: "block",
               marginTop: 1,
             }}
@@ -460,10 +459,10 @@ function MenuButton({
         <span
           style={{
             fontSize: 9.5,
-            color: "rgba(255,255,255,0.2)",
+            color: "var(--panel-shortcut-text)",
             padding: "2px 6px",
             borderRadius: 4,
-            background: "rgba(255,255,255,0.03)",
+            background: "var(--panel-shortcut-bg)",
             flexShrink: 0,
             fontVariantNumeric: "tabular-nums",
           }}
@@ -496,13 +495,13 @@ function SegButton({
         padding: "6px 8px",
         borderRadius: 8,
         border: `1px solid ${
-          isActive ? "rgba(56, 189, 248, 0.22)" : "rgba(255,255,255,0.04)"
+          isActive ? "rgba(56, 189, 248, 0.22)" : "var(--panel-seg-border)"
         }`,
         background: isActive
           ? "rgba(56, 189, 248, 0.08)"
           : hovered
-            ? "rgba(255,255,255,0.04)"
-            : "rgba(255,255,255,0.02)",
+            ? "var(--panel-seg-bg-hover)"
+            : "var(--panel-seg-bg)",
         cursor: "pointer",
         textAlign: "center",
         transition: "all 0.12s ease",
@@ -516,8 +515,8 @@ function SegButton({
           color: isActive
             ? "rgba(56, 189, 248, 0.9)"
             : hovered
-              ? "rgba(255,255,255,0.6)"
-              : "rgba(255,255,255,0.35)",
+              ? "var(--panel-seg-text-hover)"
+              : "var(--panel-seg-text)",
         }}
       >
         {children}
