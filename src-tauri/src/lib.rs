@@ -3330,6 +3330,7 @@ fn create_popup_panel(app: &tauri::AppHandle) -> Result<(), String> {
                 .inner_size(320.0, 480.0)
                 .visible(false)
                 .skip_taskbar(true)
+                .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled)
         })
         .build()
         .map_err(|e| format!("Failed to create popup panel: {e}"))?;
@@ -3372,6 +3373,7 @@ fn create_quick_panel_panel(app: &tauri::AppHandle) -> Result<(), String> {
                 .inner_size(232.0, 380.0)
                 .visible(false)
                 .skip_taskbar(true)
+                .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled)
         })
         .build()
         .map_err(|e| format!("Failed to create quick panel: {e}"))?;
@@ -3414,6 +3416,7 @@ fn create_preview_panel(app: &tauri::AppHandle) -> Result<(), String> {
                 .visible(false)
                 .skip_taskbar(true)
                 .focused(false)
+                .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled)
         })
         .build()
         .map_err(|e| format!("Failed to create preview panel: {e}"))?;
