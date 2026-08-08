@@ -107,11 +107,11 @@ describe("MainApp", () => {
     expect(rowEl).not.toBeNull();
   });
 
-  it("wraps window in frosted 18px radius chrome", () => {
+  it("wraps window in frosted square chrome", () => {
     const { container } = render(<MainApp />);
     const main = container.querySelector("main");
     expect(main).not.toBeNull();
-    expect(main!.className).toContain("rounded-[18px]");
+    expect(main!.className).toContain("rounded-none");
     expect(main!.className).toContain("frost-window");
   });
 

@@ -380,7 +380,7 @@ export function MainApp() {
   }
 
   return (
-    <main className="frost-window relative flex h-screen w-screen flex-col overflow-hidden rounded-[18px] border border-[var(--window-inset-border)] bg-[var(--bg)] text-[var(--text-primary)] shadow-[var(--window-drop-shadow)]">
+    <main className="frost-window relative flex h-screen w-screen flex-col overflow-hidden rounded-none border border-[var(--window-inset-border)] bg-[var(--bg)] text-[var(--text-primary)] shadow-[var(--window-drop-shadow)]">
       {/* F2：settings 打开时 MainTopBar 隐藏，由 SettingsShell 的 header 作为唯一工具条（identity + 返回列表） */}
       {!isSettingsOpen && (
         <MainTopBar

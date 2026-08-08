@@ -313,7 +313,7 @@ export function PopupApp() {
   );
 
   return (
-    <div className="popup-shell flex h-screen w-screen flex-col overflow-hidden rounded-[14px] border border-[var(--popup-border)] bg-[var(--popup-bg)] shadow-[var(--popup-shadow)] frost-window">
+    <div className="popup-shell flex h-screen w-screen flex-col overflow-hidden rounded-[12px] border border-[var(--popup-border)] bg-[var(--popup-bg)] shadow-[var(--popup-shadow)] frost-window">
       {/* 单行紧凑搜索（含窗口拖拽区；输入框与清空按钮自身不可拖拽） */}
       <div data-tauri-drag-region className="flex h-12 shrink-0 cursor-grab items-center px-[10px] pb-[2px] active:cursor-grabbing">
         <div

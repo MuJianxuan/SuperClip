@@ -135,7 +135,7 @@ describe("PreviewApp", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
-  it("renders G2 window material: rounded 14px + previewFadeIn entry", async () => {
+  it("renders G2 window material: rounded 12px + previewFadeIn entry", async () => {
     const { container } = render(<PreviewApp />);
     await vi.waitFor(() => expect(listenHandler).not.toBeNull());
     emitShow(makeItem());
@@ -144,7 +144,7 @@ describe("PreviewApp", () => {
       expect(screen.getByText("Preview content here")).toBeInTheDocument(),
     );
     const root = container.firstElementChild as HTMLElement;
-    expect(root.className).toContain("rounded-[14px]");
+    expect(root.className).toContain("rounded-[12px]");
     expect(root.className).toContain("frost-window");
     expect(root.style.animation).toContain("previewFadeIn");
   });

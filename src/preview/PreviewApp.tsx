@@ -209,7 +209,7 @@ export function PreviewApp() {
       key={item.id}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
-      className="preview-shell flex h-screen w-screen flex-col overflow-hidden rounded-[14px] border border-[var(--popup-border)] bg-[var(--popup-bg)] shadow-[var(--popup-shadow)] frost-window"
+      className="preview-shell flex h-screen w-screen flex-col overflow-hidden rounded-[12px] border border-[var(--popup-border)] bg-[var(--popup-bg)] shadow-[var(--popup-shadow)] frost-window"
       style={{ animation: "previewFadeIn 0.22s ease-out" }}
     >
       {/* Header：类型色点 + 类型标签 + 时间 */}
