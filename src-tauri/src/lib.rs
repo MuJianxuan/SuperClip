@@ -3475,6 +3475,9 @@ fn create_popup_panel(app: &tauri::AppHandle) -> Result<(), String> {
                 .inner_size(280.0, 420.0)
                 .visible(false)
                 .skip_taskbar(true)
+                // 透明：让 WKWebView drawsBackground=NO（PanelBuilder::transparent 只作用于
+                // NSPanel 层），否则 WKWebView 白色底层会遮住磨砂并在暗色半透明内容下透出白底
+                .transparent(true)
                 .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled)
         })
         .build()
@@ -3517,6 +3520,8 @@ fn create_quick_panel_panel(app: &tauri::AppHandle) -> Result<(), String> {
                 .inner_size(280.0, 420.0)
                 .visible(false)
                 .skip_taskbar(true)
+                // 透明：同 popup 的磨砂修复，WKWebView 需 drawsBackground=NO 才能透出磨砂
+                .transparent(true)
                 .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled)
         })
         .build()
@@ -3560,6 +3565,9 @@ fn create_preview_panel(app: &tauri::AppHandle) -> Result<(), String> {
                 .visible(false)
                 .skip_taskbar(true)
                 .focused(false)
+                // 透明：让 WKWebView drawsBackground=NO，空状态/淡入动画/半透明背景透出的是
+                // 深色磨砂而非 WKWebView 白色底层（暗色主题白色闪屏根因）
+                .transparent(true)
                 .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled)
         })
         .build()
