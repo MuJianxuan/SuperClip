@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { PopupApp } from "./PopupApp";
+import * as superclip from "../lib/superclip";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -98,6 +99,15 @@ describe("PopupApp", () => {
     // 首帧空态时箭头键不抛错（visible 为空）
     fireEvent.keyDown(window, { key: "ArrowDown" });
     expect(screen.getByPlaceholderText("搜索...")).toBeInTheDocument();
+  });
+
+  it("signals popup readiness after first data paint", async () => {
+    const popupReadySpy = vi.spyOn(superclip, "popupReady").mockResolvedValue();
+    render(<PopupApp />);
+    // 首批 fallback 数据加载完成 → isLoading 置 false → 双 rAF 后触发就绪信号；
+    // waitFor 轮询等待 rAF 触发（act 退出时机不保证 rAF 已执行）
+    await waitFor(() => expect(popupReadySpy).toHaveBeenCalled());
+    popupReadySpy.mockRestore();
   });
 
   describe("theme following", () => {

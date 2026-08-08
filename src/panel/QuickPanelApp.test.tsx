@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { QuickPanelApp } from "./QuickPanelApp";
 
 vi.mock("../lib/superclip", () => ({
@@ -24,6 +24,7 @@ vi.mock("../lib/superclip", () => ({
   showMain: vi.fn(() => Promise.resolve()),
   appQuit: vi.fn(() => Promise.resolve()),
   quickPanelHide: vi.fn(() => Promise.resolve()),
+  quickPanelReady: vi.fn(() => Promise.resolve()),
 }));
 
 import {
@@ -35,6 +36,7 @@ import {
   showMain,
   appQuit,
   quickPanelHide,
+  quickPanelReady,
 } from "../lib/superclip";
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -103,6 +105,13 @@ describe("QuickPanelApp", () => {
     expect(button.style.background).not.toBe(initialBackground);
     fireEvent.mouseLeave(button);
     expect(button.style.background).toBe(initialBackground);
+  });
+
+  it("signals content readiness after data loads and first paint", async () => {
+    render(<QuickPanelApp />);
+    // 数据 Promise 在 microtask 中完成，双 rAF 后触发就绪信号；
+    // waitFor 轮询等待 rAF 触发（避免历史 rAF 残留的假阳性：先清 mock 再等当前调用）
+    await waitFor(() => expect(quickPanelReady).toHaveBeenCalled());
   });
 
   describe("theme following", () => {

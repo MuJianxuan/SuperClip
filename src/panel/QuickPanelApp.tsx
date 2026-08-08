@@ -5,6 +5,7 @@ import {
   monitorStatusGet,
   monitorToggle,
   quickPanelHide,
+  quickPanelReady,
   settingsGet,
   settingsUpdate,
   showMain,
@@ -65,10 +66,28 @@ export function QuickPanelApp() {
         setIsMonitoring(monitor.isMonitoring);
         setPasteMode(settings.defaultAction);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        // 内容就绪信号：数据加载完成（或失败降级）后 + 首帧绘制（双 rAF），
+        // 通知 Rust 侧可安全显示，避免首次打开时「空白→内容突然出现」的闪屏
+        if (disposed) return;
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (!disposed) quickPanelReady().catch(() => {});
+          });
+        });
+      });
     return () => {
       disposed = true;
     };
+  }, []);
+
+  // 兜底：数据加载异常（如恢复模式）时 2.5s 后仍放行（就绪信号是体验优化，不能阻塞面板显示）
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      quickPanelReady().catch(() => {});
+    }, 2500);
+    return () => window.clearTimeout(t);
   }, []);
 
   // 实时监听全局监听状态变化（暂停/恢复来自其他入口时同步）

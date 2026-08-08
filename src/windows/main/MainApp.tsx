@@ -30,6 +30,7 @@ import {
   permissionOpenAccessibility,
   diagnosticsExport,
   runtimeStateGet,
+  mainWindowReady,
   type SettingsResponse,
   type SettingsUpdatePayload,
   type ShortcutStateResponse,
@@ -108,32 +109,55 @@ export function MainApp() {
 
   const pinnedCount = useMemo(() => items.filter((i) => i.isPinned).length, [items]);
 
+  // 内容就绪信号：bootstrap 完成（或失败降级）后 + 首帧绘制（双 rAF）通知 Rust 侧，
+  // 避免从快捷面板/Dock 首次打开主页时「空白→内容突然出现」的闪屏；数据异常时 2.5s 兜底放行
+  const mainReadyRef = useRef(false);
+  const signalMainReady = useCallback(() => {
+    if (mainReadyRef.current) return;
+    mainReadyRef.current = true;
+    mainWindowReady().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const t = window.setTimeout(signalMainReady, 2500);
+    return () => window.clearTimeout(t);
+  }, [signalMainReady]);
+
   // Bootstrap: load settings, rules, shortcut, permission, runtime state
   useEffect(() => {
     let active = true;
     async function bootstrap() {
-      const [s, r, sc, p] = await Promise.all([
-        settingsGet(),
-        rulesList(),
-        shortcutGet(),
-        permissionCheckAccessibility(),
-      ]);
-      if (!active) return;
-      setSettings(s);
-      setRules(r.rules);
-      setShortcut(sc);
-      setPermissionTrusted(p.accessibilityTrusted);
-
       try {
-        const rs = await runtimeStateGet();
+        const [s, r, sc, p] = await Promise.all([
+          settingsGet(),
+          rulesList(),
+          shortcutGet(),
+          permissionCheckAccessibility(),
+        ]);
         if (!active) return;
-        setIsRecoveryMode(rs.isRecoveryMode);
-        setIsMigrationBlocking(rs.migrationPhase === "migration_in_progress");
-      } catch {}
+        setSettings(s);
+        setRules(r.rules);
+        setShortcut(sc);
+        setPermissionTrusted(p.accessibilityTrusted);
+
+        try {
+          const rs = await runtimeStateGet();
+          if (!active) return;
+          setIsRecoveryMode(rs.isRecoveryMode);
+          setIsMigrationBlocking(rs.migrationPhase === "migration_in_progress");
+        } catch {}
+      } finally {
+        // 内容就绪信号：bootstrap 完成（或异常降级）后 + 首帧绘制（双 rAF）
+        if (active) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => signalMainReady());
+          });
+        }
+      }
     }
     bootstrap();
     return () => { active = false; };
-  }, []);
+  }, [signalMainReady]);
 
   // Persist view mode
   useEffect(() => {

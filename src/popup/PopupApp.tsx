@@ -78,7 +78,7 @@ function formatShortcutGlyph(binding: string): string {
 }
 
 export function PopupApp() {
-  const { query, setQuery, items, selectedId, setSelectedId, selectedItem } =
+  const { query, setQuery, items, selectedId, setSelectedId, selectedItem, isLoading } =
     useClipboardData();
   const [settings, setSettings] = useState<SettingsResponse | null>(null);
   const [shortcutBinding, setShortcutBinding] = useState("Cmd+Shift+V");
@@ -179,7 +179,38 @@ export function PopupApp() {
       applyThemeMode(s?.themeMode ?? "system");
     }).catch(() => applyThemeMode("system"));
     shortcutGet().then((sc) => setShortcutBinding(sc.binding)).catch(() => {});
-    popupReady().catch(() => {});
+  }, []);
+
+  // 内容就绪信号：首批数据加载完成 + 首帧绘制（双 rAF）后通知 Rust 侧，
+  // 避免首次打开时「空白→内容突然出现」的闪屏；数据异常时 2.5s 兜底放行
+  const popupReadyRef = useRef(false);
+  useEffect(() => {
+    if (popupReadyRef.current || isLoading) return;
+    let disposed = false;
+    let rafId = 0;
+    const fire = () => {
+      if (!disposed && !popupReadyRef.current) {
+        popupReadyRef.current = true;
+        popupReady().catch(() => {});
+      }
+    };
+    rafId = requestAnimationFrame(() => {
+      rafId = requestAnimationFrame(fire);
+    });
+    return () => {
+      disposed = true;
+      cancelAnimationFrame(rafId);
+    };
+  }, [isLoading]);
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      if (!popupReadyRef.current) {
+        popupReadyRef.current = true;
+        popupReady().catch(() => {});
+      }
+    }, 2500);
+    return () => window.clearTimeout(t);
   }, []);
 
   // 三模式主题同步：监听 settings-updated（Main/Settings 里改动时联动）+

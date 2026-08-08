@@ -35,6 +35,8 @@ interface CommandMap {
   previewShow: "preview_show";
   previewHide: "preview_hide";
   popupReady: "popup_ready";
+  quickPanelReady: "quick_panel_ready";
+  mainWindowReady: "main_window_ready";
   systemAppearanceGet: "system_appearance_get";
   monitorToggle: "monitor_toggle";
   monitorStatusGet: "monitor_status_get";
@@ -76,6 +78,8 @@ const COMMANDS: CommandMap = {
   previewShow: "preview_show",
   previewHide: "preview_hide",
   popupReady: "popup_ready",
+  quickPanelReady: "quick_panel_ready",
+  mainWindowReady: "main_window_ready",
   systemAppearanceGet: "system_appearance_get",
   monitorToggle: "monitor_toggle",
   monitorStatusGet: "monitor_status_get",
@@ -1290,6 +1294,14 @@ export async function previewHide() {
 
 export async function popupReady() {
   return invokeOrFallback<void>("popupReady", {}, () => {});
+}
+
+export async function quickPanelReady() {
+  return invokeOrFallback<void>("quickPanelReady", {}, () => {});
+}
+
+export async function mainWindowReady() {
+  return invokeOrFallback<void>("mainWindowReady", {}, () => {});
 }
 
 export async function monitorToggle(nextState?: boolean) {

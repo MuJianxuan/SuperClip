@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { MainApp } from "./MainApp";
+import * as superclip from "../../lib/superclip";
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
@@ -131,6 +132,15 @@ describe("MainApp", () => {
     render(<MainApp />);
     expect(await screen.findByText(/仅复制模式/)).toBeInTheDocument();
     expect(screen.getByText(/仅复制模式/).closest("div")?.parentElement?.className).toContain("mx-4");
+  });
+
+  it("signals main window readiness after bootstrap completes", async () => {
+    const mainWindowReadySpy = vi.spyOn(superclip, "mainWindowReady").mockResolvedValue();
+    render(<MainApp />);
+    // bootstrap 在 microtask 中完成（fallback 数据），双 rAF 后触发就绪信号；
+    // waitFor 轮询等待 rAF 触发（act 退出时机不保证 rAF 已执行）
+    await waitFor(() => expect(mainWindowReadySpy).toHaveBeenCalled());
+    mainWindowReadySpy.mockRestore();
   });
 
   describe("theme following", () => {

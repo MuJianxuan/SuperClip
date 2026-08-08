@@ -451,6 +451,12 @@ struct AppState {
     tray_icon: Mutex<Option<TrayIcon<tauri::Wry>>>,
     preview_active: Mutex<bool>,
     popup_ready: Mutex<bool>,
+    quick_panel_ready: Mutex<bool>,
+    main_window_ready: Mutex<bool>,
+    /// 内容未就绪时收到的显示请求（前端就绪后自动补显，避免丢弃用户点击）
+    pending_show_popup: Mutex<bool>,
+    pending_show_quick_panel: Mutex<bool>,
+    pending_show_main: Mutex<bool>,
     /// 最近一次检测到的系统有效外观（"dark"/"light"/None），供主题跟随 watcher 差量检测
     last_system_appearance: Mutex<Option<String>>,
 }
@@ -557,6 +563,11 @@ impl AppState {
             tray_icon: Mutex::new(None),
             preview_active: Mutex::new(false),
             popup_ready: Mutex::new(false),
+            quick_panel_ready: Mutex::new(false),
+            main_window_ready: Mutex::new(false),
+            pending_show_popup: Mutex::new(false),
+            pending_show_quick_panel: Mutex::new(false),
+            pending_show_main: Mutex::new(false),
             last_system_appearance: Mutex::new(None),
         }
     }
@@ -2829,7 +2840,14 @@ fn toggle_popup_window(app: &tauri::AppHandle) {
     if let Some(state) = app.try_state::<AppState>() {
         let ready = state.popup_ready.lock().map(|f| *f).unwrap_or(false);
         if !ready {
+            // 内容未就绪：记录待显示，前端就绪后自动补显（避免丢弃用户点击）
+            if let Ok(mut pending) = state.pending_show_popup.lock() {
+                *pending = true;
+            }
             return;
+        }
+        if let Ok(mut pending) = state.pending_show_popup.lock() {
+            *pending = false;
         }
     }
 
@@ -2845,6 +2863,9 @@ fn toggle_popup_window(app: &tauri::AppHandle) {
         }
         let _ = window.hide();
     } else {
+        // 切换互斥：popup 与 quick_panel 共用托盘下方锚点，显示 popup 时先隐藏 quick_panel，
+        // 避免两面板叠加时快速覆盖造成的闪屏
+        hide_quick_panel_window(app);
         position_popup_window(app, &window);
 
         #[cfg(target_os = "macos")]
@@ -2865,6 +2886,42 @@ fn toggle_popup_window(app: &tauri::AppHandle) {
         let _ = window.show();
         let _ = window.set_focus();
     }
+}
+
+// 与 tao set_outer_position 相同的坐标基准：Tauri 逻辑 y（主屏顶向下）经主屏物理高度
+// 翻转后作为窗口左上角的屏幕坐标；setFrame 的 frame.origin 是窗口左下角，故再减去窗口高。
+#[cfg(target_os = "macos")]
+extern "C" {
+    fn CGMainDisplayID() -> u32;
+    fn CGDisplayPixelsHigh(display: u32) -> usize;
+}
+
+/// macOS：同步设置 panel frame（setFrame:display: 为同步 API，立即生效）。
+/// 异步 window.set_position 经 dispatch_async 延迟到下一 runloop 才移动窗口，而
+/// show_and_make_key 同步显示时窗口仍在旧位置（初始默认=屏幕中央），造成「先闪旧位置→
+/// 再跳变到目标位置」的闪屏；隐藏状态下同步 setFrame 可避免。
+#[cfg(target_os = "macos")]
+fn set_panel_frame_sync(
+    app: &tauri::AppHandle,
+    label: &str,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+) -> bool {
+    let Ok(panel) = app.get_webview_panel(label) else {
+        return false;
+    };
+    unsafe {
+        let main_pixels_high = CGDisplayPixelsHigh(CGMainDisplayID()) as f64;
+        let rect = tauri_nspanel::NSRect::new(
+            tauri_nspanel::NSPoint::new(x, main_pixels_high - y - h),
+            tauri_nspanel::NSSize::new(w, h),
+        );
+        let _: () =
+            tauri_nspanel::objc2::msg_send![panel.as_panel(), setFrame: rect, display: false];
+    }
+    true
 }
 
 /// Popup 定位：与快捷面板同一视觉锚点（托盘图标下方的菜单栏位置）。
@@ -2929,6 +2986,13 @@ fn position_popup_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) 
     let max_y = mon_y + (mon_h - POPUP_H - SCREEN_MARGIN).max(SCREEN_MARGIN);
     let y = (mon_y + menu_bar_thickness + MENU_BAR_GAP).clamp(mon_y + SCREEN_MARGIN, max_y);
 
+    #[cfg(target_os = "macos")]
+    {
+        // 同步 setFrame，避免异步 set_position 在 show 前未生效导致先以默认位置闪现
+        if set_panel_frame_sync(app, "popup", x, y, POPUP_W, POPUP_H) {
+            return;
+        }
+    }
     let _ = window.set_position(tauri::LogicalPosition::new(x, y));
 }
 
@@ -2951,6 +3015,20 @@ fn position_popup_centered(window: &tauri::WebviewWindow) {
         let y = monitor_pos.y as f64 / scale + (monitor_logical_h - window_height) / 2.0;
         let max_y = monitor_pos.y as f64 / scale + monitor_logical_h - window_height;
         let y = y.min(max_y).max(monitor_pos.y as f64 / scale);
+        #[cfg(target_os = "macos")]
+        {
+            // 同步 setFrame，避免异步 set_position 在 show 前未生效导致先以默认位置闪现
+            if set_panel_frame_sync(
+                window.app_handle(),
+                "popup",
+                x,
+                y,
+                window_width,
+                window_height,
+            ) {
+                return;
+            }
+        }
         let _ = window.set_position(tauri::LogicalPosition::new(x, y));
     } else {
         use tauri_plugin_positioner::WindowExt;
@@ -3176,6 +3254,14 @@ fn position_quick_panel_below_tray(
         .clamp(mon_x + SCREEN_MARGIN, mon_x + mon_w - PANEL_W - SCREEN_MARGIN);
     let y = icon_bottom + MENU_BAR_GAP;
 
+    let panel_h = window.outer_size().ok().map(|s| s.height as f64 / scale).unwrap_or(460.0);
+    #[cfg(target_os = "macos")]
+    {
+        // 同步 setFrame，避免异步 set_position 在 show 前未生效导致先以默认位置闪现
+        if set_panel_frame_sync(window.app_handle(), "quick_panel", x, y, PANEL_W, panel_h) {
+            return;
+        }
+    }
     let _ = window.set_position(tauri::LogicalPosition::new(x, y));
 }
 
@@ -3183,6 +3269,21 @@ fn toggle_quick_panel_window(app: &tauri::AppHandle, tray_rect: Option<tauri::Re
     let Some(window) = app.get_webview_window("quick_panel") else {
         return;
     };
+
+    // 内容就绪门控（与 popup 一致）：首次打开时 webview 可能尚未完成渲染，
+    // 未就绪则记录待显示，前端就绪后自动补显，避免空白→内容突然出现的闪屏
+    if let Some(state) = app.try_state::<AppState>() {
+        let ready = state.quick_panel_ready.lock().map(|f| *f).unwrap_or(false);
+        if !ready {
+            if let Ok(mut pending) = state.pending_show_quick_panel.lock() {
+                *pending = true;
+            }
+            return;
+        }
+        if let Ok(mut pending) = state.pending_show_quick_panel.lock() {
+            *pending = false;
+        }
+    }
 
     let is_visible = window.is_visible().unwrap_or(false);
 
@@ -3196,6 +3297,9 @@ fn toggle_quick_panel_window(app: &tauri::AppHandle, tray_rect: Option<tauri::Re
         }
         let _ = window.hide();
     } else {
+        // 切换互斥：popup 与 quick_panel 共用托盘下方锚点，显示 quick_panel 时先隐藏 popup
+        //（含 hover preview），避免两面板叠加时快速覆盖造成的闪屏
+        hide_popup_window(app);
         position_quick_panel_below_tray(&window, tray_rect);
 
         #[cfg(target_os = "macos")]
@@ -3246,6 +3350,20 @@ fn hide_popup_window(app: &tauri::AppHandle) {
     }
 }
 
+fn hide_quick_panel_window(app: &tauri::AppHandle) {
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(panel) = app.get_webview_panel("quick_panel") {
+            panel.hide();
+            return;
+        }
+    }
+
+    if let Some(window) = app.get_webview_window("quick_panel") {
+        let _ = window.hide();
+    }
+}
+
 fn show_main_window(
     app: &tauri::AppHandle,
     presentation_reason: &str,
@@ -3261,10 +3379,27 @@ fn show_main_window(
         return Err("WINDOW_HANDLE_UNAVAILABLE".into());
     };
 
+    // 内容就绪门控：首次打开（如从快捷面板进入）时 webview 可能尚未完成渲染，
+    // 未就绪则记录待显示，前端就绪后自动补显，避免空白→内容突然出现的闪屏
+    let state: State<'_, AppState> = app.state();
+    let main_ready = state
+        .main_window_ready
+        .lock()
+        .map(|f| *f)
+        .unwrap_or(false);
+    if !main_ready {
+        if let Ok(mut pending) = state.pending_show_main.lock() {
+            *pending = true;
+        }
+        return Ok(());
+    }
+    if let Ok(mut pending) = state.pending_show_main.lock() {
+        *pending = false;
+    }
+
     let _ = window.show();
     let _ = window.unminimize();
 
-    let state: State<'_, AppState> = app.state();
     let target_monitor =
         target_point.and_then(|point| find_monitor_for_physical_point(&window, point.x, point.y));
 
@@ -4697,10 +4832,54 @@ fn preview_hide(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(),
 }
 
 #[tauri::command]
-fn popup_ready(state: State<'_, AppState>) {
+fn popup_ready(app: tauri::AppHandle, state: State<'_, AppState>) {
     if let Ok(mut flag) = state.popup_ready.lock() {
         *flag = true;
     }
+    // 若就绪前已有显示请求（未被丢弃，而是挂起），就绪后自动补显
+    if take_pending_show(&state.pending_show_popup) {
+        toggle_popup_window(&app);
+    }
+}
+
+#[tauri::command]
+fn quick_panel_ready(app: tauri::AppHandle, state: State<'_, AppState>) {
+    if let Ok(mut flag) = state.quick_panel_ready.lock() {
+        *flag = true;
+    }
+    if take_pending_show(&state.pending_show_quick_panel) {
+        // 补显时从托盘重新取 rect（点击发生在就绪前，托盘位置未变）
+        let tray_rect = app.try_state::<AppState>().and_then(|state| {
+            state
+                .tray_icon
+                .lock()
+                .ok()
+                .and_then(|guard| guard.as_ref().and_then(|tray| tray.rect().ok().flatten()))
+        });
+        toggle_quick_panel_window(&app, tray_rect);
+    }
+}
+
+#[tauri::command]
+fn main_window_ready(app: tauri::AppHandle, state: State<'_, AppState>) {
+    if let Ok(mut flag) = state.main_window_ready.lock() {
+        *flag = true;
+    }
+    if take_pending_show(&state.pending_show_main) {
+        let _ = show_main_window(&app, "main_window_ready", Some("main_window_ready"), None);
+    }
+}
+
+/// 读取并清除「未就绪时挂起的显示请求」标志，返回是否有待补显的窗口。
+fn take_pending_show(pending: &Mutex<bool>) -> bool {
+    pending
+        .lock()
+        .map(|mut flag| {
+            let should_show = *flag;
+            *flag = false;
+            should_show
+        })
+        .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -5385,6 +5564,11 @@ mod tests {
             tray_icon: Mutex::new(None),
             preview_active: Mutex::new(false),
             popup_ready: Mutex::new(false),
+            quick_panel_ready: Mutex::new(false),
+            main_window_ready: Mutex::new(false),
+            pending_show_popup: Mutex::new(false),
+            pending_show_quick_panel: Mutex::new(false),
+            pending_show_main: Mutex::new(false),
             last_system_appearance: Mutex::new(None),
         }
     }
@@ -5819,6 +6003,8 @@ pub fn run() {
             preview_show,
             preview_hide,
             popup_ready,
+            quick_panel_ready,
+            main_window_ready,
             monitor_toggle,
             monitor_status_get,
             system_appearance_get,
