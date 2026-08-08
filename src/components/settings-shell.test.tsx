@@ -15,6 +15,7 @@ const settings: SettingsResponse = {
   defaultAction: "direct_paste",
   themeMode: "system",
   historyLimit: 1000,
+  listFontSize: 13,
   launchAtLogin: false,
   showOnStartup: false,
 };
@@ -86,6 +87,9 @@ describe("SettingsShell (F2 分区化)", () => {
     // 历史保留上限滑块（F2：渐变轨道 + 蓝色数值）
     expect(screen.getByText("历史保留上限")).toBeInTheDocument();
     expect(screen.getByText("1000")).toBeInTheDocument();
+    // 列表字体大小滑块（默认 13px）
+    expect(screen.getByText("列表字体大小")).toBeInTheDocument();
+    expect(screen.getByText("13")).toBeInTheDocument();
     // 粘贴行为
     expect(screen.getByText("直接粘贴优先")).toBeInTheDocument();
     expect(screen.getByText("仅复制优先")).toBeInTheDocument();
@@ -143,6 +147,22 @@ describe("SettingsShell (F2 分区化)", () => {
     render(<SettingsShell {...makeProps({ onUpdate })} />);
     fireEvent.click(screen.getByText("深色"));
     expect(onUpdate).toHaveBeenCalledWith({ themeMode: "dark" });
+  });
+
+  it("列表字体大小滑块 change 调用 onUpdate(listFontSize) 并 clamp 到 11..16", () => {
+    const onUpdate = vi.fn(async () => {
+      /* no-op */
+    });
+    render(<SettingsShell {...makeProps({ onUpdate })} />);
+    // 历史上限滑块 min=100，字体滑块 min=11，用 min 区分
+    const slider = document.querySelector('input[type="range"][min="11"]');
+    expect(slider).toBeTruthy();
+
+    fireEvent.change(slider as HTMLInputElement, { target: { value: "15" } });
+    expect(onUpdate).toHaveBeenCalledWith({ listFontSize: 15 });
+
+    fireEvent.change(slider as HTMLInputElement, { target: { value: "99" } });
+    expect(onUpdate).toHaveBeenCalledWith({ listFontSize: 16 });
   });
 
   it("返回列表按钮触发 onClose", () => {

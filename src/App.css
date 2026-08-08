@@ -327,6 +327,11 @@ input::placeholder {
   --breakpoint-lg: 1200px;
 }
 
+/* 列表字体大小（popup/main 历史列表共用；运行时由 settings.listFontSize 覆盖） */
+:root {
+  --list-font-size: 13px;
+}
+
 @media (max-width: 839px) {
   :root {
     --layout-mode: compact;

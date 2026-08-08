@@ -16,10 +16,10 @@ import {
 } from "../lib/superclip";
 import type { ClipboardItem } from "../components/history-row";
 
-/** Popup 面板宽度（与 Rust 侧 popup panel 的 inner_size 300 保持一致） */
-const POPUP_WIDTH = 300;
-/** 固定行高（Popup 列表虚拟滚动用；行外层以 h-[46px] 固定对齐，见下） */
-const ROW_HEIGHT_PX = 46;
+/** Popup 面板宽度（与 Rust 侧 popup panel 的 inner_size 280 保持一致） */
+const POPUP_WIDTH = 280;
+/** 基础行高（13px 字体时）；行高随列表字体大小联动：每 ±1px 字体 → ±2px 行高 */
+const ROW_HEIGHT_BASE_PX = 46;
 /** 可视区上下额外渲染行数 */
 const OVERSCAN_ROWS = 6;
 
@@ -27,6 +27,16 @@ const OVERSCAN_ROWS = 6;
  * WKWebView 的 prefers-color-scheme 在窗口被 Rust 侧 setAppearance 锁定后停止跟随
  * 系统外观（Sky.app #37/#60），会造成前端主题与磨砂背景错配。改由 Rust 提供有效外观：
  * 挂载/变更时经 systemAppearanceGet 取解析值，运行中订阅 panel-appearance-changed。 */
+/** 列表字体大小 → 行高联动（与 ROW_HEIGHT_BASE_PX 注释一致），供虚拟滚动精确计算 */
+function rowHeightForFontSize(fontSize: number): number {
+  return ROW_HEIGHT_BASE_PX + (fontSize - 13) * 2;
+}
+
+/** 把列表字体大小同步为全局 CSS 变量（popup/main 列表共用同一变量渲染） */
+function applyListFontSize(size: number) {
+  document.documentElement.style.setProperty("--list-font-size", `${size}px`);
+}
+
 function applyThemeMode(mode: string) {
   const root = document.documentElement;
   if (mode !== "system") {
@@ -82,6 +92,10 @@ export function PopupApp() {
     useClipboardData();
   const [settings, setSettings] = useState<SettingsResponse | null>(null);
   const [shortcutBinding, setShortcutBinding] = useState("Cmd+Shift+V");
+
+  // 列表字体大小（默认 13）；行高随其联动，虚拟滚动与渲染共用同一派生值
+  const listFontSize = settings?.listFontSize ?? 13;
+  const rowHeightPx = rowHeightForFontSize(listFontSize);
 
   // B2：悬停 200ms 显示预览，移入浮窗 150ms 容错
   const hoverPreview = useHoverPreview<ClipboardItem>({ delay: 200, hideDelay: 150 });
@@ -148,25 +162,25 @@ export function PopupApp() {
     if (!el || !items.length) return;
     const idx = items.findIndex((i) => i.id === selectedId);
     if (idx < 0) return;
-    const rowTop = idx * ROW_HEIGHT_PX;
-    const rowBottom = rowTop + ROW_HEIGHT_PX;
+    const rowTop = idx * rowHeightPx;
+    const rowBottom = rowTop + rowHeightPx;
     if (rowTop < el.scrollTop || rowBottom > el.scrollTop + el.clientHeight) {
       el.scrollTop = Math.max(
         0,
-        Math.min(rowTop - (el.clientHeight - ROW_HEIGHT_PX) / 2, el.scrollHeight - el.clientHeight),
+        Math.min(rowTop - (el.clientHeight - rowHeightPx) / 2, el.scrollHeight - el.clientHeight),
       );
     }
-  }, [selectedId, items]);
+  }, [selectedId, items, rowHeightPx]);
 
   const renderedWindow = useMemo(() => {
     const total = items.length;
     if (!total) return { startIndex: 0, endIndex: 0, total: 0, items: [] as ClipboardItem[] };
-    const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT_PX) - OVERSCAN_ROWS);
+    const startIndex = Math.max(0, Math.floor(scrollTop / rowHeightPx) - OVERSCAN_ROWS);
     // jsdom/未测量时 fallback 高度，保证测试与真实皆有内容渲染
-    const visibleCount = Math.ceil((viewportH || ROW_HEIGHT_PX * 8) / ROW_HEIGHT_PX);
+    const visibleCount = Math.ceil((viewportH || rowHeightPx * 8) / rowHeightPx);
     const endIndex = Math.min(total, startIndex + visibleCount + OVERSCAN_ROWS * 2);
     return { startIndex, endIndex, total, items: items.slice(startIndex, endIndex) };
-  }, [items, scrollTop, viewportH]);
+  }, [items, scrollTop, viewportH, rowHeightPx]);
 
   const setScroll = useCallback(() => {
     const el = listRef.current;
@@ -176,6 +190,7 @@ export function PopupApp() {
   useEffect(() => {
     settingsGet().then((s) => {
       setSettings(s);
+      applyListFontSize(s?.listFontSize ?? 13);
       applyThemeMode(s?.themeMode ?? "system");
     }).catch(() => applyThemeMode("system"));
     shortcutGet().then((sc) => setShortcutBinding(sc.binding)).catch(() => {});
@@ -223,9 +238,13 @@ export function PopupApp() {
     void import("@tauri-apps/api/event")
       .then(({ listen }) =>
         Promise.all([
-          listen<{ theme_mode?: string }>("settings-updated", (event) => {
+          listen<{ theme_mode?: string; list_font_size?: number }>("settings-updated", (event) => {
             if (!disposed && event.payload.theme_mode) {
               applyThemeMode(event.payload.theme_mode);
+            }
+            if (!disposed && typeof event.payload.list_font_size === "number") {
+              applyListFontSize(event.payload.list_font_size);
+              setSettings((prev) => (prev ? { ...prev, listFontSize: event.payload.list_font_size as number } : prev));
             }
           }),
           listen<{ appearance?: string }>("panel-appearance-changed", (event) => {
@@ -386,8 +405,8 @@ export function PopupApp() {
           {/* 上下 spacer 占位保持滚动条比例 */}
           <div
             style={{
-              paddingTop: renderedWindow.startIndex * ROW_HEIGHT_PX,
-              paddingBottom: (renderedWindow.total - renderedWindow.endIndex) * ROW_HEIGHT_PX,
+              paddingTop: renderedWindow.startIndex * rowHeightPx,
+              paddingBottom: (renderedWindow.total - renderedWindow.endIndex) * rowHeightPx,
             }}
           >
             {renderedWindow.items.map((item, rowOffset) => {
@@ -396,8 +415,8 @@ export function PopupApp() {
               return (
                 <div
                   key={item.id}
-                  className="h-[46px]"
                   style={{
+                    height: rowHeightPx,
                     animation:
                       rowIndex < 5
                         ? `rowSlideIn ${0.1 + rowIndex * 0.025}s ease-out both`

@@ -106,11 +106,12 @@ export const PopupHistoryRow = memo(function PopupHistoryRow({
       {/* 标题 + 预览（两行结构） */}
       <span className="min-w-0 flex-1">
         <span
-          className={`flex items-center gap-1 truncate text-[13px] leading-[1.25] ${
+          className={`flex items-center gap-1 truncate leading-[1.25] ${
             isSelected
               ? "font-medium text-[var(--text-primary)]"
               : "text-[var(--text-secondary)]"
           }`}
+          style={{ fontSize: "var(--list-font-size)" }}
         >
           <span className="truncate">{item.title}</span>
           {item.isPinned && (
@@ -120,18 +121,22 @@ export const PopupHistoryRow = memo(function PopupHistoryRow({
             />
           )}
         </span>
-        <span className="block truncate text-[11px] text-[var(--text-tertiary)]">
+        <span
+          className="block truncate text-[var(--text-tertiary)]"
+          style={{ fontSize: "calc(var(--list-font-size) - 2px)" }}
+        >
           {item.preview}
         </span>
       </span>
 
       {/* 右侧时间 */}
       <span
-        className={`shrink-0 text-[10px] tabular-nums ${
+        className={`shrink-0 tabular-nums ${
           isSelected
             ? "text-[color-mix(in_srgb,var(--accent)_55%,transparent)]"
             : "text-[var(--text-tertiary)]"
         }`}
+        style={{ fontSize: "calc(var(--list-font-size) - 3px)" }}
       >
         {item.timeLabel}
       </span>

@@ -199,7 +199,7 @@ export function QuickPanelApp() {
       className="quick-panel-shell frost-window"
       style={{
         /* 铺满整个窗口（对齐 popup 的 h-screen w-screen 模式）：
-           内容高度与窗口 300x460 一致，任何亚像素差异都由本层覆盖，
+           内容高度与窗口 280x420 一致，任何亚像素差异都由本层覆盖，
            不露出未填充区域 */
         width: "100vw",
         height: "100vh",
@@ -216,7 +216,7 @@ export function QuickPanelApp() {
       {/* Header: 仅监听状态指示（品牌文字已按 D2 精简移除） */}
       <div
         style={{
-          padding: "12px 14px 8px",
+          padding: "8px 14px 6px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -225,7 +225,7 @@ export function QuickPanelApp() {
         <StatusChip isMonitoring={isMonitoring} />
       </div>
 
-      <div style={{ padding: "2px 10px 12px" }}>
+      <div style={{ padding: "2px 10px 10px" }}>
         {/* Group: 监听控制 */}
         <GroupLabel text="监听" />
         <MenuButton
@@ -381,7 +381,7 @@ function IconBox({
 
 function GroupLabel({ text }: { text: string }) {
   return (
-    <div style={{ padding: "8px 10px 4px" }}>
+    <div style={{ padding: "6px 10px 3px" }}>
       <span
         style={{
           fontSize: 10,
@@ -403,7 +403,7 @@ function Divider() {
       style={{
         height: 1,
         background: "var(--panel-divider)",
-        margin: "6px 0",
+        margin: "4px 0",
       }}
     />
   );
@@ -436,7 +436,7 @@ function MenuButton({
         alignItems: "center",
         gap: 12,
         width: "100%",
-        padding: "9px 10px",
+        padding: "7px 10px",
         border: "none",
         borderRadius: 9,
         background: danger

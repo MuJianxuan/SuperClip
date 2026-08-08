@@ -112,6 +112,7 @@ struct SettingsResponse {
     default_action: String,
     theme_mode: String,
     history_limit: u32,
+    list_font_size: u32,
     launch_at_login: bool,
     show_on_startup: bool,
 }
@@ -122,6 +123,7 @@ struct SettingsUpdateRequest {
     default_action: Option<String>,
     theme_mode: Option<String>,
     history_limit: Option<u32>,
+    list_font_size: Option<u32>,
     launch_at_login: Option<bool>,
     show_on_startup: Option<bool>,
 }
@@ -715,6 +717,7 @@ fn migrate_database(connection: &Connection) -> Result<(), String> {
                 ('default_action', 'direct_paste', unixepoch()),
                 ('theme_mode', 'system', unixepoch()),
                 ('history_limit', '1000', unixepoch()),
+                ('list_font_size', '13', unixepoch()),
                 ('show_on_startup', 'false', unixepoch());
 
             INSERT OR IGNORE INTO exclusion_rules(id, kind, value, enabled, created_at, updated_at)
@@ -833,6 +836,7 @@ fn default_settings_response() -> SettingsResponse {
             "history_limit".into(),
             "default_action".into(),
             "theme_mode".into(),
+            "list_font_size".into(),
             "launch_at_login".into(),
             "show_on_startup".into(),
         ],
@@ -846,6 +850,7 @@ fn default_settings_response() -> SettingsResponse {
         default_action: "direct_paste".into(),
         theme_mode: "system".into(),
         history_limit: 1000,
+        list_font_size: 13,
         launch_at_login: false,
         show_on_startup: false,
     }
@@ -877,11 +882,16 @@ fn load_settings(connection: &Connection) -> Result<SettingsResponse, String> {
     let show_on_startup = load_setting_value(connection, "show_on_startup")?
         .map(|value| value == "true")
         .unwrap_or(defaults.show_on_startup);
+    let list_font_size = load_setting_value(connection, "list_font_size")?
+        .and_then(|value| value.parse::<u32>().ok())
+        .map(|value| value.clamp(11, 16))
+        .unwrap_or(defaults.list_font_size);
 
     Ok(SettingsResponse {
         default_action,
         theme_mode,
         history_limit,
+        list_font_size,
         show_on_startup,
         ..defaults
     })
@@ -2929,8 +2939,8 @@ fn set_panel_frame_sync(
 /// 转置到光标所在显示器的菜单栏下方；托盘左键点击时光标本就在图标处，行为与快捷面板一致。
 /// 无 tray rect 等异常时回退为屏幕居中（原行为）。
 fn position_popup_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
-    const POPUP_W: f64 = 300.0;
-    const POPUP_H: f64 = 460.0;
+    const POPUP_W: f64 = 280.0;
+    const POPUP_H: f64 = 420.0;
     const MENU_BAR_GAP: f64 = 5.0;
     const SCREEN_MARGIN: f64 = 6.0;
 
@@ -3007,8 +3017,8 @@ fn position_popup_centered(window: &tauri::WebviewWindow) {
         let scale = monitor.scale_factor();
         let monitor_pos = monitor.position();
         let monitor_size = monitor.size();
-        let window_width = 300.0_f64;
-        let window_height = 460.0_f64;
+        let window_width = 280.0_f64;
+        let window_height = 420.0_f64;
         let monitor_logical_w = monitor_size.width as f64 / scale;
         let monitor_logical_h = monitor_size.height as f64 / scale;
         let x = monitor_pos.x as f64 / scale + (monitor_logical_w - window_width) / 2.0;
@@ -3206,7 +3216,7 @@ fn position_quick_panel_below_tray(
     window: &tauri::WebviewWindow,
     tray_rect: Option<tauri::Rect>,
 ) {
-    const PANEL_W: f64 = 300.0;
+    const PANEL_W: f64 = 280.0;
     const MENU_BAR_GAP: f64 = 5.0;
     const SCREEN_MARGIN: f64 = 6.0;
 
@@ -3254,7 +3264,7 @@ fn position_quick_panel_below_tray(
         .clamp(mon_x + SCREEN_MARGIN, mon_x + mon_w - PANEL_W - SCREEN_MARGIN);
     let y = icon_bottom + MENU_BAR_GAP;
 
-    let panel_h = window.outer_size().ok().map(|s| s.height as f64 / scale).unwrap_or(460.0);
+    let panel_h = window.outer_size().ok().map(|s| s.height as f64 / scale).unwrap_or(420.0);
     #[cfg(target_os = "macos")]
     {
         // 同步 setFrame，避免异步 set_position 在 show 前未生效导致先以默认位置闪现
@@ -3462,7 +3472,7 @@ fn create_popup_panel(app: &tauri::AppHandle) -> Result<(), String> {
             builder
                 .decorations(false)
                 .resizable(false)
-                .inner_size(300.0, 460.0)
+                .inner_size(280.0, 420.0)
                 .visible(false)
                 .skip_taskbar(true)
                 .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled)
@@ -3503,8 +3513,8 @@ fn create_quick_panel_panel(app: &tauri::AppHandle) -> Result<(), String> {
             builder
                 .decorations(false)
                 .resizable(false)
-                // 尺寸与 popup 统一为 300×460；高度由美化后的间距与内容填充。
-                .inner_size(300.0, 460.0)
+                // 尺寸与 popup 统一为 280×420；高度由美化后的间距与内容填充。
+                .inner_size(280.0, 420.0)
                 .visible(false)
                 .skip_taskbar(true)
                 .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled)
@@ -3988,6 +3998,10 @@ fn settings_update(
         settings.history_limit = history_limit.clamp(100, 5_000);
     }
 
+    if let Some(list_font_size) = patch.list_font_size {
+        settings.list_font_size = list_font_size.clamp(11, 16);
+    }
+
     if let Some(launch_at_login) = resolved_launch_at_login {
         settings.launch_at_login = launch_at_login;
     }
@@ -4007,6 +4021,7 @@ fn settings_update(
         save_setting_value(&db, "default_action", &response.default_action)?;
         save_setting_value(&db, "theme_mode", &response.theme_mode)?;
         save_setting_value(&db, "history_limit", &response.history_limit.to_string())?;
+        save_setting_value(&db, "list_font_size", &response.list_font_size.to_string())?;
         save_setting_value(
             &db,
             "show_on_startup",
@@ -4029,6 +4044,7 @@ fn settings_update(
             "default_action": response.default_action,
             "theme_mode": response.theme_mode,
             "history_limit": response.history_limit,
+            "list_font_size": response.list_font_size,
             "launch_at_login": response.launch_at_login,
             "show_on_startup": response.show_on_startup
         }),
@@ -5683,13 +5699,27 @@ mod tests {
             .expect("setting should save");
         save_setting_value(&connection, "theme_mode", "dark").expect("setting should save");
         save_setting_value(&connection, "history_limit", "2500").expect("setting should save");
+        save_setting_value(&connection, "list_font_size", "15").expect("setting should save");
         save_setting_value(&connection, "show_on_startup", "true").expect("setting should save");
 
         let settings = load_settings(&connection).expect("settings should load");
         assert_eq!(settings.default_action, "copy_only");
         assert_eq!(settings.theme_mode, "dark");
         assert_eq!(settings.history_limit, 2500);
+        assert_eq!(settings.list_font_size, 15);
         assert!(settings.show_on_startup);
+
+        // 越界值被 clamp 到合法范围（11..=16）
+        save_setting_value(&connection, "list_font_size", "99").expect("setting should save");
+        assert_eq!(
+            load_settings(&connection).expect("settings should load").list_font_size,
+            16
+        );
+        save_setting_value(&connection, "list_font_size", "3").expect("setting should save");
+        assert_eq!(
+            load_settings(&connection).expect("settings should load").list_font_size,
+            11
+        );
     }
 
     #[test]

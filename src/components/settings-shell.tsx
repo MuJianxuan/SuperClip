@@ -935,6 +935,47 @@ export function SettingsShell({
                     </div>
                   </SectionCard>
 
+                  {/* 列表字体大小（popup/main 历史列表共用；行高随字号联动） */}
+                  <SectionCard
+                    title="列表字体大小"
+                    description="调整历史列表的标题与预览字号（行高随之联动）"
+                    style={{ marginTop: 14 }}
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <input
+                        type="range"
+                        min={11}
+                        max={16}
+                        step={1}
+                        disabled={readOnlyMode}
+                        value={settings.listFontSize}
+                        onChange={(event) => {
+                          const nextValue = Number(event.currentTarget.value);
+                          if (Number.isNaN(nextValue)) {
+                            return;
+                          }
+
+                          void onUpdate({
+                            listFontSize: Math.max(11, Math.min(16, nextValue)),
+                          });
+                        }}
+                        className="slider-range flex-1"
+                        style={
+                          {
+                            "--slider-fill": `${((settings.listFontSize - 11) / (16 - 11)) * 100}%`,
+                            "--slider-track-color": sliderTrack.bg,
+                            "--slider-hover-thumb-color": sliderTrack.hover,
+                            "--slider-active-thumb-color": sliderTrack.active,
+                          } as React.CSSProperties
+                        }
+                      />
+                      <span className="min-w-[44px] text-right text-[13px] font-semibold tabular-nums" style={{ color: "rgba(56,189,248,0.85)" }}>
+                        {settings.listFontSize}
+                      </span>
+                      <span className="min-w-[32px] text-[10.5px] text-[var(--text-tertiary)]">px</span>
+                    </div>
+                  </SectionCard>
+
                   {/* 历史保留上限 */}
                   <SectionCard
                     title="历史保留上限"

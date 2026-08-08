@@ -110,6 +110,25 @@ describe("PopupApp", () => {
     popupReadySpy.mockRestore();
   });
 
+  it("applies list font size to CSS variable and derives row height", async () => {
+    const base = await superclip.settingsGet();
+    const settingsGetSpy = vi
+      .spyOn(superclip, "settingsGet")
+      .mockResolvedValue({ ...base, listFontSize: 15 });
+
+    const { container } = render(<PopupApp />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // 15px → CSS 变量同步 + 行高联动 46 + (15-13)*2 = 50
+    expect(document.documentElement.style.getPropertyValue("--list-font-size")).toBe("15px");
+    const row = container.querySelector("[data-clipboard-row-id]")?.parentElement;
+    expect(row).toHaveStyle({ height: "50px" });
+
+    settingsGetSpy.mockRestore();
+  });
+
   describe("theme following", () => {
     beforeEach(() => {
       delete document.documentElement.dataset.themeMode;

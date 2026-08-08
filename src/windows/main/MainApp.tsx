@@ -56,6 +56,7 @@ const initialSettings: SettingsResponse = {
   defaultAction: "direct_paste",
   themeMode: "system",
   historyLimit: 1000,
+  listFontSize: 13,
   launchAtLogin: false,
   showOnStartup: false,
 };
@@ -182,6 +183,11 @@ export function MainApp() {
     return undefined;
   }, [settings.themeMode]);
 
+  // 列表字体大小同步为全局 CSS 变量（popup/main 列表共用同一变量渲染）
+  useEffect(() => {
+    document.documentElement.style.setProperty("--list-font-size", `${settings.listFontSize}px`);
+  }, [settings.listFontSize]);
+
   // Tauri events
   useEffect(() => {
     if (!("__TAURI_INTERNALS__" in window)) return;
@@ -193,7 +199,7 @@ export function MainApp() {
         Promise.all([
           listen("app:show-settings", () => { if (!disposed) setIsSettingsOpen(true); }),
           // 主题/设置外部变更（如 QuickPanel）时保持 Main 本地状态与 data-theme-mode 同步
-          listen<{ theme_mode?: string; default_action?: SettingsResponse["defaultAction"] }>("settings-updated", (event) => {
+          listen<{ theme_mode?: string; default_action?: SettingsResponse["defaultAction"]; list_font_size?: number }>("settings-updated", (event) => {
             if (disposed) return;
             const payload = event.payload;
             if (payload.theme_mode) {
@@ -201,6 +207,9 @@ export function MainApp() {
             }
             if (payload.default_action) {
               setSettings((prev) => ({ ...prev, defaultAction: payload.default_action as SettingsResponse["defaultAction"] }));
+            }
+            if (typeof payload.list_font_size === "number") {
+              setSettings((prev) => ({ ...prev, listFontSize: payload.list_font_size as number }));
             }
           }),
         ]),

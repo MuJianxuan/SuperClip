@@ -120,6 +120,7 @@ export interface SettingsResponse {
   defaultAction: "direct_paste" | "copy_only";
   themeMode: "light" | "dark" | "system";
   historyLimit: number;
+  listFontSize: number;
   launchAtLogin: boolean;
   showOnStartup: boolean;
 }
@@ -211,6 +212,7 @@ export interface SettingsUpdatePayload {
   defaultAction?: SettingsResponse["defaultAction"];
   themeMode?: SettingsResponse["themeMode"];
   historyLimit?: number;
+  listFontSize?: number;
   launchAtLogin?: boolean;
   showOnStartup?: boolean;
 }
@@ -468,6 +470,7 @@ let fallbackSettings: SettingsResponse = {
     "history_limit",
     "default_action",
     "theme_mode",
+    "list_font_size",
     "launch_at_login",
     "show_on_startup",
   ],
@@ -481,6 +484,7 @@ let fallbackSettings: SettingsResponse = {
   defaultAction: "direct_paste",
   themeMode: "system",
   historyLimit: 1000,
+  listFontSize: 13,
   launchAtLogin: false,
   showOnStartup: false,
 };
@@ -560,6 +564,7 @@ export function __resetSuperClipFallbackForTests() {
       "history_limit",
       "default_action",
       "theme_mode",
+      "list_font_size",
       "launch_at_login",
       "show_on_startup",
     ],
@@ -573,6 +578,7 @@ export function __resetSuperClipFallbackForTests() {
     defaultAction: "direct_paste",
     themeMode: "system",
     historyLimit: 1000,
+    listFontSize: 13,
     launchAtLogin: false,
     showOnStartup: false,
   };

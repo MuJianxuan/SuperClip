@@ -180,8 +180,11 @@ function Row({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span
-            className={`truncate text-[13px] font-medium`}
-            style={{ color: selected ? "var(--row-title-selected, var(--text-primary))" : "var(--row-title, var(--text-primary))" }}
+            className={`truncate font-medium`}
+            style={{
+              fontSize: "var(--list-font-size)",
+              color: selected ? "var(--row-title-selected, var(--text-primary))" : "var(--row-title, var(--text-primary))",
+            }}
           >
             {item.title}
           </span>
@@ -193,7 +196,12 @@ function Row({
             />
           )}
         </div>
-        <span className="block truncate text-[11px] text-[var(--row-preview,var(--text-tertiary))]">{item.preview}</span>
+        <span
+          className="block truncate text-[var(--row-preview,var(--text-tertiary))]"
+          style={{ fontSize: "calc(var(--list-font-size) - 2px)" }}
+        >
+          {item.preview}
+        </span>
       </div>
 
       {/* hover actions or meta（占位等宽，避免 hover 时行跳动） */}
@@ -211,8 +219,18 @@ function Row({
         </div>
       ) : (
         <div className="flex h-[26px] shrink-0 items-center gap-2.5" style={{ minWidth: 86 }}>
-          <span className="truncate text-right text-[11px] text-[var(--row-meta,var(--text-tertiary))]">{item.sourceApp}</span>
-          <span className="shrink-0 text-[10.5px] text-[var(--row-time,var(--text-tertiary))]">{item.timeLabel}</span>
+          <span
+            className="truncate text-right text-[var(--row-meta,var(--text-tertiary))]"
+            style={{ fontSize: "calc(var(--list-font-size) - 2px)" }}
+          >
+            {item.sourceApp}
+          </span>
+          <span
+            className="shrink-0 text-[var(--row-time,var(--text-tertiary))]"
+            style={{ fontSize: "calc(var(--list-font-size) - 2.5px)" }}
+          >
+            {item.timeLabel}
+          </span>
         </div>
       )}
     </div>
