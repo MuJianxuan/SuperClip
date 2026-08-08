@@ -16,8 +16,8 @@ import {
 } from "../lib/superclip";
 import type { ClipboardItem } from "../components/history-row";
 
-/** Popup 面板宽度（与 Rust 侧 popup panel 的 inner_size 320 保持一致） */
-const POPUP_WIDTH = 320;
+/** Popup 面板宽度（与 Rust 侧 popup panel 的 inner_size 300 保持一致） */
+const POPUP_WIDTH = 300;
 /** 固定行高（Popup 列表虚拟滚动用；行外层以 h-[46px] 固定对齐，见下） */
 const ROW_HEIGHT_PX = 46;
 /** 可视区上下额外渲染行数 */

@@ -47,9 +47,9 @@ describe("QuickPanelApp", () => {
     vi.clearAllMocks();
   });
 
-  it("renders brand and monitoring status chip", async () => {
+  it("renders monitoring status chip without brand text", async () => {
     render(<QuickPanelApp />);
-    expect(screen.getByText("SuperClip")).toBeInTheDocument();
+    expect(screen.queryByText("SuperClip")).not.toBeInTheDocument();
     expect(await screen.findByText("监听中")).toBeInTheDocument();
   });
 

@@ -2872,8 +2872,8 @@ fn toggle_popup_window(app: &tauri::AppHandle) {
 /// 转置到光标所在显示器的菜单栏下方；托盘左键点击时光标本就在图标处，行为与快捷面板一致。
 /// 无 tray rect 等异常时回退为屏幕居中（原行为）。
 fn position_popup_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
-    const POPUP_W: f64 = 320.0;
-    const POPUP_H: f64 = 480.0;
+    const POPUP_W: f64 = 300.0;
+    const POPUP_H: f64 = 460.0;
     const MENU_BAR_GAP: f64 = 5.0;
     const SCREEN_MARGIN: f64 = 6.0;
 
@@ -2943,8 +2943,8 @@ fn position_popup_centered(window: &tauri::WebviewWindow) {
         let scale = monitor.scale_factor();
         let monitor_pos = monitor.position();
         let monitor_size = monitor.size();
-        let window_width = 320.0_f64;
-        let window_height = 480.0_f64;
+        let window_width = 300.0_f64;
+        let window_height = 460.0_f64;
         let monitor_logical_w = monitor_size.width as f64 / scale;
         let monitor_logical_h = monitor_size.height as f64 / scale;
         let x = monitor_pos.x as f64 / scale + (monitor_logical_w - window_width) / 2.0;
@@ -3128,7 +3128,7 @@ fn position_quick_panel_below_tray(
     window: &tauri::WebviewWindow,
     tray_rect: Option<tauri::Rect>,
 ) {
-    const PANEL_W: f64 = 232.0;
+    const PANEL_W: f64 = 300.0;
     const MENU_BAR_GAP: f64 = 5.0;
     const SCREEN_MARGIN: f64 = 6.0;
 
@@ -3327,7 +3327,7 @@ fn create_popup_panel(app: &tauri::AppHandle) -> Result<(), String> {
             builder
                 .decorations(false)
                 .resizable(false)
-                .inner_size(320.0, 480.0)
+                .inner_size(300.0, 460.0)
                 .visible(false)
                 .skip_taskbar(true)
                 .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled)
@@ -3368,9 +3368,8 @@ fn create_quick_panel_panel(app: &tauri::AppHandle) -> Result<(), String> {
             builder
                 .decorations(false)
                 .resizable(false)
-                // 高度 380 = 原型 D2 实际渲染高度（header + 4 组内容）；
-                // 旧值 332 小于内容高度，会导致面板滚动/裁剪（底部“退出”不可见）。
-                .inner_size(232.0, 380.0)
+                // 尺寸与 popup 统一为 300×460；高度由美化后的间距与内容填充。
+                .inner_size(300.0, 460.0)
                 .visible(false)
                 .skip_taskbar(true)
                 .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled)
