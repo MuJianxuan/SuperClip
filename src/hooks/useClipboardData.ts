@@ -58,10 +58,13 @@ function dataReducer(state: DataState, action: DataAction): DataState {
 export interface UseClipboardDataOptions {
   kindFilter?: string;
   pinnedOnly?: boolean;
+  /** 空查询（浏览列表）时返回的最大条数；不传则用后端上限（5000）。
+   * popup 小窗用限量的最近列表加速首次就绪，搜索（非空查询）不受限。 */
+  listLimit?: number;
 }
 
 export function useClipboardData(options: UseClipboardDataOptions = {}) {
-  const { kindFilter, pinnedOnly } = options;
+  const { kindFilter, pinnedOnly, listLimit } = options;
 
   const [query, setQuery] = useReducer((_: string, next: string) => next, "");
   const [debouncedQuery, setDebouncedQuery] = useReducer((_: string, next: string) => next, "");
@@ -102,7 +105,7 @@ export function useClipboardData(options: UseClipboardDataOptions = {}) {
 
   useEffect(() => {
     let active = true;
-    const cacheKey = `${kindFilter ?? ""}:${pinnedOnly ? "1" : "0"}:${debouncedQuery}`;
+    const cacheKey = `${kindFilter ?? ""}:${pinnedOnly ? "1" : "0"}:${listLimit ?? ""}:${debouncedQuery}`;
     const cached = cacheRef.current.get(cacheKey);
     const now = Date.now();
 
@@ -126,7 +129,13 @@ export function useClipboardData(options: UseClipboardDataOptions = {}) {
 
     async function fetchData() {
       try {
-        const response = await clipboardSearch(debouncedQuery, kindFilter, pinnedOnly);
+        const response = await clipboardSearch(
+          debouncedQuery,
+          kindFilter,
+          pinnedOnly,
+          // 仅浏览列表（空查询）时应用 listLimit；搜索时保持全量结果
+          debouncedQuery ? undefined : listLimit,
+        );
         if (!active) return;
 
         cacheRef.current.set(cacheKey, { items: response.results, ts: Date.now() });

@@ -893,10 +893,11 @@ export async function clipboardSearch(
   query: string,
   kindFilter?: string,
   pinnedOnly?: boolean,
+  listLimit?: number,
 ) {
   return invokeOrFallback<ClipboardSearchResponse>(
     "clipboardSearch",
-    { query, kindFilter: kindFilter ?? null, pinnedOnly: pinnedOnly ?? false },
+    { query, kindFilter: kindFilter ?? null, pinnedOnly: pinnedOnly ?? false, listLimit: listLimit ?? null },
     () => {
       let results = filterItems(query);
       if (kindFilter) {
@@ -904,6 +905,9 @@ export async function clipboardSearch(
       }
       if (pinnedOnly) {
         results = results.filter((item) => item.isPinned);
+      }
+      if (listLimit) {
+        results = results.slice(0, listLimit);
       }
 
       return {

@@ -22,6 +22,8 @@ const POPUP_WIDTH = 280;
 const ROW_HEIGHT_BASE_PX = 46;
 /** 可视区上下额外渲染行数 */
 const OVERSCAN_ROWS = 6;
+/** 浏览列表上限：popup 小窗只取最近 N 条（首屏快速就绪），搜索不受限 */
+const POPUP_LIST_LIMIT = 200;
 
 /** 三模式主题同步：浅/深/跟随系统。panel 窗口不能用 matchMedia 推断 system 模式——
  * WKWebView 的 prefers-color-scheme 在窗口被 Rust 侧 setAppearance 锁定后停止跟随
@@ -89,7 +91,8 @@ function formatShortcutGlyph(binding: string): string {
 
 export function PopupApp() {
   const { query, setQuery, items, selectedId, setSelectedId, selectedItem, isLoading } =
-    useClipboardData();
+    // 首次浏览列表只取最近 POPUP_LIST_LIMIT 条（加速首次就绪），搜索不受限
+    useClipboardData({ listLimit: POPUP_LIST_LIMIT });
   const [settings, setSettings] = useState<SettingsResponse | null>(null);
   const [shortcutBinding, setShortcutBinding] = useState("Cmd+Shift+V");
 

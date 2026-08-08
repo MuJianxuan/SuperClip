@@ -183,6 +183,47 @@ describe("PreviewApp", () => {
     expect(mockEmit).toHaveBeenCalledWith("preview:mouse-leave");
   });
 
+  it("keeps cached detail when re-hovering the same item (no detail reset)", async () => {
+    // 回归用例：同一行鼠标离开再回来（同一 item 对象再次 preview:show）时，
+    // detail 应保持缓存；修复前 preview:show 无条件 setDetail(null)+effect 依赖
+    // item?.id 未变不重载，导致 detail 停在 null（图片占位 / 文本回退到 preview）
+    const { invoke } = await import("@tauri-apps/api/core");
+    (invoke as ReturnType<typeof vi.fn>).mockImplementation(async (cmd: string) => {
+      if (cmd === "clipboard_get") {
+        return {
+          item: baseItem({ id: "clip-keep" }),
+          payload: {
+            textPlain: "REAL PAYLOAD TEXT",
+            textHtml: null,
+            textRtf: null,
+            imageBytes: null,
+            imageWidth: null,
+            imageHeight: null,
+            fileUrls: null,
+            extraJson: null,
+          },
+          version: 1,
+        };
+      }
+      return null;
+    });
+    render(<PreviewApp />);
+    await vi.waitFor(() => expect(listenHandler).not.toBeNull());
+
+    const item = makeItem({ id: "clip-keep", title: "T", preview: "FALLBACK" });
+    emitShow(item);
+    await vi.waitFor(() =>
+      expect(screen.getByText("REAL PAYLOAD TEXT")).toBeInTheDocument(),
+    );
+
+    // 同一对象再次 emitShow：detail 应保持，不得回退到 item.preview
+    emitShow(item);
+    await vi.waitFor(() =>
+      expect(screen.getByText("REAL PAYLOAD TEXT")).toBeInTheDocument(),
+    );
+    expect(screen.queryByText("FALLBACK")).not.toBeInTheDocument();
+  });
+
   describe("theme following", () => {
     beforeEach(() => {
       delete document.documentElement.dataset.themeMode;

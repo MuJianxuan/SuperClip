@@ -116,8 +116,11 @@ export function PreviewApp() {
         emitRef.current = emit;
         return listen<PreviewPayload>("preview:show", (event) => {
           if (!disposed) {
+            // 只更新 item；detail 清空交给下方 effect（依赖 item?.id）处理：
+            // 同一行连续 hover 时 PopupApp 发来的 item 对象引用不变，setItem 不会重渲染，
+            // 若在此清 detail 会导致 detail 停在 null——effect 依赖 item?.id 未变不重新加载，
+            // 图片预览永远显示占位（切换行正常、离开再回来同一行异常）。
             setItem(event.payload.item);
-            setDetail(null);
           }
         });
       })
@@ -134,6 +137,9 @@ export function PreviewApp() {
   }, []);
 
   useEffect(() => {
+    // item 变化时先清空旧 detail，避免串条；
+    // 同一 item 连续 hover（引用不变）此 effect 不触发，detail 缓存直接复用
+    setDetail(null);
     if (!item) return;
     let active = true;
     clipboardGet(item.id)

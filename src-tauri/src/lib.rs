@@ -1853,6 +1853,7 @@ fn list_clipboard_items(
     connection: &Connection,
     kind_filter: Option<&str>,
     pinned_only: bool,
+    limit: usize,
 ) -> Result<Vec<ClipboardItemSummary>, String> {
     let sql = match (kind_filter, pinned_only) {
         (Some(_), true) => format!(
@@ -1860,7 +1861,7 @@ fn list_clipboard_items(
             SELECT * FROM clipboard_items
             WHERE kind = ?1 AND is_pinned = 1
             ORDER BY is_pinned DESC, COALESCE(pinned_at, 0) DESC, last_seen_at DESC
-            LIMIT {MAX_HISTORY_RESULTS}
+            LIMIT {limit}
         "#
         ),
         (Some(_), false) => format!(
@@ -1868,7 +1869,7 @@ fn list_clipboard_items(
             SELECT * FROM clipboard_items
             WHERE kind = ?1
             ORDER BY is_pinned DESC, COALESCE(pinned_at, 0) DESC, last_seen_at DESC
-            LIMIT {MAX_HISTORY_RESULTS}
+            LIMIT {limit}
         "#
         ),
         (None, true) => format!(
@@ -1876,14 +1877,14 @@ fn list_clipboard_items(
             SELECT * FROM clipboard_items
             WHERE is_pinned = 1
             ORDER BY COALESCE(pinned_at, 0) DESC, last_seen_at DESC
-            LIMIT {MAX_HISTORY_RESULTS}
+            LIMIT {limit}
         "#
         ),
         (None, false) => format!(
             r#"
             SELECT * FROM clipboard_items
             ORDER BY is_pinned DESC, COALESCE(pinned_at, 0) DESC, last_seen_at DESC
-            LIMIT {MAX_HISTORY_RESULTS}
+            LIMIT {limit}
         "#
         ),
     };
@@ -2034,9 +2035,15 @@ fn search_clipboard_items(
     query: &str,
     kind_filter: Option<&str>,
     pinned_only: bool,
+    list_limit: Option<usize>,
 ) -> Result<Vec<ClipboardItemSummary>, String> {
     if normalized(query).is_empty() {
-        return list_clipboard_items(connection, kind_filter, pinned_only);
+        return list_clipboard_items(
+            connection,
+            kind_filter,
+            pinned_only,
+            list_limit.unwrap_or(MAX_HISTORY_RESULTS),
+        );
     }
 
     if let Some(match_query) = fts_query(query) {
@@ -2877,6 +2884,9 @@ fn toggle_popup_window(app: &tauri::AppHandle) {
         // 避免两面板叠加时快速覆盖造成的闪屏
         hide_quick_panel_window(app);
         position_popup_window(app, &window);
+        // popup 已从隐藏切到显示：异步预热 preview 面板（后台加载页面），
+        // 使 hover 预览立即可用；启动时不再创建，减小启动 webview 竞争
+        prewarm_preview_panel(app);
 
         #[cfg(target_os = "macos")]
         {
@@ -3586,6 +3596,25 @@ fn create_preview_panel(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// 预热 preview 面板：popup 显示时异步创建（后台加载页面），hover 时立即可用。
+/// 幂等：窗口已存在则跳过。窗口创建必须在主线程（macOS NSWindow），
+/// 经 run_on_main_thread 排队到下一轮事件循环，不阻塞 popup 显示。
+/// 预热失败无碍：hover 时 preview_show 的懒创建会再尝试。
+fn prewarm_preview_panel(app: &tauri::AppHandle) {
+    if app.get_webview_window("preview").is_some() {
+        return;
+    }
+    let app = app.clone();
+    let task_app = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        #[cfg(target_os = "macos")]
+        if task_app.get_webview_window("preview").is_none() {
+            // 与 preview_show 的懒创建在主线程串行执行，创建前重新检查窗口存在保证幂等
+            let _ = create_preview_panel(&task_app);
+        }
+    });
+}
+
 #[cfg(target_os = "macos")]
 fn apply_macos_dock_policy(app: &tauri::AppHandle, state: &State<'_, AppState>) {
     if let Err(error) = app.set_dock_visibility(false) {
@@ -3635,19 +3664,8 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
                         },
                     );
                 }
-                if let Err(error) = create_preview_panel(app) {
-                    record_recent_error(
-                        state,
-                        RecentErrorRecord {
-                            error_code: "PREVIEW_PANEL_CREATE_FAILED".into(),
-                            context: format!("desktop-controls/nspanel/preview/{error}"),
-                            occurred_at: build_runtime_timestamp()
-                                .unwrap_or_else(|_| "unknown".into()),
-                            startup_phase: Some("desktop_controls".into()),
-                            setting_value: None,
-                        },
-                    );
-                }
+                // preview 改按需创建（首次 hover 时懒创建，见 preview_show）：
+                // 启动时少一个 WKWebView 加载，减小 popup/quick_panel 首次就绪的资源竞争
                 if let Err(error) = create_quick_panel_panel(app) {
                     record_recent_error(
                         state,
@@ -3859,7 +3877,7 @@ fn clipboard_list(state: State<'_, AppState>) -> Result<Vec<ClipboardItemSummary
         .lock()
         .map_err(|_| "clipboard store unavailable".to_string())?;
 
-    list_clipboard_items(&db, None, false)
+    list_clipboard_items(&db, None, false, MAX_HISTORY_RESULTS)
 }
 
 #[tauri::command]
@@ -3867,6 +3885,7 @@ fn clipboard_search(
     query: String,
     kind_filter: Option<String>,
     pinned_only: Option<bool>,
+    list_limit: Option<usize>,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<ClipboardSearchResponse, String> {
@@ -3875,7 +3894,13 @@ fn clipboard_search(
         .db_read
         .lock()
         .map_err(|_| "clipboard store unavailable".to_string())?;
-    let results = search_clipboard_items(&db, &query, kind_filter.as_deref(), pinned_only.unwrap_or(false))?;
+    let results = search_clipboard_items(
+        &db,
+        &query,
+        kind_filter.as_deref(),
+        pinned_only.unwrap_or(false),
+        list_limit,
+    )?;
     let total = results.len();
     let search_time_ms = started_at.elapsed().as_millis() as u64;
     emit_superclip_event(
@@ -4246,7 +4271,7 @@ fn session_ui_state_get(state: State<'_, AppState>) -> Result<SessionUiStateResp
             .db_read
             .lock()
             .map_err(|_| "clipboard store unavailable".to_string())?;
-        list_clipboard_items(&db, None, false)?
+        list_clipboard_items(&db, None, false, MAX_HISTORY_RESULTS)?
     };
     let mut session_ui_state = state
         .session_ui_state
@@ -4281,7 +4306,7 @@ fn session_ui_state_update(
             .db_read
             .lock()
             .map_err(|_| "clipboard store unavailable".to_string())?;
-        list_clipboard_items(&db, None, false)?
+        list_clipboard_items(&db, None, false, MAX_HISTORY_RESULTS)?
     };
     let mut session_ui_state = state
         .session_ui_state
@@ -4767,8 +4792,16 @@ fn preview_show(
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let Some(window) = app.get_webview_window("preview") else {
-        return Err("preview window not found".into());
+    let window = match app.get_webview_window("preview") {
+        Some(window) => window,
+        None => {
+            // 按需创建：启动时不再预热 preview，首次 hover 时懒创建（避免并发创建：
+            // command 在主线程执行，创建-获取之间无重入窗口）
+            #[cfg(target_os = "macos")]
+            create_preview_panel(&app).map_err(|e| format!("failed to create preview panel: {e}"))?;
+            app.get_webview_window("preview")
+                .ok_or_else(|| "preview window not found".to_string())?
+        }
     };
 
     if let Ok(mut flag) = state.preview_active.lock() {
@@ -4848,8 +4881,9 @@ fn preview_hide(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(),
         }
     }
 
+    // 懒创建模式下窗口可能尚未创建（preview 未打开过），无需隐藏
     let Some(window) = app.get_webview_window("preview") else {
-        return Err("preview window not found".into());
+        return Ok(());
     };
     let _ = window.hide();
     Ok(())
@@ -5645,7 +5679,7 @@ mod tests {
             upsert_clipboard_snapshot(&connection, snapshot, DEFAULT_HISTORY_LIMIT).expect("upsert should pass");
         assert!(inserted);
 
-        let results = search_clipboard_items(&connection, "backend", None, false).expect("search should pass");
+        let results = search_clipboard_items(&connection, "backend", None, false, None).expect("search should pass");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].kind, "text");
         assert!(results[0].preview.contains("SQLite FTS"));
@@ -5776,7 +5810,7 @@ mod tests {
         assert!(snapshot.payload.file_urls.is_some());
 
         upsert_clipboard_snapshot(&connection, snapshot, DEFAULT_HISTORY_LIMIT).expect("file upsert should pass");
-        let results = search_clipboard_items(&connection, "copy-only", None, false).expect("search should pass");
+        let results = search_clipboard_items(&connection, "copy-only", None, false, None).expect("search should pass");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].kind, "file");
     }
@@ -5829,7 +5863,7 @@ mod tests {
         );
 
         upsert_clipboard_snapshot(&connection, snapshot, DEFAULT_HISTORY_LIMIT).expect("html upsert should pass");
-        let results = search_clipboard_items(&connection, "clipboard", None, false).expect("search should pass");
+        let results = search_clipboard_items(&connection, "clipboard", None, false, None).expect("search should pass");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].kind, "html");
     }
