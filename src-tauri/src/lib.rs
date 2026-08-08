@@ -3027,7 +3027,7 @@ fn sync_vibrancy_panels_appearance(app: &tauri::AppHandle, theme_mode: &str) {
     };
 
     // (label, 圆角)：与 create_*_panel 的 apply_vibrancy 半径一致
-    for (label, radius) in [("popup", 10.0), ("preview", 10.0), ("quick_panel", 12.0)] {
+    for (label, radius) in [("popup", 12.0), ("preview", 12.0), ("quick_panel", 12.0)] {
         let Some(window) = app.get_webview_window(label) else {
             continue;
         };
@@ -3339,7 +3339,7 @@ fn create_popup_panel(app: &tauri::AppHandle) -> Result<(), String> {
             &window,
             NSVisualEffectMaterial::Menu,
             Some(NSVisualEffectState::Active),
-            Some(10.0),
+            Some(12.0),
         );
     }
 
@@ -3423,7 +3423,7 @@ fn create_preview_panel(app: &tauri::AppHandle) -> Result<(), String> {
             &window,
             NSVisualEffectMaterial::Menu,
             Some(NSVisualEffectState::Active),
-            Some(10.0),
+            Some(12.0),
         );
     }
 
