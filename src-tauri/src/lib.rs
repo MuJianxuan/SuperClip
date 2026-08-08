@@ -24,7 +24,7 @@ use tauri_nspanel::{
 };
 
 #[cfg(target_os = "macos")]
-use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
+use window_vibrancy::{apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
 
 const RECENT_ERROR_LIMIT: usize = 50;
 const WINDOW_FALLBACK_RECORD_LIMIT: usize = 20;
@@ -3008,8 +3008,8 @@ fn current_system_appearance_name() -> Option<String> {
 }
 
 /// 三模式主题的原生外观同步：显式 light/dark 时把三个磨砂 panel 的 NSAppearance 固定为
-/// Aqua/DarkAqua——NSVisualEffectView 材质只跟随 window appearance，否则 app 主题与系统
-/// 外观不一致时磨砂背景与前端 token 错配；system 镜像 NSApp.effectiveAppearance 的具体值
+/// Aqua/DarkAqua，并重建 NSVisualEffectView 使其以当前外观初始化渲染；否则 app 主题与系统
+/// 外观不一致时磨砂背景与前端 token 错配。system 镜像 NSApp.effectiveAppearance 的具体值
 /// （不设 nil，见 resolve_panel_appearance_name 的注释）。
 #[cfg(target_os = "macos")]
 fn sync_vibrancy_panels_appearance(app: &tauri::AppHandle, theme_mode: &str) {
@@ -3026,7 +3026,8 @@ fn sync_vibrancy_panels_appearance(app: &tauri::AppHandle, theme_mode: &str) {
         }
     };
 
-    for label in ["popup", "preview", "quick_panel"] {
+    // (label, 圆角)：与 create_*_panel 的 apply_vibrancy 半径一致
+    for (label, radius) in [("popup", 10.0), ("preview", 10.0), ("quick_panel", 12.0)] {
         let Some(window) = app.get_webview_window(label) else {
             continue;
         };
@@ -3051,6 +3052,38 @@ fn sync_vibrancy_panels_appearance(app: &tauri::AppHandle, theme_mode: &str) {
                 tauri_nspanel::objc2::msg_send![appearance_cls, appearanceNamed: name_str];
             let () = tauri_nspanel::objc2::msg_send![ns_window, setAppearance: appearance];
         }
+
+        // 重建 NSVisualEffectView：window_vibrancy 的 apply_vibrancy 只 add 不 replace，
+        // 且已存在的 view 在 setAppearance 后不重算（asyar #290 同款：blur tint 建窗时
+        // 定死）。clear 后重新 apply，让 view 以当前 window appearance 正确初始化渲染。
+        // 这是运行时切换磨砂深浅最可靠的业界做法（HardwareVisualizer #1724 同源）。
+        let _ = clear_vibrancy(&window);
+        let _ = apply_vibrancy(
+            &window,
+            NSVisualEffectMaterial::Menu,
+            Some(NSVisualEffectState::Active),
+            Some(radius),
+        );
+    }
+
+    // 前端主题的唯一事实源：广播 panel 实际应用的有效外观。WKWebView 的
+    // prefers-color-scheme 在 setAppearance 锁定后停止跟随系统（Sky.app #37/#60），
+    // 前端 matchMedia 不可用，改由本事件 + system_appearance_get 驱动。
+    let applied = if name == c"NSAppearanceNameDarkAqua" { "dark" } else { "light" };
+    emit_superclip_event(app, "panel-appearance-changed", json!({ "appearance": applied }));
+}
+
+/// 前端三模式主题的 system 解析源：主线程读 NSApp.effectiveAppearance。
+/// （sync command 主线程执行，与 permission_check_accessibility 同一模式。）
+#[tauri::command]
+fn system_appearance_get() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        current_system_appearance_name().unwrap_or_else(|| "light".into())
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        "light".to_string()
     }
 }
 
@@ -5786,6 +5819,7 @@ pub fn run() {
             popup_ready,
             monitor_toggle,
             monitor_status_get,
+            system_appearance_get,
             app_quit,
             quick_panel_hide,
             clipboard_copy,

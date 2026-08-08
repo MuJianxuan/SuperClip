@@ -35,6 +35,7 @@ interface CommandMap {
   previewShow: "preview_show";
   previewHide: "preview_hide";
   popupReady: "popup_ready";
+  systemAppearanceGet: "system_appearance_get";
   monitorToggle: "monitor_toggle";
   monitorStatusGet: "monitor_status_get";
   appQuit: "app_quit";
@@ -75,6 +76,7 @@ const COMMANDS: CommandMap = {
   previewShow: "preview_show",
   previewHide: "preview_hide",
   popupReady: "popup_ready",
+  systemAppearanceGet: "system_appearance_get",
   monitorToggle: "monitor_toggle",
   monitorStatusGet: "monitor_status_get",
   appQuit: "app_quit",
@@ -908,6 +910,15 @@ export async function clipboardSearch(
 
 export async function settingsGet() {
   return invokeOrFallback<SettingsResponse>("settingsGet", {}, () => ({ ...fallbackSettings }));
+}
+
+/** 系统有效外观（dark/light）。WKWebView 的 prefers-color-scheme 在窗口被 Rust 侧
+ * setAppearance 锁定后停止跟随系统（Sky.app #37/#60），panel 前端不能用 matchMedia
+ * 推断主题，改由后端读 NSApp.effectiveAppearance；浏览器开发环境才用 matchMedia。 */
+export async function systemAppearanceGet(): Promise<"dark" | "light"> {
+  return invokeOrFallback("systemAppearanceGet", {}, () =>
+    window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
+  );
 }
 
 export async function settingsUpdate(patch: SettingsUpdatePayload) {

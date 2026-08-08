@@ -8,6 +8,7 @@ import {
   settingsGet,
   settingsUpdate,
   showMain,
+  systemAppearanceGet,
   type SettingsResponse,
 } from "../lib/superclip";
 
@@ -30,29 +31,25 @@ const PASTE_MODE_DESC: Record<PasteMode, string> = {
   copy_only: "仅复制到剪贴板，需手动粘贴",
 };
 
-/** 三模式主题同步：浅/深/跟随系统。
- * system 模式用 matchMedia 显式判断并写入具体 data-theme-mode，不依赖 CSS
- * @media (prefers-color-scheme) 的匹配行为——WKWebView 中该媒体查询跟随窗口外观，
- * 当窗口被 Rust 侧 setAppearance 锁定后不可靠；同时监听系统外观变化实时更新。 */
-let systemAppearanceCleanup: (() => void) | null = null;
-
+/** 三模式主题同步：浅/深/跟随系统。panel 窗口不能用 matchMedia 推断 system 模式——
+ * WKWebView 的 prefers-color-scheme 在窗口被 Rust 侧 setAppearance 锁定后停止跟随
+ * 系统外观（Sky.app #37/#60），会造成前端主题与磨砂背景错配。改由 Rust 提供有效外观：
+ * 挂载/变更时经 systemAppearanceGet 取解析值，运行中订阅 panel-appearance-changed。 */
 function applyThemeMode(mode: string) {
   const root = document.documentElement;
-  if (mode === "system") {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    root.dataset.themeMode = media.matches ? "dark" : "light";
-    if (!systemAppearanceCleanup) {
-      const listener = (event: MediaQueryListEvent) => {
-        root.dataset.themeMode = event.matches ? "dark" : "light";
-      };
-      media.addEventListener("change", listener);
-      systemAppearanceCleanup = () => media.removeEventListener("change", listener);
-    }
-  } else {
-    systemAppearanceCleanup?.();
-    systemAppearanceCleanup = null;
+  if (mode !== "system") {
     root.dataset.themeMode = mode;
+    return;
   }
+  void systemAppearanceGet()
+    .then((appearance) => {
+      if (appearance === "dark" || appearance === "light") {
+        root.dataset.themeMode = appearance;
+      }
+    })
+    .catch(() => {
+      root.dataset.themeMode = "light";
+    });
 }
 
 export function QuickPanelApp() {
@@ -100,37 +97,46 @@ export function QuickPanelApp() {
     };
   }, []);
 
-  // 三模式主题同步 + 默认粘贴模式实时联动（监听 settings-updated）
+  // 三模式主题同步 + 默认粘贴模式实时联动（监听 settings-updated / panel-appearance-changed）
   useEffect(() => {
     settingsGet().then((s) => {
       applyThemeMode(s?.themeMode ?? "system");
       setPasteMode(s?.defaultAction ?? "direct_paste");
-    }).catch(() => {});
+    }).catch(() => applyThemeMode("system"));
 
     if (!("__TAURI_INTERNALS__" in window)) return;
-    let unlisten: (() => void) | null = null;
+    let unlisten: Array<() => void> = [];
     let disposed = false;
 
     void import("@tauri-apps/api/event")
       .then(({ listen }) =>
-        listen<{ theme_mode?: string; default_action?: PasteMode }>(
-          "settings-updated",
-          (event) => {
+        Promise.all([
+          listen<{ theme_mode?: string; default_action?: PasteMode }>(
+            "settings-updated",
+            (event) => {
+              if (disposed) return;
+              if (event.payload.theme_mode) applyThemeMode(event.payload.theme_mode);
+              if (event.payload.default_action) setPasteMode(event.payload.default_action);
+            },
+          ),
+          listen<{ appearance?: string }>("panel-appearance-changed", (event) => {
             if (disposed) return;
-            if (event.payload.theme_mode) applyThemeMode(event.payload.theme_mode);
-            if (event.payload.default_action) setPasteMode(event.payload.default_action);
-          },
-        ),
+            const appearance = event.payload.appearance;
+            if (appearance === "dark" || appearance === "light") {
+              document.documentElement.dataset.themeMode = appearance;
+            }
+          }),
+        ]),
       )
-      .then((fn) => {
-        if (disposed) void fn();
-        else unlisten = fn;
+      .then((fns) => {
+        if (disposed) fns.forEach((f) => void f());
+        else unlisten = fns;
       })
       .catch(() => {});
 
     return () => {
       disposed = true;
-      unlisten?.();
+      unlisten.forEach((f) => f());
     };
   }, []);
 

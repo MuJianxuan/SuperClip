@@ -4,6 +4,7 @@ import { QuickPanelApp } from "./QuickPanelApp";
 
 vi.mock("../lib/superclip", () => ({
   monitorStatusGet: vi.fn(() => Promise.resolve({ isMonitoring: true })),
+  systemAppearanceGet: vi.fn(() => Promise.resolve("dark")),
   settingsGet: vi.fn(() =>
     Promise.resolve({
       schemaVersion: 1,
@@ -28,6 +29,7 @@ vi.mock("../lib/superclip", () => ({
 import {
   monitorStatusGet,
   settingsGet,
+  systemAppearanceGet,
   monitorToggle,
   settingsUpdate,
   showMain,
@@ -109,11 +111,12 @@ describe("QuickPanelApp", () => {
     });
 
     it("writes concrete data-theme-mode derived from system appearance (dark)", async () => {
-      // settingsGet mock 返回 themeMode: "system"; jsdom matchMedia 对 prefers-color-scheme 返回 matches=true
+      // settingsGet mock 返回 themeMode: "system"; systemAppearanceGet mock 返回 dark
       render(<QuickPanelApp />);
       await act(async () => {
         await Promise.resolve();
       });
+      expect(systemAppearanceGet).toHaveBeenCalled();
       expect(document.documentElement.dataset.themeMode).toBe("dark");
     });
   });

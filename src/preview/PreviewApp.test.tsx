@@ -204,13 +204,16 @@ describe("PreviewApp", () => {
             showOnStartup: false,
           };
         }
+        if (cmd === "system_appearance_get") {
+          return "dark";
+        }
         return null;
       });
       render(<PreviewApp />);
       await act(async () => {
         await Promise.resolve();
       });
-      // jsdom matchMedia 对 prefers-color-scheme: dark 返回 matches=true
+      // system_appearance_get mock 返回 dark（system 模式以后端解析的有效外观为准）
       expect(document.documentElement.dataset.themeMode).toBe("dark");
     });
   });
