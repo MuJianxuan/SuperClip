@@ -181,6 +181,11 @@ export function QuickPanelApp() {
 
   const handleOpenMain = useCallback(() => {
     void showMain().catch(() => {});
+    // 与 handleOpenSettings 的 app:show-settings 对称：主窗口可能停留在设置分区，
+    // 显式通知切回主页视图，避免 showMain 只显示窗口而停留在设置页
+    void import("@tauri-apps/api/event")
+      .then(({ emit }) => emit("app:show-home", { source: "quick_panel" }))
+      .catch(() => {});
   }, []);
 
   const handleOpenSettings = useCallback(() => {

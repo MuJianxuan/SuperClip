@@ -198,6 +198,8 @@ export function MainApp() {
       .then(({ listen }) =>
         Promise.all([
           listen("app:show-settings", () => { if (!disposed) setIsSettingsOpen(true); }),
+          // QuickPanel「主管理台」：主窗口可能停留在设置分区，收到后切回主页视图
+          listen("app:show-home", () => { if (!disposed) setIsSettingsOpen(false); }),
           // 主题/设置外部变更（如 QuickPanel）时保持 Main 本地状态与 data-theme-mode 同步
           listen<{ theme_mode?: string; default_action?: SettingsResponse["defaultAction"]; list_font_size?: number }>("settings-updated", (event) => {
             if (disposed) return;
