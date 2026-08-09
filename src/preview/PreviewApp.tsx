@@ -193,12 +193,20 @@ export function PreviewApp() {
 
   const imageDataUrl = useImageDataUrl(detail);
 
+  // emitRef 可能尚未就绪（懒加载 import 未完成/失败）：直接调用会因 optional chaining
+  // 返回 undefined 后在 .catch 上抛 TypeError，进而中断 onMouseLeave——覆盖标记残留
+  // 导致宿主悬浮窗永不消失。统一守卫：无 emit 时静默跳过。
+  function emitPreviewEvent(event: string) {
+    const emitFn = emitRef.current;
+    if (emitFn) void emitFn(event).catch(() => {});
+  }
+
   function handleMouseEnter() {
-    emitRef.current?.("preview:mouse-enter").catch(() => {});
+    emitPreviewEvent("preview:mouse-enter");
   }
 
   function handleMouseLeave() {
-    emitRef.current?.("preview:mouse-leave").catch(() => {});
+    emitPreviewEvent("preview:mouse-leave");
   }
 
   if (!item) {

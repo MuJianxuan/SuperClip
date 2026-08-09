@@ -34,6 +34,7 @@ interface CommandMap {
   showMain: "show_main";
   previewShow: "preview_show";
   previewHide: "preview_hide";
+  previewMouseState: "preview_mouse_state";
   popupReady: "popup_ready";
   quickPanelReady: "quick_panel_ready";
   mainWindowReady: "main_window_ready";
@@ -77,6 +78,7 @@ const COMMANDS: CommandMap = {
   showMain: "show_main",
   previewShow: "preview_show",
   previewHide: "preview_hide",
+  previewMouseState: "preview_mouse_state",
   popupReady: "popup_ready",
   quickPanelReady: "quick_panel_ready",
   mainWindowReady: "main_window_ready",
@@ -1453,4 +1455,19 @@ export function getKindActionLabel(kind: ClipboardKind, defaultAction: SettingsR
   }
 
   return kind === "image" ? "直接粘贴（尽力）" : "直接粘贴";
+}
+
+/**
+ * 鼠标是否在 preview 悬浮窗窗口内（Rust 侧全局鼠标位置判定，不依赖 webview 鼠标事件）。
+ * "unknown" 表示无法判定（非 Tauri 环境/调用失败），调用方应保持现状不处理。
+ */
+export async function previewMouseState(): Promise<"on" | "off" | "unknown"> {
+  try {
+    if (!("__TAURI_INTERNALS__" in window)) return "unknown";
+    const result = await invokeOrFallback<string>("previewMouseState", {}, () => "unknown");
+    if (result === "on" || result === "off") return result;
+    return "unknown";
+  } catch {
+    return "unknown";
+  }
 }

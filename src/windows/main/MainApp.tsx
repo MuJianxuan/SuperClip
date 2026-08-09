@@ -16,6 +16,7 @@ import {
   clipboardPin,
   clipboardUnpin,
   clipboardDelete,
+  previewMouseState,
   previewShow,
   previewHide,
   settingsGet,
@@ -107,6 +108,10 @@ export function MainApp() {
     },
     [hoverPreview.handleRowEnter],
   );
+
+  const handleRowLeave = useCallback(() => {
+    hoverPreview.handleRowLeave();
+  }, [hoverPreview.handleRowLeave]);
 
   const { query, setQuery, items, itemsRef, selectedId, setSelectedId, enqueueRefresh } = useClipboardData();
 
@@ -309,6 +314,29 @@ export function MainApp() {
 
     return () => { disposed = true; unlistenEnter?.(); unlistenLeave?.(); };
   }, [hoverPreview.handlePreviewEnter, hoverPreview.handlePreviewLeave]);
+
+  // 悬浮窗鼠标状态轮询：preview 窗口（focused(false) 非激活 NSPanel）的 webview
+  // mouseleave 事件在非激活状态不可靠（点击激活后才正常派发），导致「鼠标离开悬浮窗
+  // 仍停留」。改由 Rust 全局鼠标位置判定「鼠标是否在悬浮窗窗口内」，独立于 webview
+  // 事件驱动隐藏。每次 off 都触发 handlePreviewLeave（scheduleHide 幂等，计时器不会
+  // 被高频调用重置）——覆盖「hover 行后鼠标移开却不经过悬浮窗」的行级隐藏缺失场景。
+  useEffect(() => {
+    if (!hoverPreview.isPreviewVisible) return;
+    let disposed = false;
+    const check = async () => {
+      if (disposed) return;
+      const state = await previewMouseState();
+      if (disposed) return;
+      if (state === "on") {
+        hoverPreview.handlePreviewEnter();
+      } else if (state === "off") {
+        hoverPreview.handlePreviewLeave();
+      }
+    };
+    void check();
+    const t = window.setInterval(check, 300);
+    return () => { disposed = true; window.clearInterval(t); };
+  }, [hoverPreview.isPreviewVisible, hoverPreview.handlePreviewEnter, hoverPreview.handlePreviewLeave]);
 
   // Feedback auto-dismiss
   useEffect(() => {
@@ -604,7 +632,7 @@ export function MainApp() {
             onPin={handlePin}
             onDelete={handleDelete}
             onRowHover={handleRowHover}
-            onRowLeave={hoverPreview.handleRowLeave}
+            onRowLeave={handleRowLeave}
           />
         ) : (
           <MainGridView
@@ -619,7 +647,7 @@ export function MainApp() {
             onPin={handlePin}
             onDelete={handleDelete}
             onRowHover={handleRowHover}
-            onRowLeave={hoverPreview.handleRowLeave}
+            onRowLeave={handleRowLeave}
           />
         )}
 

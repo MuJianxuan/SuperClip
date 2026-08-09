@@ -68,7 +68,7 @@ describe("useHoverPreview", () => {
     expect(result.current.hoveredItem).toBeNull();
   });
 
-  it("panel leave resets the row-leave hide timer (no stale timer fires later)", () => {
+  it("panel leave does not restart an in-flight hide timer (scheduleHide is idempotent)", () => {
     const { result } = renderHook(() => useHoverPreview<string>({ delay: 300, hideDelay: 100 }));
 
     act(() => {
@@ -76,15 +76,12 @@ describe("useHoverPreview", () => {
     });
     act(() => { vi.advanceTimersByTime(300); });
 
-    // 行离开起 100ms 计时 → 50ms 后窗口离开重置为新 100ms 计时
+    // 行离开起 100ms 计时 → 50ms 后窗口离开：不重启（幂等），旧计时器剩余 50ms 触发
     act(() => { result.current.handleRowLeave(); });
     act(() => { vi.advanceTimersByTime(50); });
     act(() => { result.current.handlePanelLeave(); });
     act(() => { vi.advanceTimersByTime(50); });
-    // 旧计时器（行离开后 100ms）已被清理，悬浮窗仍可见
-    expect(result.current.isPreviewVisible).toBe(true);
-
-    act(() => { vi.advanceTimersByTime(50); });
+    // 旧计时器（行离开后 100ms）未被重启，此时已触发隐藏
     expect(result.current.isPreviewVisible).toBe(false);
   });
 
@@ -172,6 +169,61 @@ describe("useHoverPreview", () => {
     act(() => { vi.advanceTimersByTime(100); });
 
     expect(result.current.isPreviewVisible).toBe(false);
+  });
+
+  it("panel leave clears stale isOverPreviewRef (drop lost leave event) so hiding is never stuck", () => {
+    const { result } = renderHook(() => useHoverPreview<string>({ delay: 300, hideDelay: 100 }));
+
+    // 模拟 preview:mouse-leave 丢失：鼠标进过悬浮窗（覆盖标记 true）且从未收到 leave，
+    // 之后鼠标离开宿主窗口——handlePanelLeave 必须作废覆盖标记，隐藏计时才能生效
+    act(() => {
+      result.current.handleRowEnter("item-1", new DOMRect(0, 0, 100, 44));
+    });
+    act(() => { vi.advanceTimersByTime(300); });
+    act(() => { result.current.handlePreviewEnter(); });
+    act(() => { result.current.handleRowLeave(); });
+    act(() => { result.current.handlePanelLeave(); });
+
+    act(() => { vi.advanceTimersByTime(100); });
+    expect(result.current.isPreviewVisible).toBe(false);
+  });
+
+  it("preview overstay fallback hides stuck preview when leave event is lost", () => {
+    const { result } = renderHook(() => useHoverPreview<string>({ delay: 300, hideDelay: 100 }));
+
+    // mouse-leave 丢失：鼠标进过悬浮窗后无任何离开事件，覆盖标记永久 true。
+    // 超过 PREVIEW_OVERSTAY_MS（10s）且鼠标不在行上时强制解除覆盖并隐藏
+    act(() => {
+      result.current.handleRowEnter("item-1", new DOMRect(0, 0, 100, 44));
+    });
+    act(() => { vi.advanceTimersByTime(300); });
+    act(() => { result.current.handlePreviewEnter(); });
+    act(() => { result.current.handleRowLeave(); });
+
+    act(() => { vi.advanceTimersByTime(9_900); });
+    // 未到兜底时限：悬浮窗保持（鼠标可能仍在悬浮窗上）
+    expect(result.current.isPreviewVisible).toBe(true);
+
+    act(() => { vi.advanceTimersByTime(200); });
+    act(() => { vi.advanceTimersByTime(100); });
+    expect(result.current.isPreviewVisible).toBe(false);
+  });
+
+  it("preview overstay does not fire while mouse is back on a row", () => {
+    const { result } = renderHook(() => useHoverPreview<string>({ delay: 300, hideDelay: 100 }));
+
+    // 鼠标从悬浮窗移回行（rowActive=true）：10s 兜底不触发，悬浮窗保持跟随
+    act(() => {
+      result.current.handleRowEnter("item-1", new DOMRect(0, 0, 100, 44));
+    });
+    act(() => { vi.advanceTimersByTime(300); });
+    act(() => { result.current.handlePreviewEnter(); });
+    act(() => {
+      result.current.handleRowEnter("item-2", new DOMRect(0, 44, 100, 44));
+    });
+
+    act(() => { vi.advanceTimersByTime(10_200); });
+    expect(result.current.isPreviewVisible).toBe(true);
   });
 
   it("reset clears all state and timers", () => {

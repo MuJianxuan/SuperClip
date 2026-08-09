@@ -4926,6 +4926,66 @@ fn preview_hide(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(),
     Ok(())
 }
 
+/// 鼠标是否在 preview 悬浮窗窗口内（全局鼠标位置判定，不依赖 webview 鼠标事件）。
+/// preview 窗口是 focused(false) 的非激活 NSPanel，其 WKWebView 的 mouseleave 事件在
+/// 非激活状态不可靠（点击激活后才正常派发，见 WebKit 非激活窗口 hover 问题），导致
+/// 「鼠标离开悬浮窗仍停留」。改由 AppKit 全局鼠标位置（NSEvent::mouseLocation）与窗口
+/// frame（同一左下原点坐标系，无需转换）比较，宿主轮询驱动隐藏。
+/// 返回 "on" / "off"；preview 未创建或不可见时恒为 "off"。
+/// AppKit 调用需主线程：经 run_on_main_thread 调度后经 channel 返回。
+#[tauri::command]
+fn preview_mouse_state(app: tauri::AppHandle) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    {
+        let Some(preview) = app.get_webview_window("preview") else {
+            return Ok("off".into());
+        };
+        if !preview.is_visible().unwrap_or(false) {
+            return Ok("off".into());
+        }
+        let (tx, rx) = std::sync::mpsc::channel::<String>();
+        app.run_on_main_thread(move || {
+            let state = mouse_over_window(&preview);
+            let _ = tx.send(state);
+        })
+        .map_err(|e| e.to_string())?;
+        return rx.recv().map_err(|e| e.to_string());
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        Ok("off".into())
+    }
+}
+
+/// AppKit 全局鼠标位置（左下原点）与窗口 frame（同一坐标系）直接比较，零转换。
+/// 无法获取鼠标位置时保守返回 "on"：不误杀正在悬浮窗上的用户。
+#[cfg(target_os = "macos")]
+fn mouse_over_window(window: &tauri::WebviewWindow) -> String {
+    use tauri_nspanel::objc2::runtime::{AnyClass, AnyObject};
+
+    let Ok(ns_window) = window.ns_window() else {
+        return "on".into();
+    };
+    let ns_window = ns_window as *mut AnyObject;
+    unsafe {
+        let frame: tauri_nspanel::NSRect = tauri_nspanel::objc2::msg_send![ns_window, frame];
+        let Some(event_cls) = AnyClass::get(c"NSEvent") else {
+            return "on".into();
+        };
+        let mouse: tauri_nspanel::NSPoint = tauri_nspanel::objc2::msg_send![event_cls, mouseLocation];
+        let inside = mouse.x >= frame.origin.x
+            && mouse.x <= frame.origin.x + frame.size.width
+            && mouse.y >= frame.origin.y
+            && mouse.y <= frame.origin.y + frame.size.height;
+        if inside {
+            "on".into()
+        } else {
+            "off".into()
+        }
+    }
+}
+
 #[tauri::command]
 fn popup_ready(app: tauri::AppHandle, state: State<'_, AppState>) {
     if let Ok(mut flag) = state.popup_ready.lock() {
@@ -6111,6 +6171,7 @@ pub fn run() {
             show_main,
             preview_show,
             preview_hide,
+            preview_mouse_state,
             popup_ready,
             quick_panel_ready,
             main_window_ready,
