@@ -856,7 +856,6 @@ export function SettingsShell({
             >
               <Copy className="h-3 w-3 text-white/85" />
             </div>
-            <span className="text-[13px] font-semibold text-[var(--text-secondary)]">设置</span>
           </div>
 
           <div className="flex-1" />
