@@ -4959,6 +4959,9 @@ fn preview_mouse_state(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 /// AppKit 全局鼠标位置（左下原点）与窗口 frame（同一坐标系）直接比较，零转换。
+/// 判定区域按圆角半径内缩（悬浮窗 corner_radius 12）：frame 是矩形，比可见圆角内容大，
+/// 鼠标「移出悬浮窗」后若停在圆角外/边缘角落（<12px）仍会被判定 on，导致 handlePreviewEnter
+/// 持续取消隐藏计时（悬浮窗不消失）。内缩后鼠标离开可见内容即判定 off。
 /// 无法获取鼠标位置时保守返回 "on"：不误杀正在悬浮窗上的用户。
 #[cfg(target_os = "macos")]
 fn mouse_over_window(window: &tauri::WebviewWindow) -> String {
@@ -4974,10 +4977,13 @@ fn mouse_over_window(window: &tauri::WebviewWindow) -> String {
             return "on".into();
         };
         let mouse: tauri_nspanel::NSPoint = tauri_nspanel::objc2::msg_send![event_cls, mouseLocation];
-        let inside = mouse.x >= frame.origin.x
-            && mouse.x <= frame.origin.x + frame.size.width
-            && mouse.y >= frame.origin.y
-            && mouse.y <= frame.origin.y + frame.size.height;
+        // 与 preview 面板 corner_radius(12.0) 一致的内缩：排除圆角外/阴影边缘的误判区
+        let inset: f64 = 12.0;
+        let x0 = frame.origin.x + inset;
+        let y0 = frame.origin.y + inset;
+        let x1 = frame.origin.x + frame.size.width - inset;
+        let y1 = frame.origin.y + frame.size.height - inset;
+        let inside = mouse.x >= x0 && mouse.x <= x1 && mouse.y >= y0 && mouse.y <= y1;
         if inside {
             "on".into()
         } else {
