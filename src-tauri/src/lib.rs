@@ -3417,6 +3417,10 @@ fn show_main_window(
         *pending = false;
     }
 
+    // Main 窗口显示前异步预热 preview 面板（幂等，已存在则跳过），
+    // 使主窗口首次 hover 列表行时悬浮窗已就绪，无需懒创建等待
+    prewarm_preview_panel(app);
+
     let _ = window.show();
     let _ = window.unminimize();
 

@@ -241,18 +241,26 @@ export function MainApp() {
     return () => { disposed = true; unlisten.forEach((f) => f()); };
   }, []);
 
-  // 悬浮预览显示/隐藏：hover 行 → 定位行右侧并显示 preview 窗口 + 广播 preview:show；
-  // 与 popup 共用同一 preview 单例窗口（用户同时只操作一个窗口，无冲突）
+  // 悬浮预览显示/隐藏：hover 行 → 定位跟随鼠标并显示 preview 窗口 + 广播 preview:show；
+  // 与 popup 共用同一 preview 单例窗口（用户同时只操作一个窗口，无冲突）。
+  // 每次状态变化异步检查窗口可见性：窗口隐藏（最小化等）期间不响应 hover 状态，
+  // 避免残留状态在窗口隐藏后仍操作共享悬浮窗
   useEffect(() => {
-    if (hoverPreview.isPreviewVisible && hoverPreview.hoveredItem && hoverPreview.hoveredRect) {
-      const item = hoverPreview.hoveredItem;
-      const rect = hoverPreview.hoveredRect;
+    let cancelled = false;
+    void (async () => {
       if (!("__TAURI_INTERNALS__" in window)) return;
-
-      void (async () => {
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const win = getCurrentWindow();
+        let visible = true;
         try {
-          const { getCurrentWindow } = await import("@tauri-apps/api/window");
-          const win = getCurrentWindow();
+          visible = await win.isVisible();
+        } catch {}
+        if (cancelled || !visible) return;
+
+        if (hoverPreview.isPreviewVisible && hoverPreview.hoveredItem && hoverPreview.hoveredRect) {
+          const item = hoverPreview.hoveredItem;
+          const rect = hoverPreview.hoveredRect;
           const pos = await win.outerPosition();
           const scale = await win.scaleFactor();
           const logicalX = pos.x / scale;
@@ -271,11 +279,14 @@ export function MainApp() {
 
           const { emit } = await import("@tauri-apps/api/event");
           await emit("preview:show", { item });
-        } catch {}
-      })();
-    } else {
-      void previewHide().catch(() => {});
-    }
+        } else {
+          await previewHide();
+        }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [hoverPreview.isPreviewVisible, hoverPreview.hoveredItem, hoverPreview.hoveredRect]);
 
   // 悬浮窗 mouse-enter/leave 桥：鼠标进入 preview 窗口时取消隐藏计时（与 popup 同机制），
@@ -607,6 +618,8 @@ export function MainApp() {
             onAction={handleAction}
             onPin={handlePin}
             onDelete={handleDelete}
+            onRowHover={handleRowHover}
+            onRowLeave={hoverPreview.handleRowLeave}
           />
         )}
 

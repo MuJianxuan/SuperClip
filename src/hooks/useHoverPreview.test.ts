@@ -121,7 +121,7 @@ describe("useHoverPreview", () => {
     expect(result.current.isPreviewVisible).toBe(false);
   });
 
-  it("hides preview when mouse leaves preview", () => {
+  it("hides preview when mouse leaves preview and no row is hovered", () => {
     const { result } = renderHook(() => useHoverPreview<string>({ delay: 300, hideDelay: 100 }));
 
     act(() => {
@@ -129,9 +129,68 @@ describe("useHoverPreview", () => {
     });
     act(() => { vi.advanceTimersByTime(300); });
     act(() => { result.current.handlePreviewEnter(); });
+    // 鼠标离开行（移向悬浮窗之外的空白/窗口外）后，再离开悬浮窗才隐藏
+    act(() => { result.current.handleRowLeave(); });
     act(() => { result.current.handlePreviewLeave(); });
     act(() => { vi.advanceTimersByTime(100); });
 
+    expect(result.current.isPreviewVisible).toBe(false);
+  });
+
+  it("keeps preview when mouse leaves preview while hovering a row (row-active, no race mis-hide)", () => {
+    const { result } = renderHook(() => useHoverPreview<string>({ delay: 300, hideDelay: 100 }));
+
+    // 模拟「从悬浮窗移回另一行」：行 B enter（rowActive=true）先到，悬浮窗 leave IPC 后到
+    act(() => {
+      result.current.handleRowEnter("item-1", new DOMRect(0, 0, 100, 44));
+    });
+    act(() => { vi.advanceTimersByTime(300); });
+    act(() => { result.current.handlePreviewEnter(); });
+    act(() => {
+      result.current.handleRowEnter("item-2", new DOMRect(0, 44, 100, 44));
+    });
+    act(() => { result.current.handlePreviewLeave(); });
+    act(() => { vi.advanceTimersByTime(200); });
+
+    expect(result.current.isPreviewVisible).toBe(true);
+  });
+
+  it("row enter resets stale isOverPreviewRef so hiding is never stuck", () => {
+    const { result } = renderHook(() => useHoverPreview<string>({ delay: 300, hideDelay: 100 }));
+
+    // 鼠标进过悬浮窗（isOverPreviewRef=true）后，直接 hover 新行：残留标记被重置，
+    // 之后离开行的隐藏计时不会被跳过（修复「悬浮窗永不消失」）
+    act(() => {
+      result.current.handleRowEnter("item-1", new DOMRect(0, 0, 100, 44));
+    });
+    act(() => { vi.advanceTimersByTime(300); });
+    act(() => { result.current.handlePreviewEnter(); });
+    act(() => {
+      result.current.handleRowEnter("item-2", new DOMRect(0, 44, 100, 44));
+    });
+    act(() => { result.current.handleRowLeave(); });
+    act(() => { vi.advanceTimersByTime(100); });
+
+    expect(result.current.isPreviewVisible).toBe(false);
+  });
+
+  it("reset clears all state and timers", () => {
+    const { result } = renderHook(() => useHoverPreview<string>({ delay: 300, hideDelay: 100 }));
+
+    act(() => {
+      result.current.handleRowEnter("item-1", new DOMRect(0, 0, 100, 44));
+    });
+    act(() => { vi.advanceTimersByTime(300); });
+    expect(result.current.isPreviewVisible).toBe(true);
+
+    act(() => { result.current.reset(); });
+    expect(result.current.isPreviewVisible).toBe(false);
+    expect(result.current.hoveredItem).toBeNull();
+    expect(result.current.hoveredRect).toBeNull();
+
+    // reset 后无残留计时器：离开行/窗口不再触发隐藏副作用
+    act(() => { result.current.handleRowLeave(); });
+    act(() => { vi.advanceTimersByTime(500); });
     expect(result.current.isPreviewVisible).toBe(false);
   });
 

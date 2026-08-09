@@ -14,6 +14,10 @@ interface MainGridViewProps {
   onAction: (id: string) => void;
   onPin: (id: string) => void;
   onDelete: (id: string) => void;
+  /** 卡片 hover 预览：与 MainListView 行 hover 同链路（MainApp 的 useHoverPreview 消费）；
+   * cursorX/cursorY 为鼠标在窗口内的 client 坐标，用于悬浮窗跟随鼠标右侧定位 */
+  onRowHover: (item: ClipboardItem, rect: DOMRect, cursorX: number, cursorY: number) => void;
+  onRowLeave: () => void;
 }
 
 /** E2 网格：卡片 minmax(160px,1fr) 自适应列，顶部类型色渐变条，20px 图标。 */
@@ -28,6 +32,8 @@ export const MainGridView = memo(function MainGridView({
   onAction,
   onPin,
   onDelete,
+  onRowHover,
+  onRowLeave,
 }: MainGridViewProps) {
   if (items.length === 0) {
     return (
@@ -54,6 +60,8 @@ export const MainGridView = memo(function MainGridView({
           onAction={onAction}
           onPin={onPin}
           onDelete={onDelete}
+          onRowHover={onRowHover}
+          onRowLeave={onRowLeave}
         />
       ))}
     </div>
@@ -69,6 +77,8 @@ function GridCard({
   onAction,
   onPin,
   onDelete,
+  onRowHover,
+  onRowLeave,
 }: {
   item: ClipboardItem;
   selected: boolean;
@@ -78,6 +88,8 @@ function GridCard({
   onAction: (id: string) => void;
   onPin: (id: string) => void;
   onDelete: (id: string) => void;
+  onRowHover: (item: ClipboardItem, rect: DOMRect, cursorX: number, cursorY: number) => void;
+  onRowLeave: () => void;
 }) {
   const meta = KIND_META[item.kind];
   const Icon = meta.icon;
@@ -87,8 +99,14 @@ function GridCard({
     <div
       data-clipboard-row-id={item.id}
       data-selected={selected || undefined}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={(e) => {
+        setHovered(true);
+        onRowHover(item, e.currentTarget.getBoundingClientRect(), e.clientX, e.clientY);
+      }}
+      onMouseLeave={() => {
+        setHovered(false);
+        onRowLeave();
+      }}
       onClick={() => onSelect(item.id)}
       onDoubleClick={() => onAction(item.id)}
       className="relative flex min-h-[118px] cursor-pointer flex-col overflow-hidden rounded-xl border p-[11px] transition-all animate-[rowSlideIn_0.2s_ease-out]"

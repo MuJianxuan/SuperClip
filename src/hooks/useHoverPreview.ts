@@ -17,6 +17,9 @@ export function useHoverPreview<T>(options: UseHoverPreviewOptions = {}) {
   const showTimerRef = useRef<number | null>(null);
   const hideTimerRef = useRef<number | null>(null);
   const isOverPreviewRef = useRef(false);
+  /** 鼠标当前是否在列表行上：悬浮窗跟随行时（行 enter 先于悬浮窗 leave IPC 到达）
+   * 由 handlePreviewLeave 据此跳过隐藏计时，修复从悬浮窗移回行的竞态误隐藏 */
+  const rowActiveRef = useRef(false);
 
   const clearTimers = useCallback(() => {
     if (showTimerRef.current !== null) {
@@ -48,6 +51,11 @@ export function useHoverPreview<T>(options: UseHoverPreviewOptions = {}) {
 
   const handleRowEnter = useCallback(
     (item: T, rect: DOMRect) => {
+      // 新行 hover 时鼠标必然在行上（不在悬浮窗上）：重置悬浮窗覆盖标记，
+      // 清除上次 hover 残留的 true——否则后续所有隐藏计时都会被跳过（悬浮窗永不消失）
+      isOverPreviewRef.current = false;
+      rowActiveRef.current = true;
+
       if (hideTimerRef.current !== null) {
         window.clearTimeout(hideTimerRef.current);
         hideTimerRef.current = null;
@@ -71,6 +79,7 @@ export function useHoverPreview<T>(options: UseHoverPreviewOptions = {}) {
   const handleRowLeave = useCallback(() => {
     // 鼠标离开行：清显示计时器（快速滑过行时不显示预览）；
     // 按配置决定是否立即开始隐藏计时
+    rowActiveRef.current = false;
     if (showTimerRef.current !== null) {
       window.clearTimeout(showTimerRef.current);
       showTimerRef.current = null;
@@ -83,6 +92,7 @@ export function useHoverPreview<T>(options: UseHoverPreviewOptions = {}) {
   /** 鼠标离开 popup/主窗口（relatedTarget 不在窗口内）时重置隐藏计时；
    * 窗口内停留（等 hover 其他行/操作）不触发；进入悬浮窗时由 handlePreviewEnter 取消 */
   const handlePanelLeave = useCallback(() => {
+    rowActiveRef.current = false;
     scheduleHide();
   }, [scheduleHide]);
 
@@ -96,8 +106,29 @@ export function useHoverPreview<T>(options: UseHoverPreviewOptions = {}) {
 
   const handlePreviewLeave = useCallback(() => {
     isOverPreviewRef.current = false;
+    // 鼠标从悬浮窗移回列表行时，行 enter 已先于悬浮窗 leave IPC 到达（rowActive=true），
+    // 悬浮窗正在跟随该行——此时启动隐藏计时会误杀悬浮窗；移到空白/窗口外才隐藏
+    if (rowActiveRef.current) return;
     scheduleHide();
   }, [scheduleHide]);
+
+  /** 重置全部悬停状态（窗口隐藏/显示切换时调用）：清计时器 + 覆盖标记 + 状态，
+   * 避免残留状态在窗口隐藏后仍响应全局 preview 事件、干扰共享悬浮窗 */
+  const reset = useCallback(() => {
+    if (showTimerRef.current !== null) {
+      window.clearTimeout(showTimerRef.current);
+      showTimerRef.current = null;
+    }
+    if (hideTimerRef.current !== null) {
+      window.clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+    isOverPreviewRef.current = false;
+    rowActiveRef.current = false;
+    setIsPreviewVisible(false);
+    setHoveredItem(null);
+    setHoveredRect(null);
+  }, []);
 
   useEffect(() => {
     return clearTimers;
@@ -112,5 +143,6 @@ export function useHoverPreview<T>(options: UseHoverPreviewOptions = {}) {
     handlePanelLeave,
     handlePreviewEnter,
     handlePreviewLeave,
+    reset,
   };
 }

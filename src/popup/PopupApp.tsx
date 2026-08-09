@@ -106,15 +106,24 @@ export function PopupApp() {
   const hoverPreview = useHoverPreview<ClipboardItem>({ delay: 200, hideDelay: 350, hideOnRowLeave: false });
 
   useEffect(() => {
-    if (hoverPreview.isPreviewVisible && hoverPreview.hoveredItem && hoverPreview.hoveredRect) {
-      const item = hoverPreview.hoveredItem;
-      const rect = hoverPreview.hoveredRect;
+    // popup 是 NSPanel，失焦自动隐藏但 React 组件仍运行——隐藏期间必须停止响应
+    // hover 状态（否则残留的 isPreviewVisible 会在收到全局 preview:mouse-* 事件时
+    // 误调用 previewHide，干扰 Main 共享的同一悬浮窗）；每次状态变化异步检查窗口可见性
+    let cancelled = false;
+    void (async () => {
       if (!("__TAURI_INTERNALS__" in window)) return;
-
-      void (async () => {
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const win = getCurrentWindow();
+        let visible = true;
         try {
-          const { getCurrentWindow } = await import("@tauri-apps/api/window");
-          const win = getCurrentWindow();
+          visible = await win.isVisible();
+        } catch {}
+        if (cancelled || !visible) return;
+
+        if (hoverPreview.isPreviewVisible && hoverPreview.hoveredItem && hoverPreview.hoveredRect) {
+          const item = hoverPreview.hoveredItem;
+          const rect = hoverPreview.hoveredRect;
           const pos = await win.outerPosition();
           const scale = await win.scaleFactor();
           const logicalX = pos.x / scale;
@@ -131,11 +140,14 @@ export function PopupApp() {
 
           const { emit } = await import("@tauri-apps/api/event");
           await emit("preview:show", { item });
-        } catch {}
-      })();
-    } else {
-      void previewHide().catch(() => {});
-    }
+        } else {
+          await previewHide();
+        }
+      } catch {}
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [hoverPreview.isPreviewVisible, hoverPreview.hoveredItem, hoverPreview.hoveredRect]);
 
   // ---- 虚拟滚动状态（固定行高，仅渲染可视窗 + overscan）----
