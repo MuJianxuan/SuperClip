@@ -26,9 +26,9 @@ describe("MainApp", () => {
 
   it("renders top bar without brand title text", () => {
     render(<MainApp />);
-    // 品牌文字已移除，搜索框左拉占满；logo 图标保留（aria-label 兜底标识）
+    // 品牌文字与 logo 图标均已移除，搜索框占用整行（不再有 aria-label 兜底标识）
     expect(screen.queryByText("剪贴板")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("SuperClip")).toBeInTheDocument();
+    expect(screen.queryByLabelText("SuperClip")).not.toBeInTheDocument();
   });
 
   it("renders all filter chip labels", () => {

@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import { Copy, Grid3X3, List, Search, Settings2, X } from "lucide-react";
+import { Grid3X3, List, Search, Settings2, X } from "lucide-react";
 
 interface MainTopBarProps {
   viewMode: "list" | "grid";
@@ -24,16 +24,15 @@ export const MainTopBar = memo(function MainTopBar({
   const searchActive = searchFocused || searchHovered;
 
   return (
-    <header className="flex items-center gap-3 px-4 pb-2.5 pt-3.5">
-      {/* identity：仅保留 logo 图标（去掉品牌文字，搜索框向左拉伸占满剩余空间） */}
-      <div className="flex shrink-0 items-center gap-2" aria-label="SuperClip">
-        <div
-          className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-[rgba(56,189,248,0.35)] to-[rgba(167,139,250,0.25)] shadow-[0_0_12px_rgba(56,189,248,0.2)]"
-          aria-hidden="true"
-        >
-          <Copy className="h-3 w-3 text-white/85" />
-        </div>
-      </div>
+    // Overlay 标题栏（tauri.conf.json titleBarStyle:Overlay）：整行作为窗口拖拽区，
+    // deep 使 logo/空隙也能拖拽，search label/视图/设置按钮等可交互元素自动豁免；
+    // 双击空白区由 Tauri 拖拽脚本原生触发窗口缩放（internal_toggle_maximize，macOS 惯例）。
+    // 左侧 pl-[84px] 避让原生红绿灯（trafficLightPosition x=20 后约占 20~80px）。
+    <header
+      data-tauri-drag-region="deep"
+      className="flex items-center gap-3 pb-2.5 pl-[84px] pr-4 pt-3.5"
+    >
+      {/* 左上角不再放品牌 logo：红绿灯避让后搜索框直接占满，无 identity 元素干扰拖拽区 */}
 
       {/* dominant search */}
       <label

@@ -3105,12 +3105,14 @@ fn current_system_appearance_name() -> Option<String> {
     }
 }
 
-/// 三模式主题的原生外观同步：显式 light/dark 时把三个磨砂 panel 的 NSAppearance 固定为
-/// Aqua/DarkAqua，并重建 NSVisualEffectView 使其以当前外观初始化渲染；否则 app 主题与系统
-/// 外观不一致时磨砂背景与前端 token 错配。system 镜像 NSApp.effectiveAppearance 的具体值
-/// （不设 nil，见 resolve_panel_appearance_name 的注释）。
+/// 三模式主题的原生外观同步：显式 light/dark 时把主窗口与三个磨砂 panel 的 NSAppearance
+/// 固定为 Aqua/DarkAqua；否则 app 主题与系统外观不一致时，磨砂背景/标题栏红绿灯与前端
+/// token 错配。system 镜像 NSApp.effectiveAppearance 的具体值（不设 nil，见
+/// resolve_panel_appearance_name 的注释）。三个磨砂 panel 额外重建 NSVisualEffectView
+/// 使其以当前外观初始化渲染；主窗口无磨砂仅设外观（Overlay 标题栏红绿灯颜色由窗口
+/// NSAppearance 决定，须与主题一致）。
 #[cfg(target_os = "macos")]
-fn sync_vibrancy_panels_appearance(app: &tauri::AppHandle, theme_mode: &str) {
+fn sync_native_windows_appearance(app: &tauri::AppHandle, theme_mode: &str) {
     use tauri_nspanel::objc2::runtime::{AnyClass, AnyObject};
 
     let name = match theme_mode {
@@ -3124,8 +3126,9 @@ fn sync_vibrancy_panels_appearance(app: &tauri::AppHandle, theme_mode: &str) {
         }
     };
 
-    // (label, 圆角)：与 create_*_panel 的 apply_vibrancy 半径一致
-    for (label, radius) in [("popup", 12.0), ("preview", 12.0), ("quick_panel", 12.0)] {
+    // 主窗口 + 三个磨砂 panel：统一锁定 NSAppearance（红绿灯/原生控件跟随主题）。
+    // 主窗口为普通 NSWindow（非 NSPanel），get_webview_window 同样可用。
+    for label in ["main", "popup", "preview", "quick_panel"] {
         let Some(window) = app.get_webview_window(label) else {
             continue;
         };
@@ -3150,11 +3153,17 @@ fn sync_vibrancy_panels_appearance(app: &tauri::AppHandle, theme_mode: &str) {
                 tauri_nspanel::objc2::msg_send![appearance_cls, appearanceNamed: name_str];
             let () = tauri_nspanel::objc2::msg_send![ns_window, setAppearance: appearance];
         }
+    }
 
-        // 重建 NSVisualEffectView：window_vibrancy 的 apply_vibrancy 只 add 不 replace，
-        // 且已存在的 view 在 setAppearance 后不重算（asyar #290 同款：blur tint 建窗时
-        // 定死）。clear 后重新 apply，让 view 以当前 window appearance 正确初始化渲染。
-        // 这是运行时切换磨砂深浅最可靠的业界做法（HardwareVisualizer #1724 同源）。
+    // 重建 NSVisualEffectView：window_vibrancy 的 apply_vibrancy 只 add 不 replace，
+    // 且已存在的 view 在 setAppearance 后不重算（asyar #290 同款：blur tint 建窗时
+    // 定死）。clear 后重新 apply，让 view 以当前 window appearance 正确初始化渲染。
+    // 这是运行时切换磨砂深浅最可靠的业界做法（HardwareVisualizer #1724 同源）。
+    // (label, 圆角)：与 create_*_panel 的 apply_vibrancy 半径一致；主窗口无磨砂，跳过。
+    for (label, radius) in [("popup", 12.0), ("preview", 12.0), ("quick_panel", 12.0)] {
+        let Some(window) = app.get_webview_window(label) else {
+            continue;
+        };
         let _ = clear_vibrancy(&window);
         let _ = apply_vibrancy(
             &window,
@@ -3164,7 +3173,7 @@ fn sync_vibrancy_panels_appearance(app: &tauri::AppHandle, theme_mode: &str) {
         );
     }
 
-    // 前端主题的唯一事实源：广播 panel 实际应用的有效外观。WKWebView 的
+    // 前端主题的唯一事实源：广播实际应用的有效外观。WKWebView 的
     // prefers-color-scheme 在 setAppearance 锁定后停止跟随系统（Sky.app #37/#60），
     // 前端 matchMedia 不可用，改由本事件 + system_appearance_get 驱动。
     let applied = if name == c"NSAppearanceNameDarkAqua" { "dark" } else { "light" };
@@ -3186,7 +3195,7 @@ fn system_appearance_get() -> String {
 }
 
 /// 系统外观跟随 watcher：周期检测 NSApp.effectiveAppearance 变化，当前主题为 system 时
-/// 把三个磨砂 panel 镜像到系统最新外观（经由主线程执行 AppKit 调用）。
+/// 把主窗口与磨砂 panel 镜像到系统最新外观（经由主线程执行 AppKit 调用）。
 #[cfg(target_os = "macos")]
 fn start_system_appearance_watcher(app: tauri::AppHandle) {
     std::thread::spawn(move || loop {
@@ -3212,7 +3221,7 @@ fn start_system_appearance_watcher(app: tauri::AppHandle) {
                 .map(|settings| settings.theme_mode.clone())
                 .unwrap_or_else(|_| "system".into());
             if theme_mode == "system" {
-                sync_vibrancy_panels_appearance(&app_for_closure, "system");
+                sync_native_windows_appearance(&app_for_closure, "system");
             }
         });
     });
@@ -3684,13 +3693,13 @@ fn install_desktop_controls(app: &tauri::AppHandle, state: &State<'_, AppState>)
                     );
                 }
 
-                // 启动即按持久化主题同步三个磨砂 panel 的原生外观（后续变更由 settings_update 触发）
+                // 启动即按持久化主题同步主窗口与磨砂 panel 的原生外观（后续变更由 settings_update 触发）
                 let theme_mode = state
                     .settings
                     .lock()
                     .map(|settings| settings.theme_mode.clone())
                     .unwrap_or_else(|_| "system".into());
-                sync_vibrancy_panels_appearance(app, &theme_mode);
+                sync_native_windows_appearance(app, &theme_mode);
 
                 // 系统外观跟随 watcher：system 模式下实时镜像到三个磨砂 panel
                 start_system_appearance_watcher(app.clone());
@@ -4072,7 +4081,7 @@ fn settings_update(
     }
 
     #[cfg(target_os = "macos")]
-    sync_vibrancy_panels_appearance(&app, &response.theme_mode);
+    sync_native_windows_appearance(&app, &response.theme_mode);
 
     emit_superclip_event(
         &app,

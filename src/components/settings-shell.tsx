@@ -1,7 +1,6 @@
 import * as React from "react";
 import {
   ArrowLeft,
-  Copy,
   Database,
   Keyboard,
   Monitor,
@@ -845,19 +844,10 @@ export function SettingsShell({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      {/* ================= F2 顶部 toolbar：identity + 返回列表（与 E2/F2 同位） ================= */}
-      <div className="shrink-0 px-4 pt-3.5">
+      {/* ================= F2 顶部 toolbar：identity + 返回列表（与 E2/F2 同位） =================
+           Overlay 标题栏：整行作为窗口拖拽区（返回按钮可交互自动豁免），左侧 pl-[84px] 避让红绿灯 */}
+      <div data-tauri-drag-region="deep" className="shrink-0 pl-[84px] pr-4 pt-3.5">
         <div className="flex items-center gap-2.5">
-          {/* Window identity：渐变图标 + 「设置」（与 Main 列表 toolbar 的 identity 语言一致） */}
-          <div className="flex shrink-0 items-center gap-[7px]">
-            <div
-              className="flex h-6 w-6 items-center justify-center rounded-[8px] bg-gradient-to-br from-[rgba(56,189,248,0.35)] to-[rgba(167,139,250,0.25)] shadow-[0_0_12px_rgba(56,189,248,0.2)]"
-              aria-hidden="true"
-            >
-              <Copy className="h-3 w-3 text-white/85" />
-            </div>
-          </div>
-
           <div className="flex-1" />
 
           {/* 返回列表（回到 Main 的剪贴板分区） */}
