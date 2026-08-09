@@ -11,9 +11,9 @@ describe("MainTopBar", () => {
     onSettingsClick: vi.fn(),
   };
 
-  it("renders app title", () => {
+  it("does not render app title text (search bar extends left)", () => {
     render(<MainTopBar {...defaultProps} />);
-    expect(screen.getByText("剪贴板")).toBeInTheDocument();
+    expect(screen.queryByText("剪贴板")).not.toBeInTheDocument();
   });
 
   it("renders search input", () => {

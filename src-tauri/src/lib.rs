@@ -4789,6 +4789,7 @@ fn preview_show(
     y: f64,
     width: f64,
     height: f64,
+    anchor: String,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
@@ -4826,11 +4827,34 @@ fn preview_show(
         let screen_bottom = mon_y + mon_h;
 
         if final_x + width > screen_right {
-            if let Some(popup) = app.get_webview_window("popup") {
-                if let Ok(popup_pos) = popup.outer_position() {
-                    let popup_x = popup_pos.x as f64 / scale;
-                    final_x = popup_x - width - 4.0;
+            let mut placed_left = false;
+            if anchor == "popup" {
+                // popup 专属：悬浮窗在 popup 窗口右缘外，溢出时优先放 popup 左缘之左
+                // （popup 固定在屏幕右上托盘区，悬浮窗紧贴窗口左侧显示）
+                if let Some(popup) = app.get_webview_window("popup") {
+                    if let Ok(popup_pos) = popup.outer_position() {
+                        let popup_x = popup_pos.x as f64 / scale;
+                        let candidate = popup_x - width - 4.0;
+                        if candidate >= mon_x {
+                            final_x = candidate;
+                            placed_left = true;
+                        }
+                    }
                 }
+                if !placed_left {
+                    // 兜底：仍以 popup 左缘为基准（gap 4），不依赖触发位置
+                    if let Some(popup) = app.get_webview_window("popup") {
+                        if let Ok(popup_pos) = popup.outer_position() {
+                            let popup_x = popup_pos.x as f64 / scale;
+                            final_x = (popup_x - width - 4.0).max(mon_x);
+                        }
+                    }
+                }
+            } else {
+                // cursor 场景（Main 窗口行 hover）：悬浮窗右缘放回触发点左侧，两侧与前端
+                // gap 对称（前端传入 = 触发点 + 48，这里再左移 width + 96 → 右缘 = 触发点 - 48），
+                // 紧贴鼠标不甩远；仍由下方 clamp 保底
+                final_x = final_x - width - 96.0;
             }
         }
         if final_y + height > screen_bottom {

@@ -24,9 +24,11 @@ describe("MainApp", () => {
     }
   });
 
-  it("renders top bar with app title", () => {
+  it("renders top bar without brand title text", () => {
     render(<MainApp />);
-    expect(screen.getByText("剪贴板")).toBeInTheDocument();
+    // 品牌文字已移除，搜索框左拉占满；logo 图标保留（aria-label 兜底标识）
+    expect(screen.queryByText("剪贴板")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("SuperClip")).toBeInTheDocument();
   });
 
   it("renders all filter chip labels", () => {

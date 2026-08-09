@@ -15,6 +15,10 @@ interface MainListViewProps {
   onCopy: (id: string) => void;
   onPin: (id: string) => void;
   onDelete: (id: string) => void;
+  /** 行 hover 预览：由 MainApp 的 useHoverPreview 消费（显示/隐藏 preview 悬浮窗）；
+   * cursorX/cursorY 为鼠标在窗口内的 client 坐标，用于悬浮窗跟随鼠标右侧定位 */
+  onRowHover: (item: ClipboardItem, rect: DOMRect, cursorX: number, cursorY: number) => void;
+  onRowLeave: () => void;
 }
 
 type GroupId = "today" | "yesterday" | "earlier";
@@ -48,6 +52,8 @@ export const MainListView = memo(function MainListView({
   onCopy,
   onPin,
   onDelete,
+  onRowHover,
+  onRowLeave,
 }: MainListViewProps) {
   const grouped = useMemo(() => {
     return GROUP_ORDER.map((group) => ({
@@ -87,6 +93,8 @@ export const MainListView = memo(function MainListView({
               onCopy={onCopy}
               onPin={onPin}
               onDelete={onDelete}
+              onRowHover={onRowHover}
+              onRowLeave={onRowLeave}
             />
           ))}
         </section>
@@ -107,6 +115,8 @@ function Row({
   onCopy,
   onPin,
   onDelete,
+  onRowHover,
+  onRowLeave,
 }: {
   item: ClipboardItem;
   selected: boolean;
@@ -117,6 +127,8 @@ function Row({
   onCopy: (id: string) => void;
   onPin: (id: string) => void;
   onDelete: (id: string) => void;
+  onRowHover: (item: ClipboardItem, rect: DOMRect, cursorX: number, cursorY: number) => void;
+  onRowLeave: () => void;
 }) {
   const meta = KIND_META[item.kind];
   const Icon = meta.icon;
@@ -125,8 +137,14 @@ function Row({
   return (
     <div
       data-clipboard-row-id={item.id}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseEnter={(e) => {
+        setHovered(true);
+        onRowHover(item, e.currentTarget.getBoundingClientRect(), e.clientX, e.clientY);
+      }}
+      onMouseLeave={() => {
+        setHovered(false);
+        onRowLeave();
+      }}
       onClick={() => onSelect(item.id)}
       onDoubleClick={() => onAction(item.id)}
       className="relative flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-[7px] transition-colors animate-[rowSlideIn_0.2s_ease-out]"

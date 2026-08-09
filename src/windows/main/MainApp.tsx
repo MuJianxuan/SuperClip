@@ -8,12 +8,16 @@ import { MainGridView } from "./MainGridView";
 import { MainBulkActionBar } from "./MainBulkActionBar";
 import { SettingsShell } from "../../components/settings-shell";
 import { useClipboardData } from "../../hooks/useClipboardData";
+import { useHoverPreview } from "../../hooks/useHoverPreview";
+import type { ClipboardItem } from "../../components/history-row";
 import {
   clipboardCopy,
   clipboardPaste,
   clipboardPin,
   clipboardUnpin,
   clipboardDelete,
+  previewShow,
+  previewHide,
   settingsGet,
   settingsUpdate,
   rulesList,
@@ -88,6 +92,21 @@ export function MainApp() {
 
   const readOnlyRef = useRef({ isRecoveryMode, isMigrationBlocking });
   readOnlyRef.current = { isRecoveryMode, isMigrationBlocking };
+
+  // 悬浮预览：hover 列表行 200ms 后，复用 popup 的 preview 悬浮窗显示在鼠标右侧（单例窗口）。
+  // 行离开即开始 200ms 隐藏计时（鼠标不在悬浮窗上时快速消失）；进入悬浮窗则保持
+  const hoverPreview = useHoverPreview<ClipboardItem>({ delay: 200, hideDelay: 200 });
+
+  // hover 行的鼠标窗口内坐标（用于悬浮窗定位：跟随鼠标右侧，而非行右侧——
+  // 主窗口行几乎占满宽度，行右侧定位会溢出切左导致悬浮窗离鼠标很远）
+  const hoverCursorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const handleRowHover = useCallback(
+    (item: ClipboardItem, rect: DOMRect, cursorX: number, cursorY: number) => {
+      hoverCursorRef.current = { x: cursorX, y: cursorY };
+      hoverPreview.handleRowEnter(item, rect);
+    },
+    [hoverPreview.handleRowEnter],
+  );
 
   const { query, setQuery, items, itemsRef, selectedId, setSelectedId, enqueueRefresh } = useClipboardData();
 
@@ -219,8 +238,66 @@ export function MainApp() {
       .then((fns) => { if (disposed) fns.forEach((f) => void f()); else unlisten = fns; })
       .catch(() => {});
 
-    return () => { disposed = true; unlisten.forEach((f) => void f()); };
+    return () => { disposed = true; unlisten.forEach((f) => f()); };
   }, []);
+
+  // 悬浮预览显示/隐藏：hover 行 → 定位行右侧并显示 preview 窗口 + 广播 preview:show；
+  // 与 popup 共用同一 preview 单例窗口（用户同时只操作一个窗口，无冲突）
+  useEffect(() => {
+    if (hoverPreview.isPreviewVisible && hoverPreview.hoveredItem && hoverPreview.hoveredRect) {
+      const item = hoverPreview.hoveredItem;
+      const rect = hoverPreview.hoveredRect;
+      if (!("__TAURI_INTERNALS__" in window)) return;
+
+      void (async () => {
+        try {
+          const { getCurrentWindow } = await import("@tauri-apps/api/window");
+          const win = getCurrentWindow();
+          const pos = await win.outerPosition();
+          const scale = await win.scaleFactor();
+          const logicalX = pos.x / scale;
+          const logicalY = pos.y / scale;
+
+          // 悬浮窗 x 跟随鼠标右侧一段距离（gap 48，用户要求加大缓冲），y 与行顶部对齐；
+          // 屏幕右缘越界时 Rust preview_show 按 cursor 锚点切到鼠标左侧对称 gap 48/clamp
+          const isImage = item.kind === "image";
+          const previewW = 320;
+          const previewH = isImage ? 280 : 360;
+          const cursor = hoverCursorRef.current;
+          const previewX = logicalX + cursor.x + 48;
+          const previewY = logicalY + rect.top;
+
+          await previewShow(previewX, previewY, previewW, previewH, "cursor");
+
+          const { emit } = await import("@tauri-apps/api/event");
+          await emit("preview:show", { item });
+        } catch {}
+      })();
+    } else {
+      void previewHide().catch(() => {});
+    }
+  }, [hoverPreview.isPreviewVisible, hoverPreview.hoveredItem, hoverPreview.hoveredRect]);
+
+  // 悬浮窗 mouse-enter/leave 桥：鼠标进入 preview 窗口时取消隐藏计时（与 popup 同机制），
+  // 鼠标从列表行移到悬浮窗时悬浮窗保持
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    let unlistenEnter: (() => void) | null = null;
+    let unlistenLeave: (() => void) | null = null;
+    let disposed = false;
+
+    void import("@tauri-apps/api/event").then(({ listen }) => {
+      listen("preview:mouse-enter", () => {
+        if (!disposed) hoverPreview.handlePreviewEnter();
+      }).then((fn) => { if (disposed) void fn(); else unlistenEnter = fn; });
+
+      listen("preview:mouse-leave", () => {
+        if (!disposed) hoverPreview.handlePreviewLeave();
+      }).then((fn) => { if (disposed) void fn(); else unlistenLeave = fn; });
+    });
+
+    return () => { disposed = true; unlistenEnter?.(); unlistenLeave?.(); };
+  }, [hoverPreview.handlePreviewEnter, hoverPreview.handlePreviewLeave]);
 
   // Feedback auto-dismiss
   useEffect(() => {
@@ -415,7 +492,17 @@ export function MainApp() {
   }
 
   return (
-    <main className="frost-window relative flex h-screen w-screen flex-col overflow-hidden rounded-none border border-[var(--window-inset-border)] bg-[var(--bg)] text-[var(--text-primary)] shadow-[var(--window-drop-shadow)]">
+    <main
+      className="frost-window relative flex h-screen w-screen flex-col overflow-hidden rounded-none border border-[var(--window-inset-border)] bg-[var(--bg)] text-[var(--text-primary)] shadow-[var(--window-drop-shadow)]"
+      onMouseLeave={(e) => {
+        // 鼠标真正离开 Main 窗口（relatedTarget 不在窗口内）才开始悬浮窗隐藏计时；
+        // 窗口内行↔行移动不误触发，给「行→悬浮窗」路径充足时间
+        const related = e.relatedTarget as Node | null;
+        if (!related || !e.currentTarget.contains(related)) {
+          hoverPreview.handlePanelLeave();
+        }
+      }}
+    >
       {/* F2：settings 打开时 MainTopBar 隐藏，由 SettingsShell 的 header 作为唯一工具条（identity + 返回列表） */}
       {!isSettingsOpen && (
         <MainTopBar
@@ -505,6 +592,8 @@ export function MainApp() {
             onCopy={handleCopy}
             onPin={handlePin}
             onDelete={handleDelete}
+            onRowHover={handleRowHover}
+            onRowLeave={hoverPreview.handleRowLeave}
           />
         ) : (
           <MainGridView

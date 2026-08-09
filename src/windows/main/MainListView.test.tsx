@@ -22,6 +22,8 @@ describe("MainListView", () => {
     onCopy: vi.fn(),
     onPin: vi.fn(),
     onDelete: vi.fn(),
+    onRowHover: vi.fn(),
+    onRowLeave: vi.fn(),
   };
 
   it("renders item titles", () => {
@@ -101,6 +103,30 @@ describe("MainListView", () => {
     const checkbox = row!.querySelector("button[title='选择']");
     fireEvent.click(checkbox!);
     expect(onToggleSelect).toHaveBeenCalledWith("1");
+  });
+
+  it("calls onRowHover with item, rect and cursor coords on mouse enter", () => {
+    const onRowHover = vi.fn();
+    const { container } = render(<MainListView {...defaultProps} onRowHover={onRowHover} />);
+    const row = container.querySelector('[data-clipboard-row-id="1"]')!;
+    fireEvent.mouseEnter(row, { clientX: 120, clientY: 30 });
+    expect(onRowHover).toHaveBeenCalledTimes(1);
+    const [item, rect, cursorX, cursorY] = onRowHover.mock.calls[0] as [ClipboardItem, DOMRect, number, number];
+    expect(item.id).toBe("1");
+    // jsdom 中 getBoundingClientRect 返回普通矩形对象（非 DOMRect 实例），断言矩形结构
+    expect(typeof rect.left).toBe("number");
+    expect(typeof rect.top).toBe("number");
+    expect(typeof rect.width).toBe("number");
+    expect(cursorX).toBe(120);
+    expect(cursorY).toBe(30);
+  });
+
+  it("calls onRowLeave on mouse leave", () => {
+    const onRowLeave = vi.fn();
+    const { container } = render(<MainListView {...defaultProps} onRowLeave={onRowLeave} />);
+    const row = container.querySelector('[data-clipboard-row-id="1"]')!;
+    fireEvent.mouseLeave(row);
+    expect(onRowLeave).toHaveBeenCalledTimes(1);
   });
 
   it("applies rowSlideIn enter animation to rows", () => {

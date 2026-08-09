@@ -72,7 +72,7 @@ describe("superclip browser fallback", () => {
   });
 
   it("previewShow resolves without error in fallback mode", async () => {
-    await expect(previewShow(100, 200, 280, 320)).resolves.toBeUndefined();
+    await expect(previewShow(100, 200, 280, 320, "popup")).resolves.toBeUndefined();
   });
 
   it("previewHide resolves without error in fallback mode", async () => {

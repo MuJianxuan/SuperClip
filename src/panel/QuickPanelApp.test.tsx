@@ -49,7 +49,7 @@ describe("QuickPanelApp", () => {
     vi.clearAllMocks();
   });
 
-  it("renders monitoring status chip without brand text", async () => {
+  it("renders monitoring status in footer bar without brand text", async () => {
     render(<QuickPanelApp />);
     expect(screen.queryByText("SuperClip")).not.toBeInTheDocument();
     expect(await screen.findByText("监听中")).toBeInTheDocument();
@@ -76,6 +76,24 @@ describe("QuickPanelApp", () => {
     fireEvent.click(await screen.findByRole("button", { name: "仅复制" }));
     expect(settingsUpdate).toHaveBeenCalledWith({ defaultAction: "copy_only" });
     expect(screen.getByText("仅复制到剪贴板，需手动粘贴")).toBeInTheDocument();
+  });
+
+  it("renders three theme options with active state from settings", async () => {
+    render(<QuickPanelApp />);
+    await screen.findByText("监听中");
+    // settingsGet mock 返回 themeMode: "system" → 「跟随系统」为激活态
+    expect(screen.getByRole("button", { name: /跟随系统/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /浅色/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /深色/ })).toBeInTheDocument();
+  });
+
+  it("switches theme via segmented control and persists", async () => {
+    render(<QuickPanelApp />);
+    await screen.findByText("监听中");
+    fireEvent.click(screen.getByRole("button", { name: /深色/ }));
+    expect(settingsUpdate).toHaveBeenCalledWith({ themeMode: "dark" });
+    // 非 system 模式直接写入 data-theme-mode（不依赖 systemAppearanceGet）
+    expect(document.documentElement.dataset.themeMode).toBe("dark");
   });
 
   it("opens main window", async () => {

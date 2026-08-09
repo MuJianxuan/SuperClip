@@ -100,8 +100,10 @@ export function PopupApp() {
   const listFontSize = settings?.listFontSize ?? 13;
   const rowHeightPx = rowHeightForFontSize(listFontSize);
 
-  // B2：悬停 200ms 显示预览，移入浮窗 150ms 容错
-  const hoverPreview = useHoverPreview<ClipboardItem>({ delay: 200, hideDelay: 150 });
+  // B2：悬停 200ms 显示预览。popup 悬浮窗在窗口右缘外（行 280 宽 + 8px gap），
+  // 行→悬浮窗路径较长，hideOnRowLeave 关闭行级计时，改由「离开窗口」handlePanelLeave
+  // 触发隐藏（350ms 容错），避免慢移时悬浮窗中途消失；进入悬浮窗则 handlePreviewEnter 取消
+  const hoverPreview = useHoverPreview<ClipboardItem>({ delay: 200, hideDelay: 350, hideOnRowLeave: false });
 
   useEffect(() => {
     if (hoverPreview.isPreviewVisible && hoverPreview.hoveredItem && hoverPreview.hoveredRect) {
@@ -125,7 +127,7 @@ export function PopupApp() {
           const previewX = logicalX + POPUP_WIDTH + 8;
           const previewY = logicalY + rect.top;
 
-          await previewShow(previewX, previewY, previewW, previewH);
+          await previewShow(previewX, previewY, previewW, previewH, "popup");
 
           const { emit } = await import("@tauri-apps/api/event");
           await emit("preview:show", { item });
@@ -366,7 +368,17 @@ export function PopupApp() {
   );
 
   return (
-    <div className="popup-shell flex h-screen w-screen flex-col overflow-hidden rounded-[12px] border border-[var(--popup-border)] bg-[var(--popup-bg)] shadow-[var(--popup-shadow)] frost-window">
+    <div
+      className="popup-shell flex h-screen w-screen flex-col overflow-hidden rounded-[12px] border border-[var(--popup-border)] bg-[var(--popup-bg)] shadow-[var(--popup-shadow)] frost-window"
+      onMouseLeave={(e) => {
+        // 鼠标真正离开 popup 窗口（relatedTarget 不在窗口内）才开始隐藏计时；
+        // 行↔行/行↔搜索栏等窗口内移动不会误触发，给「行→悬浮窗」路径充足时间
+        const related = e.relatedTarget as Node | null;
+        if (!related || !e.currentTarget.contains(related)) {
+          hoverPreview.handlePanelLeave();
+        }
+      }}
+    >
       {/* 单行紧凑搜索（含窗口拖拽区；输入框与清空按钮自身不可拖拽） */}
       <div data-tauri-drag-region className="flex h-12 shrink-0 cursor-grab items-center px-[10px] pb-[2px] active:cursor-grabbing">
         <div

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pause, Play, ExternalLink, Settings2, LogOut } from "lucide-react";
+import { Pause, Play, ExternalLink, Settings2, LogOut, Monitor, Sun, Moon } from "lucide-react";
 import {
   appQuit,
   monitorStatusGet,
@@ -32,6 +32,15 @@ const PASTE_MODE_DESC: Record<PasteMode, string> = {
   copy_only: "仅复制到剪贴板，需手动粘贴",
 };
 
+type ThemeMode = SettingsResponse["themeMode"];
+
+/** 主题快捷切换选项：与 settings-shell 的 ThemeSegButton 同语言（图标 + 文字） */
+const THEME_OPTIONS: { value: ThemeMode; label: string; icon: React.ReactNode }[] = [
+  { value: "system", label: "跟随系统", icon: <Monitor size={13} /> },
+  { value: "light", label: "浅色", icon: <Sun size={13} /> },
+  { value: "dark", label: "深色", icon: <Moon size={13} /> },
+];
+
 /** 三模式主题同步：浅/深/跟随系统。panel 窗口不能用 matchMedia 推断 system 模式——
  * WKWebView 的 prefers-color-scheme 在窗口被 Rust 侧 setAppearance 锁定后停止跟随
  * 系统外观（Sky.app #37/#60），会造成前端主题与磨砂背景错配。改由 Rust 提供有效外观：
@@ -56,6 +65,7 @@ function applyThemeMode(mode: string) {
 export function QuickPanelApp() {
   const [isMonitoring, setIsMonitoring] = useState(true);
   const [pasteMode, setPasteMode] = useState<PasteMode>("direct_paste");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
 
   // 初始状态：监听状态 + 默认粘贴模式
   useEffect(() => {
@@ -65,6 +75,7 @@ export function QuickPanelApp() {
         if (disposed) return;
         setIsMonitoring(monitor.isMonitoring);
         setPasteMode(settings.defaultAction);
+        setThemeMode(settings.themeMode ?? "system");
       })
       .catch(() => {})
       .finally(() => {
@@ -120,6 +131,7 @@ export function QuickPanelApp() {
   useEffect(() => {
     settingsGet().then((s) => {
       applyThemeMode(s?.themeMode ?? "system");
+      setThemeMode(s?.themeMode ?? "system");
       setPasteMode(s?.defaultAction ?? "direct_paste");
     }).catch(() => applyThemeMode("system"));
 
@@ -134,7 +146,10 @@ export function QuickPanelApp() {
             "settings-updated",
             (event) => {
               if (disposed) return;
-              if (event.payload.theme_mode) applyThemeMode(event.payload.theme_mode);
+              if (event.payload.theme_mode) {
+                applyThemeMode(event.payload.theme_mode);
+                setThemeMode(event.payload.theme_mode as ThemeMode);
+              }
               if (event.payload.default_action) setPasteMode(event.payload.default_action);
             },
           ),
@@ -179,6 +194,13 @@ export function QuickPanelApp() {
     void settingsUpdate({ defaultAction: mode }).catch(() => {});
   }, []);
 
+  const handleThemeModeChange = useCallback((mode: ThemeMode) => {
+    // 本地立即生效（不等 settings-updated 广播回环），后端持久化后广播给其他窗口
+    setThemeMode(mode);
+    applyThemeMode(mode);
+    void settingsUpdate({ themeMode: mode }).catch(() => {});
+  }, []);
+
   const handleOpenMain = useCallback(() => {
     void showMain().catch(() => {});
     // 与 handleOpenSettings 的 app:show-settings 对称：主窗口可能停留在设置分区，
@@ -208,6 +230,8 @@ export function QuickPanelApp() {
            不露出未填充区域 */
         width: "100vw",
         height: "100vh",
+        display: "flex",
+        flexDirection: "column",
         borderRadius: 12,
         background: "var(--panel-bg)",
         backdropFilter: "blur(36px) saturate(1.6)",
@@ -218,19 +242,7 @@ export function QuickPanelApp() {
         animation: "panelPopIn 0.16s ease-out",
       }}
     >
-      {/* Header: 仅监听状态指示（品牌文字已按 D2 精简移除） */}
-      <div
-        style={{
-          padding: "8px 14px 6px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <StatusChip isMonitoring={isMonitoring} />
-      </div>
-
-      <div style={{ padding: "2px 10px 10px" }}>
+      <div style={{ padding: "2px 10px 8px", flex: 1 }}>
         {/* Group: 监听控制 */}
         <GroupLabel text="监听" />
         <MenuButton
@@ -273,13 +285,34 @@ export function QuickPanelApp() {
             style={{
               fontSize: 10,
               color: "var(--panel-faint-text)",
-              margin: "5px 0 0",
+              margin: "3px 0 0",
               lineHeight: 1.4,
               paddingLeft: 2,
             }}
           >
             {PASTE_MODE_DESC[pasteMode]}
           </p>
+        </div>
+
+        {/* Group: 外观（主题快捷切换；settings-updated 广播后 Main/popup/preview 实时同步） */}
+        <Divider />
+        <GroupLabel text="外观" />
+        <div style={{ padding: "2px 8px 0" }}>
+          <div style={{ display: "flex", gap: 4 }}>
+            {THEME_OPTIONS.map((option) => {
+              const isActive = themeMode === option.value;
+              return (
+                <SegButton
+                  key={option.value}
+                  isActive={isActive}
+                  icon={option.icon}
+                  onClick={() => handleThemeModeChange(option.value)}
+                >
+                  {option.label}
+                </SegButton>
+              );
+            })}
+          </div>
         </div>
 
         {/* Group: 导航 */}
@@ -298,7 +331,7 @@ export function QuickPanelApp() {
           onClick={handleOpenSettings}
         />
 
-        {/* Group: 退出 */}
+        {/* 退出（无分组标题：底部独立项，Divider 隔离——macOS 菜单惯例，为面板内容高度腾出余量） */}
         <Divider />
         <MenuButton
           icon={
@@ -312,49 +345,52 @@ export function QuickPanelApp() {
           onClick={handleQuit}
         />
       </div>
+
+      {/* 底部状态栏（popup 底部栏同尺寸同风格：h-35 + footer-border 分隔线） */}
+      <div
+        style={{
+          height: 35,
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 12px 2px",
+          borderTop: "1px solid var(--footer-border)",
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span
+            style={{
+              width: 5,
+              height: 5,
+              borderRadius: "50%",
+              background: isMonitoring ? "#34d399" : "#fb923c",
+              boxShadow: isMonitoring
+                ? "0 0 6px rgba(52,211,153,0.5)"
+                : "0 0 6px rgba(251,146,60,0.5)",
+            }}
+          />
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 500,
+              color: isMonitoring
+                ? "var(--panel-status-on-text)"
+                : "var(--panel-status-off-text)",
+            }}
+          >
+            {isMonitoring ? "监听中" : "已暂停"}
+          </span>
+        </span>
+        <span style={{ fontSize: 10, color: "var(--panel-faint-text)" }}>
+          ⎋ 关闭
+        </span>
+      </div>
     </div>
   );
 }
 
 /* ---------- Sub-components ---------- */
-
-function StatusChip({ isMonitoring }: { isMonitoring: boolean }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 5,
-        padding: "4px 10px",
-        borderRadius: 100,
-        background: isMonitoring
-          ? "rgba(52, 211, 153, 0.08)"
-          : "rgba(251, 146, 60, 0.08)",
-      }}
-    >
-      <span
-        style={{
-          width: 5,
-          height: 5,
-          borderRadius: "50%",
-          background: isMonitoring ? "#34d399" : "#fb923c",
-          boxShadow: isMonitoring
-            ? "0 0 6px rgba(52,211,153,0.5)"
-            : "0 0 6px rgba(251,146,60,0.5)",
-        }}
-      />
-      <span
-        style={{
-          fontSize: 10,
-          fontWeight: 500,
-          color: isMonitoring ? "var(--panel-status-on-text)" : "var(--panel-status-off-text)",
-        }}
-      >
-        {isMonitoring ? "监听中" : "已暂停"}
-      </span>
-    </div>
-  );
-}
 
 function IconBox({
   bg,
@@ -386,7 +422,7 @@ function IconBox({
 
 function GroupLabel({ text }: { text: string }) {
   return (
-    <div style={{ padding: "6px 10px 3px" }}>
+    <div style={{ padding: "4px 10px 1px" }}>
       <span
         style={{
           fontSize: 10,
@@ -408,7 +444,7 @@ function Divider() {
       style={{
         height: 1,
         background: "var(--panel-divider)",
-        margin: "4px 0",
+        margin: "3px 0",
       }}
     />
   );
@@ -441,7 +477,7 @@ function MenuButton({
         alignItems: "center",
         gap: 12,
         width: "100%",
-        padding: "7px 10px",
+        padding: "5px 10px",
         border: "none",
         borderRadius: 9,
         background: danger
@@ -510,10 +546,12 @@ function SegButton({
   isActive,
   onClick,
   children,
+  icon,
 }: {
   isActive: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  icon?: React.ReactNode;
 }) {
   const [hovered, setHovered] = useState(false);
   return (
@@ -524,7 +562,7 @@ function SegButton({
       onMouseLeave={() => setHovered(false)}
       style={{
         flex: 1,
-        padding: "8px 10px",
+        padding: "6px 10px",
         borderRadius: 8,
         border: `1px solid ${
           isActive ? "rgba(56, 189, 248, 0.22)" : "var(--panel-seg-border)"
@@ -541,6 +579,10 @@ function SegButton({
     >
       <span
         style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 4,
           fontSize: 11.5,
           lineHeight: 1,
           fontWeight: isActive ? 600 : 400,
@@ -551,6 +593,7 @@ function SegButton({
               : "var(--panel-seg-text)",
         }}
       >
+        {icon}
         {children}
       </span>
     </button>

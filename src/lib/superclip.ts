@@ -1294,8 +1294,8 @@ export async function showMain() {
   return invokeOrFallback<void>("showMain", {}, () => {});
 }
 
-export async function previewShow(x: number, y: number, width: number, height: number) {
-  return invokeOrFallback<void>("previewShow", { x, y, width, height }, () => {});
+export async function previewShow(x: number, y: number, width: number, height: number, anchor: "popup" | "cursor") {
+  return invokeOrFallback<void>("previewShow", { x, y, width, height, anchor }, () => {});
 }
 
 export async function previewHide() {

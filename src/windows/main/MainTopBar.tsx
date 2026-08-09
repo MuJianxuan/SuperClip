@@ -25,15 +25,14 @@ export const MainTopBar = memo(function MainTopBar({
 
   return (
     <header className="flex items-center gap-3 px-4 pb-2.5 pt-3.5">
-      {/* identity */}
-      <div className="flex shrink-0 items-center gap-2">
+      {/* identity：仅保留 logo 图标（去掉品牌文字，搜索框向左拉伸占满剩余空间） */}
+      <div className="flex shrink-0 items-center gap-2" aria-label="SuperClip">
         <div
           className="flex h-6 w-6 items-center justify-center rounded-lg bg-gradient-to-br from-[rgba(56,189,248,0.35)] to-[rgba(167,139,250,0.25)] shadow-[0_0_12px_rgba(56,189,248,0.2)]"
           aria-hidden="true"
         >
           <Copy className="h-3 w-3 text-white/85" />
         </div>
-        <span className="text-[13px] font-semibold text-[var(--text-secondary)]">剪贴板</span>
       </div>
 
       {/* dominant search */}
