@@ -1,23 +1,32 @@
 import { useState } from "react";
-import { Pause, Play, ExternalLink, Settings2, LogOut, Monitor } from "lucide-react";
+import {
+  Pause,
+  Play,
+  ExternalLink,
+  Settings2,
+  LogOut,
+  Monitor,
+  Sun,
+  Moon,
+} from "lucide-react";
 
 /* ================================================================
-   Variant D2 — Quick Control Panel (快捷控制面板 · 重设计)
+   Variant D — Quick Control Panel（对齐正式 src/panel/QuickPanelApp.tsx）
 
    Tray 右键唤出的高频控制表面（非历史列表、非完整设置）。
-   固定功能：暂停/恢复监听、默认粘贴模式、打开 Main/Settings、退出。
+   固定功能：暂停/恢复监听、默认粘贴模式、主题外观、打开 Main/Settings、退出。
 
-   相对旧版 D 的改动：
-   - hover 全部由 React state 驱动，移除直接操作 DOM style
-     （旧实现 onMouseLeave 恢复 transparent 会与 React 冲突产生变白）
-   - 暂停/恢复图标语义修正：监听中 = 播放可"暂停"；已暂停 = 恢复
-   - Header 压扁 + 右侧实时状态点（绿=监听中 / 橘=已暂停）
-   - 面板弹出动画 panelPopIn（与 B/E 一致进入语言）
-   - 粘贴模式分段控件对齐 Main 的选中态语言
-   - 危险操作（退出）hover 红底
+   相对旧版原型的改动（反向补回正式结构）：
+   - 宽度 280（与 popup 统一；旧 232 已过时）
+   - 去掉顶部品牌 Header + StatusChip；状态迁到底部 h-35 栏
+   - 新增「外观」分组：system / light / dark（Monitor / Sun / Moon）
+   - 外壳 className quick-panel-shell frost-window + CSS 变量色
+   - hover 全部由 React state 驱动
+   - 本地 mock：isMonitoring / pasteMode / themeMode
    ================================================================ */
 
 type PasteMode = "direct_paste" | "copy_only";
+type ThemeMode = "system" | "light" | "dark";
 
 const PASTE_MODE_LABELS: Record<PasteMode, string> = {
   direct_paste: "直接粘贴",
@@ -29,56 +38,56 @@ const PASTE_MODE_DESC: Record<PasteMode, string> = {
   copy_only: "仅复制到剪贴板，需手动粘贴",
 };
 
+const THEME_OPTIONS: { value: ThemeMode; label: string; icon: React.ReactNode }[] = [
+  { value: "system", label: "跟随系统", icon: <Monitor size={13} /> },
+  { value: "light", label: "浅色", icon: <Sun size={13} /> },
+  { value: "dark", label: "深色", icon: <Moon size={13} /> },
+];
+
+/** 原型演示：system 用 dark 作为默认演示外观（无 systemAppearanceGet） */
+function applyThemeMode(mode: ThemeMode) {
+  document.documentElement.dataset.themeMode = mode === "system" ? "dark" : mode;
+}
+
 export function VariantD_QuickPanel() {
   const [isMonitoring, setIsMonitoring] = useState(true);
   const [pasteMode, setPasteMode] = useState<PasteMode>("direct_paste");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
+
+  const handleThemeModeChange = (mode: ThemeMode) => {
+    setThemeMode(mode);
+    applyThemeMode(mode);
+  };
 
   return (
     <div
+      className="quick-panel-shell frost-window"
       style={{
-        width: 232,
+        /* 原型画布固定宽 ~280（正式窗口 280×420，铺满 100vw/100vh） */
+        width: 280,
+        display: "flex",
+        flexDirection: "column",
         borderRadius: 12,
-        background: "rgba(18, 23, 30, 0.82)",
+        background: "var(--panel-bg)",
         backdropFilter: "blur(36px) saturate(1.6)",
         WebkitBackdropFilter: "blur(36px) saturate(1.6)",
-        border: "1px solid rgba(255,255,255,0.06)",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.45), 0 0 0 0.5px rgba(255,255,255,0.04)",
+        border: "1px solid var(--popup-border)",
+        boxShadow: "var(--panel-shadow)",
         overflow: "hidden",
         animation: "panelPopIn 0.16s ease-out",
       }}
     >
-      {/* --- Header: brand + monitoring status --- */}
-      <div
-        style={{
-          padding: "10px 12px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-          <Monitor size={13} color="rgba(255,255,255,0.25)" />
-          <span
-            style={{
-              fontSize: 12.5,
-              fontWeight: 600,
-              color: "rgba(255,255,255,0.6)",
-              letterSpacing: "-0.01em",
-            }}
-          >
-            SuperClip
-          </span>
-        </div>
-        <StatusChip isMonitoring={isMonitoring} />
-      </div>
-
-      <div style={{ padding: "2px 6px 6px" }}>
+      <div style={{ padding: "2px 10px 8px", flex: 1 }}>
         {/* Group: 监听控制 */}
         <GroupLabel text="监听" />
         <MenuButton
           icon={
             <IconBox
-              bg={isMonitoring ? "rgba(52, 211, 153, 0.1)" : "rgba(251, 146, 60, 0.1)"}
+              bg={
+                isMonitoring
+                  ? "rgba(52, 211, 153, 0.1)"
+                  : "rgba(251, 146, 60, 0.1)"
+              }
               color={isMonitoring ? "#34d399" : "#fb923c"}
             >
               {isMonitoring ? <Pause size={13} /> : <Play size={13} />}
@@ -92,7 +101,7 @@ export function VariantD_QuickPanel() {
         {/* Group: 粘贴行为 */}
         <Divider />
         <GroupLabel text="粘贴模式" />
-        <div style={{ padding: "2px 8px 0" }}>
+        <div style={{ padding: "4px 8px 0" }}>
           <div style={{ display: "flex", gap: 4 }}>
             {(["direct_paste", "copy_only"] as PasteMode[]).map((mode) => {
               const isActive = pasteMode === mode;
@@ -110,8 +119,8 @@ export function VariantD_QuickPanel() {
           <p
             style={{
               fontSize: 10,
-              color: "rgba(255,255,255,0.18)",
-              margin: "5px 0 0",
+              color: "var(--panel-faint-text)",
+              margin: "3px 0 0",
               lineHeight: 1.4,
               paddingLeft: 2,
             }}
@@ -120,9 +129,29 @@ export function VariantD_QuickPanel() {
           </p>
         </div>
 
+        {/* Group: 外观 */}
+        <Divider />
+        <GroupLabel text="外观" />
+        <div style={{ padding: "2px 8px 0" }}>
+          <div style={{ display: "flex", gap: 4 }}>
+            {THEME_OPTIONS.map((option) => {
+              const isActive = themeMode === option.value;
+              return (
+                <SegButton
+                  key={option.value}
+                  isActive={isActive}
+                  icon={option.icon}
+                  onClick={() => handleThemeModeChange(option.value)}
+                >
+                  {option.label}
+                </SegButton>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Group: 导航 */}
         <Divider />
-
         <GroupLabel text="打开" />
         <MenuButton
           icon={<IconBox>{<ExternalLink size={13} />}</IconBox>}
@@ -135,9 +164,8 @@ export function VariantD_QuickPanel() {
           shortcut="⌘,"
         />
 
-        {/* Group: 退出 */}
+        {/* 退出（无分组标题：底部独立项） */}
         <Divider />
-
         <MenuButton
           icon={
             <IconBox bg="rgba(239, 68, 68, 0.08)" color="rgba(239, 68, 68, 0.55)">
@@ -149,49 +177,52 @@ export function VariantD_QuickPanel() {
           danger
         />
       </div>
-    </div>
-  );
-}
 
-/* ---------- Sub-components ---------- */
-
-function StatusChip({ isMonitoring }: { isMonitoring: boolean }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 5,
-        padding: "3px 8px",
-        borderRadius: 100,
-        background: isMonitoring
-          ? "rgba(52, 211, 153, 0.08)"
-          : "rgba(251, 146, 60, 0.08)",
-      }}
-    >
-      <span
+      {/* 底部状态栏（对齐正式 h-35 + footer-border） */}
+      <div
         style={{
-          width: 5,
-          height: 5,
-          borderRadius: "50%",
-          background: isMonitoring ? "#34d399" : "#fb923c",
-          boxShadow: isMonitoring
-            ? "0 0 6px rgba(52,211,153,0.5)"
-            : "0 0 6px rgba(251,146,60,0.5)",
-        }}
-      />
-      <span
-        style={{
-          fontSize: 10,
-          fontWeight: 500,
-          color: isMonitoring ? "rgba(52,211,153,0.75)" : "rgba(251,146,60,0.75)",
+          height: 35,
+          flexShrink: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 12px 2px",
+          borderTop: "1px solid var(--footer-border)",
         }}
       >
-        {isMonitoring ? "监听中" : "已暂停"}
-      </span>
+        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span
+            style={{
+              width: 5,
+              height: 5,
+              borderRadius: "50%",
+              background: isMonitoring ? "#34d399" : "#fb923c",
+              boxShadow: isMonitoring
+                ? "0 0 6px rgba(52,211,153,0.5)"
+                : "0 0 6px rgba(251,146,60,0.5)",
+            }}
+          />
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 500,
+              color: isMonitoring
+                ? "var(--panel-status-on-text)"
+                : "var(--panel-status-off-text)",
+            }}
+          >
+            {isMonitoring ? "监听中" : "已暂停"}
+          </span>
+        </span>
+        <span style={{ fontSize: 10, color: "var(--panel-faint-text)" }}>
+          ⎋ 关闭
+        </span>
+      </div>
     </div>
   );
 }
+
+/* ---------- Sub-components（与正式 QuickPanel 尺寸/间距对齐） ---------- */
 
 function IconBox({
   bg,
@@ -205,14 +236,14 @@ function IconBox({
   return (
     <div
       style={{
-        width: 28,
-        height: 28,
-        borderRadius: 8,
+        width: 30,
+        height: 30,
+        borderRadius: 9,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: bg || "rgba(255,255,255,0.04)",
-        color: color || "rgba(255,255,255,0.35)",
+        background: bg || "var(--panel-icon-bg)",
+        color: color || "var(--panel-icon-text)",
         flexShrink: 0,
       }}
     >
@@ -223,12 +254,12 @@ function IconBox({
 
 function GroupLabel({ text }: { text: string }) {
   return (
-    <div style={{ padding: "7px 8px 3px" }}>
+    <div style={{ padding: "4px 10px 1px" }}>
       <span
         style={{
-          fontSize: 9.5,
+          fontSize: 10,
           fontWeight: 600,
-          color: "rgba(255,255,255,0.15)",
+          color: "var(--panel-group-label)",
           textTransform: "uppercase",
           letterSpacing: "0.08em",
         }}
@@ -241,7 +272,13 @@ function GroupLabel({ text }: { text: string }) {
 
 function Divider() {
   return (
-    <div style={{ height: 1, background: "rgba(255,255,255,0.035)", margin: "5px 0" }} />
+    <div
+      style={{
+        height: 1,
+        background: "var(--panel-divider)",
+        margin: "3px 0",
+      }}
+    />
   );
 }
 
@@ -270,17 +307,17 @@ function MenuButton({
       style={{
         display: "flex",
         alignItems: "center",
-        gap: 10,
+        gap: 12,
         width: "100%",
-        padding: "7px 8px",
+        padding: "5px 10px",
         border: "none",
-        borderRadius: 8,
+        borderRadius: 9,
         background: danger
           ? hovered
             ? "rgba(239, 68, 68, 0.07)"
             : "transparent"
           : hovered
-            ? "rgba(255,255,255,0.035)"
+            ? "var(--panel-row-hover)"
             : "transparent",
         cursor: "pointer",
         textAlign: "left",
@@ -291,15 +328,15 @@ function MenuButton({
       <div style={{ flex: 1, minWidth: 0 }}>
         <span
           style={{
-            fontSize: 12.5,
+            fontSize: 13,
             fontWeight: 500,
             color: danger
               ? hovered
                 ? "rgba(239, 68, 68, 0.85)"
                 : "rgba(239, 68, 68, 0.65)"
               : hovered
-                ? "rgba(255,255,255,0.85)"
-                : "rgba(255,255,255,0.65)",
+                ? "var(--panel-label-hover)"
+                : "var(--panel-label)",
             display: "block",
           }}
         >
@@ -308,10 +345,10 @@ function MenuButton({
         {desc && (
           <span
             style={{
-              fontSize: 10.5,
-              color: "rgba(255,255,255,0.22)",
+              fontSize: 11,
+              color: "var(--panel-desc)",
               display: "block",
-              marginTop: 1,
+              marginTop: 2,
             }}
           >
             {desc}
@@ -322,10 +359,10 @@ function MenuButton({
         <span
           style={{
             fontSize: 9.5,
-            color: "rgba(255,255,255,0.2)",
-            padding: "2px 6px",
+            color: "var(--panel-shortcut-text)",
+            padding: "3px 7px",
             borderRadius: 4,
-            background: "rgba(255,255,255,0.03)",
+            background: "var(--panel-shortcut-bg)",
             flexShrink: 0,
             fontVariantNumeric: "tabular-nums",
           }}
@@ -341,10 +378,12 @@ function SegButton({
   isActive,
   onClick,
   children,
+  icon,
 }: {
   isActive: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  icon?: React.ReactNode;
 }) {
   const [hovered, setHovered] = useState(false);
   return (
@@ -355,16 +394,16 @@ function SegButton({
       onMouseLeave={() => setHovered(false)}
       style={{
         flex: 1,
-        padding: "6px 8px",
+        padding: "6px 10px",
         borderRadius: 8,
         border: `1px solid ${
-          isActive ? "rgba(56, 189, 248, 0.22)" : "rgba(255,255,255,0.04)"
+          isActive ? "rgba(56, 189, 248, 0.22)" : "var(--panel-seg-border)"
         }`,
         background: isActive
           ? "rgba(56, 189, 248, 0.08)"
           : hovered
-            ? "rgba(255,255,255,0.04)"
-            : "rgba(255,255,255,0.02)",
+            ? "var(--panel-seg-bg-hover)"
+            : "var(--panel-seg-bg)",
         cursor: "pointer",
         textAlign: "center",
         transition: "all 0.12s ease",
@@ -372,15 +411,21 @@ function SegButton({
     >
       <span
         style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 4,
           fontSize: 11.5,
+          lineHeight: 1,
           fontWeight: isActive ? 600 : 400,
           color: isActive
             ? "rgba(56, 189, 248, 0.9)"
             : hovered
-              ? "rgba(255,255,255,0.6)"
-              : "rgba(255,255,255,0.35)",
+              ? "var(--panel-seg-text-hover)"
+              : "var(--panel-seg-text)",
         }}
       >
+        {icon}
         {children}
       </span>
     </button>

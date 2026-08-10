@@ -1,6 +1,4 @@
-// 原型自包含的类型定义。
-// 从 src/components/history-row.tsx 复制，切断原型对主项目业务代码的依赖。
-// 原型只关心剪贴板条目的数据形状，不需要 history-row 组件本身。
+// 原型自包含类型 —— 对齐正式 history-row / settings 形状，不依赖主项目。
 
 export type ClipboardKind = "text" | "html" | "rtf" | "image" | "file";
 
@@ -22,4 +20,30 @@ export interface ClipboardItem {
   matchType?: "exact" | "prefix" | "contains" | "recent" | null;
   matchedFields?: string[];
   highlightRanges?: HighlightRange[];
+}
+
+export type ThemeMode = "system" | "light" | "dark";
+export type DefaultAction = "direct_paste" | "copy_only";
+export type ExclusionRuleKind = "bundle_id" | "content_kind" | "keyword";
+
+export interface ExclusionRule {
+  id: string;
+  kind: ExclusionRuleKind;
+  value: string;
+  enabled: boolean;
+}
+
+export interface PrototypeSettings {
+  defaultAction: DefaultAction;
+  themeMode: ThemeMode;
+  historyLimit: number;
+  listFontSize: number;
+  launchAtLogin: boolean;
+  showOnStartup: boolean;
+}
+
+export interface PrototypeShortcut {
+  binding: string;
+  isRegistered: boolean;
+  source: "default" | "user";
 }

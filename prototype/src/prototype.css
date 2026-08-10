@@ -1,30 +1,18 @@
-/* ===========================
-   SuperClip UI Prototype
-   Throwaway — do not use in production
-   =========================== */
+/* SuperClip UI Prototype — reverse-synced from formal App.css tokens (2026-08)
+   Throwaway visual mirror of production surfaces. Not for production bundling.
+*/
+@import "tailwindcss";
 
-/* --- base styles --- */
-* {
-  box-sizing: border-box;
-}
-body {
+/* Prototype canvas: default dark theme so frosted panels match formal dark surface */
+html, body, #root {
+  height: 100%;
   margin: 0;
-  font-family: "Inter", "SF Pro Text", "SF Pro Display", ui-sans-serif, system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  background: #1a1e24;
 }
-
-/* --- mock popup frame --- */
-.mock-popup {
-  width: 360px;
-  height: 520px;
-  border-radius: 14px;
-  overflow: hidden;
-  position: relative;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35), 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+html {
+  color-scheme: dark;
 }
-
-/* --- prototype switcher bar --- */
+/* Prototype switcher bar */
 .prototype-switcher {
   position: fixed;
   bottom: 32px;
@@ -43,7 +31,6 @@ body {
   -webkit-backdrop-filter: blur(16px);
   user-select: none;
 }
-
 .prototype-switcher button {
   width: 32px;
   height: 32px;
@@ -62,7 +49,6 @@ body {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
 }
-
 .prototype-switcher .label {
   font-size: 13px;
   font-weight: 500;
@@ -71,7 +57,6 @@ body {
   text-align: center;
   letter-spacing: 0.01em;
 }
-
 .prototype-switcher .dots {
   display: flex;
   gap: 6px;
@@ -88,9 +73,536 @@ body {
   width: 20px;
   border-radius: 3px;
 }
+/* Prototype framed surfaces sit on canvas */
+.prototype-frame {
+  position: relative;
+}
 
-/* --- card slide-in animation --- */
-@keyframes cardSlideIn {
+
+:root {
+  /* ========== Light theme (soft consumer, paired with dark) ========== */
+  --bg: rgba(247, 248, 250, 0.9);
+  --bg-accent: rgba(56, 189, 248, 0.08);
+  --surface: rgba(255, 255, 255, 0.78);
+  --surface-raised: rgba(255, 255, 255, 0.9);
+  --surface-2: rgba(241, 243, 246, 0.9);
+  --border: rgba(15, 23, 42, 0.08);
+  --border-strong: rgba(15, 23, 42, 0.14);
+  --text-primary: #16191d;
+  --text-secondary: #5b6470;
+  --text-tertiary: #7a8088;
+  --accent: #38bdf8;
+  --accent-contrast: #0b1420;
+  --accent-soft: rgba(56, 189, 248, 0.12);
+  --shadow-soft: 0 6px 14px rgba(18, 23, 30, 0.08);
+  --success-bg: rgba(224, 238, 228, 0.9);
+  --success-text: #29563a;
+  --warning-bg: rgba(245, 237, 220, 0.95);
+  --warning-text: #735a31;
+  --warning-border: rgba(169, 132, 59, 0.18);
+  --danger-bg: rgba(239, 68, 68, 0.1);
+  --danger-text: #e0483e;
+  --danger-border: rgba(239, 68, 68, 0.2);
+  --popup-bg: rgba(255, 255, 255, 0.85);
+  --popup-border: rgba(0, 0, 0, 0.06);
+  --popup-shadow: 0 24px 80px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(255, 255, 255, 0.5);
+  --selection-accent: #38bdf8;
+  --tab-active-bg: rgba(56, 189, 248, 0.12);
+  --tab-hover-bg: rgba(15, 23, 42, 0.04);
+  --row-hover: rgba(15, 23, 42, 0.03);
+  --row-selected: rgba(56, 189, 248, 0.08);
+  --grid-card-bg: rgba(255, 255, 255, 0.92);
+  /* F2 Settings 卡片浅底 / 分隔线 / 侧栏右边线 / 分段按钮细边（浅色配对值） */
+  --card-bg: rgba(15, 23, 42, 0.02);
+  --divider: rgba(15, 23, 42, 0.04);
+  --sidebar-border: rgba(15, 23, 42, 0.04);
+  --seg-border: rgba(15, 23, 42, 0.04);
+
+  /* ========== Confirmed language tokens (shared across themes) ========== */
+  --accent-blue: #38bdf8;
+  --pinned: #fbbf24;
+  --danger: #ef4444;
+  --type-text: #38bdf8;
+  --type-image: #fb7185;
+  --type-file: #60a5fa;
+  --type-html: #a78bfa;
+  --radius-sm: 12px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --blur-window: 40px;
+  --saturate-window: 1.6;
+  --window-inset-border: rgba(255, 255, 255, 0.04);
+  --window-drop-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-theme-mode="dark"] {
+  /* ========== Dark theme (confirmed frosted glass) ========== */
+  --bg: rgba(16, 21, 28, 0.82);
+  --bg-accent: rgba(56, 189, 248, 0.06);
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface-raised: rgba(16, 21, 28, 0.92);
+  --surface-2: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.12);
+  --text-primary: rgba(255, 255, 255, 0.85);
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --text-tertiary: rgba(255, 255, 255, 0.35);
+  --accent: #38bdf8;
+  --accent-contrast: #0b1420;
+  --accent-soft: rgba(56, 189, 248, 0.14);
+  --shadow-soft: 0 6px 14px rgba(0, 0, 0, 0.22);
+  --success-bg: rgba(27, 56, 41, 0.72);
+  --success-text: #b9e5ca;
+  --warning-bg: rgba(251, 191, 36, 0.06);
+  --warning-text: rgba(251, 191, 36, 0.75);
+  --warning-border: rgba(251, 191, 36, 0.15);
+  --danger-bg: rgba(239, 68, 68, 0.08);
+  --danger-text: rgba(239, 68, 68, 0.8);
+  --danger-border: rgba(239, 68, 68, 0.18);
+  --popup-bg: rgba(17, 22, 29, 0.82);
+  --popup-border: rgba(255, 255, 255, 0.06);
+  --popup-shadow: 0 24px 80px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+  --selection-accent: rgba(56, 189, 248, 0.9);
+  --tab-active-bg: rgba(255, 255, 255, 0.08);
+  --tab-hover-bg: rgba(255, 255, 255, 0.04);
+  --row-hover: rgba(255, 255, 255, 0.025);
+  --row-selected: rgba(56, 189, 248, 0.07);
+  --grid-card-bg: rgba(255, 255, 255, 0.018);
+  /* F2 Settings 卡片浅底 / 分隔线 / 侧栏右边线 / 分段按钮细边（深色值对齐 F2 原型） */
+  --card-bg: rgba(255, 255, 255, 0.02);
+  --divider: rgba(255, 255, 255, 0.03);
+  --sidebar-border: rgba(255, 255, 255, 0.04);
+  --seg-border: rgba(255, 255, 255, 0.04);
+
+  /* Confirmed language tokens (dark variants only where contrast differs) */
+  --accent-blue: #38bdf8;
+  --pinned: #fbbf24;
+  --danger: #ef4444;
+  --type-text: #38bdf8;
+  --type-image: #fb7185;
+  --type-file: #60a5fa;
+  --type-html: #a78bfa;
+  --radius-sm: 12px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --blur-window: 40px;
+  --saturate-window: 1.6;
+  --window-inset-border: rgba(255, 255, 255, 0.04);
+  --window-drop-shadow: 0 32px 100px rgba(0, 0, 0, 0.45);
+
+  /* E2 dark-scoped controls (对齐原型：细描边/弱化文字) */
+  --search-border: rgba(255, 255, 255, 0.04);
+  --toggle-bg: rgba(255, 255, 255, 0.03);
+  --seg-text: rgba(255, 255, 255, 0.2);
+  --seg-active-text: rgba(255, 255, 255, 0.65);
+  --chip-bg: rgba(255, 255, 255, 0.02);
+  --chip-text: rgba(255, 255, 255, 0.35);
+  --chip-badge-bg: rgba(255, 255, 255, 0.04);
+  --chip-badge-text: rgba(255, 255, 255, 0.2);
+  --chip-badge-active-bg: rgba(255, 255, 255, 0.1);
+  --chip-badge-active-text: rgba(255, 255, 255, 0.5);
+  --group-label: rgba(255, 255, 255, 0.18);
+  --group-count: rgba(255, 255, 255, 0.08);
+  --group-line: rgba(255, 255, 255, 0.03);
+  --row-title: rgba(255, 255, 255, 0.68);
+  --row-title-selected: rgba(255, 255, 255, 0.85);
+  --row-preview: rgba(255, 255, 255, 0.22);
+  --row-meta: rgba(255, 255, 255, 0.22);
+  --row-time: rgba(255, 255, 255, 0.1);
+  --search-icon: rgba(255, 255, 255, 0.25);
+  --row-action-text: rgba(255, 255, 255, 0.4);
+  --row-action-hover-bg: rgba(255, 255, 255, 0.08);
+  --row-action-hover-text: rgba(255, 255, 255, 0.7);
+  --danger-idle: rgba(239, 68, 68, 0.55);
+  --checkbox-idle: rgba(255, 255, 255, 0.08);
+  --checkbox-hover: rgba(255, 255, 255, 0.2);
+  --icon-box-bg: rgba(255, 255, 255, 0.04);
+  --icon-box-text: rgba(255, 255, 255, 0.3);
+  --grid-card-hover: rgba(255, 255, 255, 0.035);
+  --bulk-btn-text: rgba(255, 255, 255, 0.5);
+  --bulk-btn-hover: rgba(255, 255, 255, 0.06);
+  --danger-btn-bg: rgba(239, 68, 68, 0.07);
+  --danger-hover-bg: rgba(239, 68, 68, 0.12);
+  --danger-hover-text: rgba(239, 68, 68, 0.9);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme-mode="light"]) {
+    --bg: rgba(16, 21, 28, 0.82);
+    --bg-accent: rgba(56, 189, 248, 0.06);
+    --surface: rgba(255, 255, 255, 0.05);
+    --surface-raised: rgba(16, 21, 28, 0.92);
+    --surface-2: rgba(255, 255, 255, 0.04);
+    --border: rgba(255, 255, 255, 0.06);
+    --border-strong: rgba(255, 255, 255, 0.12);
+    --text-primary: rgba(255, 255, 255, 0.85);
+    --text-secondary: rgba(255, 255, 255, 0.6);
+    --text-tertiary: rgba(255, 255, 255, 0.35);
+    --accent: #38bdf8;
+    --accent-contrast: #0b1420;
+    --accent-soft: rgba(56, 189, 248, 0.14);
+    --shadow-soft: 0 6px 14px rgba(0, 0, 0, 0.22);
+    --success-bg: rgba(27, 56, 41, 0.72);
+    --success-text: #b9e5ca;
+    --warning-bg: rgba(251, 191, 36, 0.06);
+    --warning-text: rgba(251, 191, 36, 0.75);
+    --warning-border: rgba(251, 191, 36, 0.15);
+    --danger-bg: rgba(239, 68, 68, 0.08);
+    --danger-text: rgba(239, 68, 68, 0.8);
+    --danger-border: rgba(239, 68, 68, 0.18);
+    --popup-bg: rgba(17, 22, 29, 0.82);
+    --popup-border: rgba(255, 255, 255, 0.06);
+    --popup-shadow: 0 24px 80px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+    --selection-accent: rgba(56, 189, 248, 0.9);
+    --tab-active-bg: rgba(255, 255, 255, 0.08);
+    --tab-hover-bg: rgba(255, 255, 255, 0.04);
+    --row-hover: rgba(255, 255, 255, 0.025);
+    --row-selected: rgba(56, 189, 248, 0.07);
+    --grid-card-bg: rgba(255, 255, 255, 0.018);
+    /* F2 Settings 卡片浅底 / 分隔线 / 侧栏右边线 / 分段按钮细边（深色值对齐 F2 原型） */
+    --card-bg: rgba(255, 255, 255, 0.02);
+    --divider: rgba(255, 255, 255, 0.03);
+    --sidebar-border: rgba(255, 255, 255, 0.04);
+    --seg-border: rgba(255, 255, 255, 0.04);
+
+    /* Confirmed language tokens (dark variants only where contrast differs) */
+    --accent-blue: #38bdf8;
+    --pinned: #fbbf24;
+    --danger: #ef4444;
+    --type-text: #38bdf8;
+    --type-image: #fb7185;
+    --type-file: #60a5fa;
+    --type-html: #a78bfa;
+    --radius-sm: 12px;
+    --radius-md: 14px;
+    --radius-lg: 18px;
+    --blur-window: 40px;
+    --saturate-window: 1.6;
+    --window-inset-border: rgba(255, 255, 255, 0.04);
+    --window-drop-shadow: 0 32px 100px rgba(0, 0, 0, 0.45);
+
+    /* E2 dark-scoped controls (对齐原型：细描边/弱化文字) */
+    --search-border: rgba(255, 255, 255, 0.04);
+    --toggle-bg: rgba(255, 255, 255, 0.03);
+    --seg-text: rgba(255, 255, 255, 0.2);
+    --seg-active-text: rgba(255, 255, 255, 0.65);
+    --chip-bg: rgba(255, 255, 255, 0.02);
+    --chip-text: rgba(255, 255, 255, 0.35);
+    --chip-badge-bg: rgba(255, 255, 255, 0.04);
+    --chip-badge-text: rgba(255, 255, 255, 0.2);
+    --chip-badge-active-bg: rgba(255, 255, 255, 0.1);
+    --chip-badge-active-text: rgba(255, 255, 255, 0.5);
+    --group-label: rgba(255, 255, 255, 0.18);
+    --group-count: rgba(255, 255, 255, 0.08);
+    --group-line: rgba(255, 255, 255, 0.03);
+    --row-title: rgba(255, 255, 255, 0.68);
+    --row-title-selected: rgba(255, 255, 255, 0.85);
+    --row-preview: rgba(255, 255, 255, 0.22);
+    --row-meta: rgba(255, 255, 255, 0.22);
+    --row-time: rgba(255, 255, 255, 0.1);
+    --search-icon: rgba(255, 255, 255, 0.25);
+    --row-action-text: rgba(255, 255, 255, 0.4);
+    --row-action-hover-bg: rgba(255, 255, 255, 0.08);
+    --row-action-hover-text: rgba(255, 255, 255, 0.7);
+    --danger-idle: rgba(239, 68, 68, 0.55);
+    --checkbox-idle: rgba(255, 255, 255, 0.08);
+    --checkbox-hover: rgba(255, 255, 255, 0.2);
+    --icon-box-bg: rgba(255, 255, 255, 0.04);
+    --icon-box-text: rgba(255, 255, 255, 0.3);
+    --grid-card-hover: rgba(255, 255, 255, 0.035);
+    --bulk-btn-text: rgba(255, 255, 255, 0.5);
+    --bulk-btn-hover: rgba(255, 255, 255, 0.06);
+    --danger-btn-bg: rgba(239, 68, 68, 0.07);
+    --danger-hover-bg: rgba(239, 68, 68, 0.12);
+    --danger-hover-text: rgba(239, 68, 68, 0.9);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 100%;
+}
+
+/*
+ * 排版基线对齐 Confirmed design 原型 (src/prototype/prototype.css)。
+ * Tailwind preflight 给 html 设置 line-height:1.5 与 emoji 占位字体栈，
+ * 会撑高内联文本 (13px→14px @11.5-12.5px字号)，使全部表面对原型偏高；
+ * 这里统一还原为原型基线 (normal + Inter 优先)。
+ */
+html {
+  line-height: normal;
+  font-family:
+    "Inter",
+    "SF Pro Text",
+    "SF Pro Display",
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, var(--bg-accent), transparent 26%),
+    var(--bg);
+  color: var(--text-primary);
+  font-family:
+    "Inter",
+    "SF Pro Text",
+    "SF Pro Display",
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+
+/* 控件字体继承放入 base 层：非层叠样式优先级高于 @layer utilities，会吞掉 text-* 工具类 */
+@layer base {
+  button {
+    font: inherit;
+  }
+
+  input {
+    font-family: inherit;
+  }
+}
+
+input::placeholder {
+  color: var(--text-tertiary);
+}
+
+::selection {
+  background: rgba(56, 189, 248, 0.25);
+}
+
+.is-window-resizing *,
+.is-window-resizing *::before,
+.is-window-resizing *::after {
+  animation-duration: 0ms !important;
+  transition-duration: 0ms !important;
+}
+
+/* 响应式断点 */
+:root {
+  --breakpoint-sm: 840px;
+  --breakpoint-lg: 1200px;
+}
+
+/* 列表字体大小（popup/main 历史列表共用；运行时由 settings.listFontSize 覆盖） */
+:root {
+  --list-font-size: 13px;
+}
+
+@media (max-width: 839px) {
+  :root {
+    --layout-mode: compact;
+  }
+}
+
+@media (min-width: 840px) and (max-width: 1199px) {
+  :root {
+    --layout-mode: standard;
+  }
+}
+
+@media (min-width: 1200px) {
+  :root {
+    --layout-mode: spacious;
+  }
+}
+
+/* Popup window styles */
+.popup-shell {
+  -webkit-app-region: no-drag;
+
+  /* B2 popup-scoped visual tokens (light defaults; dark overrides below,
+     与 :root 变量同一模式：默认浅色 + 属性/媒体查询双 dark 分支) */
+  --search-box-bg: rgba(15, 23, 42, 0.06);
+  --badge-bg: rgba(15, 23, 42, 0.04);
+  --badge-border: rgba(15, 23, 42, 0.06);
+  --badge-text: var(--text-tertiary);
+  --footer-border: var(--border);
+  --icon-unselected-bg: var(--border);
+  --icon-unselected-text: var(--text-tertiary);
+  --footer-chip-bg: rgba(15, 23, 42, 0.02);
+}
+
+:root[data-theme-mode="dark"] .popup-shell {
+  --search-box-bg: rgba(255, 255, 255, 0.06);
+  --badge-bg: rgba(255, 255, 255, 0.04);
+  --badge-border: rgba(255, 255, 255, 0.04);
+  --badge-text: rgba(255, 255, 255, 0.12);
+  --footer-border: rgba(255, 255, 255, 0.03);
+  --icon-unselected-bg: rgba(255, 255, 255, 0.04);
+  --icon-unselected-text: rgba(255, 255, 255, 0.28);
+  --footer-chip-bg: rgba(255, 255, 255, 0.02);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme-mode="light"]) .popup-shell {
+    --search-box-bg: rgba(255, 255, 255, 0.06);
+    --badge-bg: rgba(255, 255, 255, 0.04);
+    --badge-border: rgba(255, 255, 255, 0.04);
+    --badge-text: rgba(255, 255, 255, 0.12);
+    --footer-border: rgba(255, 255, 255, 0.03);
+    --icon-unselected-bg: rgba(255, 255, 255, 0.04);
+    --icon-unselected-text: rgba(255, 255, 255, 0.28);
+    --footer-chip-bg: rgba(255, 255, 255, 0.02);
+  }
+}
+
+/* Preview floating window styles（G2 作用域 token，与 .popup-shell 同一三主题模式：
+   默认浅色 + 属性/媒体查询双 dark 分支；dark 值保留原硬编码原型值） */
+.preview-shell {
+  --preview-divider: rgba(15, 23, 42, 0.06);
+  --preview-divider-faint: rgba(15, 23, 42, 0.045);
+  --preview-header-time: rgba(15, 23, 42, 0.4);
+  --preview-faint-icon: rgba(15, 23, 42, 0.32);
+  --preview-faint-text: rgba(15, 23, 42, 0.45);
+  --preview-ghost-text: rgba(15, 23, 42, 0.3);
+  --preview-image-icon: rgba(15, 23, 42, 0.35);
+  --preview-code-bg: rgba(15, 23, 42, 0.055);
+  --preview-code-text: color-mix(in srgb, var(--type-text) 65%, var(--text-primary));
+}
+
+:root[data-theme-mode="dark"] .preview-shell {
+  --preview-divider: rgba(255, 255, 255, 0.04);
+  --preview-divider-faint: rgba(255, 255, 255, 0.03);
+  --preview-header-time: rgba(255, 255, 255, 0.15);
+  --preview-faint-icon: rgba(255, 255, 255, 0.12);
+  --preview-faint-text: rgba(255, 255, 255, 0.18);
+  --preview-ghost-text: rgba(255, 255, 255, 0.1);
+  --preview-image-icon: rgba(255, 255, 255, 0.15);
+  --preview-code-bg: rgba(10, 14, 20, 0.6);
+  --preview-code-text: color-mix(in srgb, var(--type-text) 75%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme-mode="light"]) .preview-shell {
+    --preview-divider: rgba(255, 255, 255, 0.04);
+    --preview-divider-faint: rgba(255, 255, 255, 0.03);
+    --preview-header-time: rgba(255, 255, 255, 0.15);
+    --preview-faint-icon: rgba(255, 255, 255, 0.12);
+    --preview-faint-text: rgba(255, 255, 255, 0.18);
+    --preview-ghost-text: rgba(255, 255, 255, 0.1);
+    --preview-image-icon: rgba(255, 255, 255, 0.15);
+    --preview-code-bg: rgba(10, 14, 20, 0.6);
+    --preview-code-text: color-mix(in srgb, var(--type-text) 75%, transparent);
+  }
+}
+
+/* Quick Control Panel styles（D2 作用域 token，与 .popup-shell 同一三主题模式：
+   默认浅色 + 属性/媒体查询双 dark 分支；dark 值保留原硬编码原型值） */
+.quick-panel-shell {
+  --panel-bg: rgba(255, 255, 255, 0.85);
+  --panel-shadow: 0 20px 60px rgba(0, 0, 0, 0.16), 0 0 0 0.5px rgba(255, 255, 255, 0.5);
+  --panel-icon-faint: rgba(15, 23, 42, 0.35);
+  --panel-group-label: rgba(15, 23, 42, 0.4);
+  --panel-desc: rgba(15, 23, 42, 0.5);
+  --panel-faint-text: rgba(15, 23, 42, 0.45);
+  --panel-divider: rgba(15, 23, 42, 0.05);
+  --panel-row-hover: rgba(15, 23, 42, 0.045);
+  --panel-label: rgba(15, 23, 42, 0.7);
+  --panel-label-hover: rgba(15, 23, 42, 0.88);
+  --panel-icon-bg: rgba(15, 23, 42, 0.05);
+  --panel-icon-text: rgba(15, 23, 42, 0.45);
+  --panel-shortcut-text: rgba(15, 23, 42, 0.4);
+  --panel-shortcut-bg: rgba(15, 23, 42, 0.04);
+  --panel-seg-border: rgba(15, 23, 42, 0.08);
+  --panel-seg-bg: rgba(15, 23, 42, 0.03);
+  --panel-seg-bg-hover: rgba(15, 23, 42, 0.05);
+  --panel-seg-text: rgba(15, 23, 42, 0.5);
+  --panel-seg-text-hover: rgba(15, 23, 42, 0.75);
+  --panel-status-on-text: color-mix(in srgb, #34d399 55%, #0f172a);
+  --panel-status-off-text: color-mix(in srgb, #fb923c 60%, #7c2d12);
+}
+
+:root[data-theme-mode="dark"] .quick-panel-shell {
+  --panel-bg: rgba(18, 23, 30, 0.82);
+  --panel-shadow: 0 20px 60px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+  --panel-icon-faint: rgba(255, 255, 255, 0.25);
+  --panel-group-label: rgba(255, 255, 255, 0.15);
+  --panel-desc: rgba(255, 255, 255, 0.22);
+  --panel-faint-text: rgba(255, 255, 255, 0.18);
+  --panel-divider: rgba(255, 255, 255, 0.035);
+  --panel-row-hover: rgba(255, 255, 255, 0.035);
+  --panel-label: rgba(255, 255, 255, 0.65);
+  --panel-label-hover: rgba(255, 255, 255, 0.85);
+  --panel-icon-bg: rgba(255, 255, 255, 0.04);
+  --panel-icon-text: rgba(255, 255, 255, 0.35);
+  --panel-shortcut-text: rgba(255, 255, 255, 0.2);
+  --panel-shortcut-bg: rgba(255, 255, 255, 0.03);
+  --panel-seg-border: rgba(255, 255, 255, 0.04);
+  --panel-seg-bg: rgba(255, 255, 255, 0.02);
+  --panel-seg-bg-hover: rgba(255, 255, 255, 0.04);
+  --panel-seg-text: rgba(255, 255, 255, 0.35);
+  --panel-seg-text-hover: rgba(255, 255, 255, 0.6);
+  --panel-status-on-text: rgba(52, 211, 153, 0.75);
+  --panel-status-off-text: rgba(251, 146, 60, 0.75);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme-mode="light"]) .quick-panel-shell {
+    --panel-bg: rgba(18, 23, 30, 0.82);
+    --panel-shadow: 0 20px 60px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
+    --panel-icon-faint: rgba(255, 255, 255, 0.25);
+    --panel-group-label: rgba(255, 255, 255, 0.15);
+    --panel-desc: rgba(255, 255, 255, 0.22);
+    --panel-faint-text: rgba(255, 255, 255, 0.18);
+    --panel-divider: rgba(255, 255, 255, 0.035);
+    --panel-row-hover: rgba(255, 255, 255, 0.035);
+    --panel-label: rgba(255, 255, 255, 0.65);
+    --panel-label-hover: rgba(255, 255, 255, 0.85);
+    --panel-icon-bg: rgba(255, 255, 255, 0.04);
+    --panel-icon-text: rgba(255, 255, 255, 0.35);
+    --panel-shortcut-text: rgba(255, 255, 255, 0.2);
+    --panel-shortcut-bg: rgba(255, 255, 255, 0.03);
+    --panel-seg-border: rgba(255, 255, 255, 0.04);
+    --panel-seg-bg: rgba(255, 255, 255, 0.02);
+    --panel-seg-bg-hover: rgba(255, 255, 255, 0.04);
+    --panel-seg-text: rgba(255, 255, 255, 0.35);
+    --panel-seg-text-hover: rgba(255, 255, 255, 0.6);
+    --panel-status-on-text: rgba(52, 211, 153, 0.75);
+    --panel-status-off-text: rgba(251, 146, 60, 0.75);
+  }
+}
+
+/* Frosted glass window material（确认设计：blur 36-40px saturate 1.6，由 token 控制） */
+.frost-window {
+  backdrop-filter: blur(var(--blur-window, 40px)) saturate(var(--saturate-window, 1.6));
+  -webkit-backdrop-filter: blur(var(--blur-window, 40px)) saturate(var(--saturate-window, 1.6));
+}
+
+/* Animation utilities */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-in-from-left {
+  from { transform: translateX(-4px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.animate-in {
+  animation: fade-in 150ms ease-out, slide-in-from-left 150ms ease-out;
+}
+
+/* ===== Confirmed design entry animations ===== */
+
+/* Popup 历史行进入 */
+@keyframes rowSlideIn {
   from {
     opacity: 0;
     transform: translateY(4px);
@@ -101,19 +613,7 @@ body {
   }
 }
 
-/* --- preview animation --- */
-@keyframes previewFadeIn {
-  from {
-    opacity: 0;
-    transform: translateX(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-/* --- panel pop-in (Quick Control Panel) --- */
+/* Quick Control Panel 弹入 */
 @keyframes panelPopIn {
   from {
     opacity: 0;
@@ -125,7 +625,19 @@ body {
   }
 }
 
-/* --- settings pane switch --- */
+/* Preview 浮窗淡入（4px 横向位移） */
+@keyframes previewFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Settings 分区切换 */
 @keyframes fadeSlideIn {
   from {
     opacity: 0;
@@ -137,15 +649,26 @@ body {
   }
 }
 
-/* --- custom range slider (Settings) --- */
+/* Main 列表行 / 网格卡片进入（E2） */
+.main-row-enter {
+  animation: rowSlideIn 0.2s ease-out;
+}
+
+/* Settings 渐变滑块（F2） */
 .slider-range {
   -webkit-appearance: none;
   appearance: none;
   height: 4px;
   border-radius: 2px;
-  background: linear-gradient(90deg, rgba(56, 189, 248, 0.6), rgba(56, 189, 248, 0.6)) 0 / var(--slider-fill, 0%) 100% no-repeat, rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(90deg, rgba(56, 189, 248, 0.6), rgba(56, 189, 248, 0.6)) 0 / var(--slider-fill, 0%) 100% no-repeat,
+    var(--slider-track-color, var(--surface-2));
   outline: none;
   cursor: pointer;
+}
+.slider-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 .slider-range::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -156,20 +679,65 @@ body {
   background: #fff;
   border: none;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
-  transition: transform 0.12s ease;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 .slider-range::-webkit-slider-thumb:hover {
   transform: scale(1.1);
+  box-shadow: 0 0 0 4px var(--slider-hover-thumb-color, rgba(15, 23, 42, 0.14));
+}
+.slider-range:active::-webkit-slider-thumb {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 6px var(--slider-active-thumb-color, rgba(56, 189, 248, 0.5));
 }
 
-/* --- scrollbar --- */
-.mock-popup ::-webkit-scrollbar {
-  width: 4px;
+/* Smooth transitions for interactive elements */
+.transition-colors {
+  transition-property: color, background-color, border-color;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
 }
-.mock-popup ::-webkit-scrollbar-track {
+
+/* Scrollbar styling for macOS native feel */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
   background: transparent;
 }
-.mock-popup ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12);
+
+::-webkit-scrollbar-thumb {
+  background: rgba(15, 23, 42, 0.18);
   border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 23, 42, 0.28);
+}
+
+:root[data-theme-mode="dark"] ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+:root[data-theme-mode="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme-mode="light"]) ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+  }
+  :root:not([data-theme-mode="light"]) ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .animate-in {
+    animation: none;
+  }
+  * {
+    transition-duration: 0ms !important;
+  }
 }
