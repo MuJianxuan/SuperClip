@@ -1431,6 +1431,153 @@ fn run_osascript_stdin(script: &str) -> Result<String, String> {
         .map_err(|_| "MACOS_API_UNAVAILABLE".to_string())
 }
 
+/// 通用剪贴板在 osascript 中的表达式（AppleScript-ObjC 桥接）。
+const GENERAL_PASTEBOARD_EXPR: &str = "current application's NSPasteboard's generalPasteboard()";
+
+/// 读取剪贴板中的本地文件引用列表。
+/// 优先 NSFilenamesPboardType（Finder 复制文件的标准 flavor）；
+/// 若缺失则回退到 public.file-url（部分第三方 app 只写这个）。
+/// 无文件引用时返回 None。
+/// 参数为 osascript 表达式（方便测试注入命名 pasteboard，避免污染通用剪贴板）。
+fn read_file_urls_from_pasteboard(pasteboard_expr: &str) -> Option<Vec<String>> {
+    // 优先 path 数组：NSFilenamesPboardType 的值就是文件的具体/path 列表
+    let paths = read_filenames_from_pasteboard(pasteboard_expr);
+    if let Some(paths) = paths {
+        if !paths.is_empty() {
+            return Some(paths);
+        }
+    }
+
+    // 回退：public.file-url 的值是 file:// URL，需 percent-decode 成路径
+    read_file_urls_via_public_file_url()
+}
+
+fn read_filenames_from_pasteboard(pasteboard_expr: &str) -> Option<Vec<String>> {
+    let script = format!(
+        r#"
+use framework "AppKit"
+use scripting additions
+try
+  set pb to {pasteboard_expr}
+  set filePaths to pb's propertyListForType:(current application's NSFilenamesPboardType)
+  if filePaths is missing value then return ""
+  set out to ""
+  repeat with p in filePaths
+    set out to out & (p as text) & linefeed
+  end repeat
+  return out
+on error
+  return ""
+end try
+"#,
+    );
+
+    let output = run_osascript_stdin(&script).ok()?;
+    let paths = output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+
+    if paths.is_empty() {
+        None
+    } else {
+        Some(paths)
+    }
+}
+
+/// 从 public.file-url (file:// URL) fallback 读取路径（仅 generalPasteboard）。
+/// 使用 JavaScript-ObjC 桥（AppleScript 无法可靠获取 NSURL.path），
+/// 配合 Rust 端 percent-decode 处理中文/空格等编码路径。
+fn read_file_urls_via_public_file_url() -> Option<Vec<String>> {
+    let script = r#"ObjC.import("AppKit");
+const pb = $.NSPasteboard.generalPasteboard;
+const s = pb.stringForType($.NSPasteboardTypeFileURL);
+if (s === null) { "none"; } else { ObjC.unwrap(s); }
+"#;
+    let url_str = run_osascript(&["-l", "JavaScript", "-e", script])
+        .ok()?;
+    let url_str = url_str.trim();
+    if url_str.is_empty() || url_str == "none" {
+        return None;
+    }
+    Some(vec![file_url_to_path(url_str)?])
+}
+
+/// 将 file:// URL 转换为本地 POSIX 路径。
+/// 处理 file:///path 和 file://localhost/path 格式，百分号解码中文字符。
+fn file_url_to_path(url: &str) -> Option<String> {
+    let path_part = url.strip_prefix("file://")?;
+    // 跳过可选的 localhost 主机名
+    let path_part = path_part
+        .strip_prefix("/localhost")
+        .unwrap_or(path_part);
+    if !path_part.starts_with('/') {
+        return None;
+    }
+    Some(percent_decode_path(path_part))
+}
+
+fn percent_decode_path(s: &str) -> String {
+    let mut result = Vec::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(val) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                result.push(val);
+                i += 3;
+                continue;
+            }
+        }
+        result.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(result).unwrap_or_else(|_| s.to_string())
+}
+
+/// 把本地文件引用写入指定剪贴板。
+/// 同时写 NSFilenamesPboardType（路径数组）与 writeObjects(NSURL 字面量)，
+/// 前者是 Finder 等老 app 的标准文件 flavor，后者带出 public.file-url / Apple URL，
+/// 覆盖现代 app；缺一会导致部分目标应用按纯文本处理。
+/// 参数为 osascript 表达式（方便测试注入命名 pasteboard，避免污染通用剪贴板）。
+fn write_file_urls_into_pasteboard(
+    pasteboard_expr: &str,
+    paths: &[String],
+) -> Result<(), String> {
+    let quoted_paths = paths
+        .iter()
+        .map(|path| applescript_string_literal(path))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let url_exprs = paths
+        .iter()
+        .map(|path| {
+            format!(
+                "current application's NSURL's fileURLWithPath:{}",
+                applescript_string_literal(path)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let script = format!(
+        r#"
+use framework "AppKit"
+use scripting additions
+set pb to {pasteboard_expr}
+pb's clearContents()
+set namesOk to pb's setPropertyList:{{{quoted_paths}}} forType:(current application's NSFilenamesPboardType)
+if (namesOk as boolean) is false then error "file names write failed"
+set urlsOk to pb's writeObjects:{{{url_exprs}}}
+if (urlsOk as boolean) is false then error "file urls write failed"
+return "ok"
+"#,
+    );
+
+    run_osascript_stdin(&script).map(|_| ())
+}
+
 fn read_html_from_nspasteboard() -> Option<String> {
     let script = r#"
 use framework "AppKit"
@@ -1598,6 +1745,15 @@ fn frontmost_app_bundle_id() -> String {
 fn read_clipboard_snapshot() -> Result<Option<ClipboardSnapshot>, String> {
     let bundle_id = frontmost_app_bundle_id();
     let source_app = if bundle_id.is_empty() { "System Clipboard".to_string() } else { bundle_id };
+
+    // 文件优先：Finder 复制文件时剪贴板只有文件引用 flavor（无文本），
+    // pbpaste 读不到任何字符串，必须先按文件引用读，否则文件复制会被整体丢弃。
+    if let Some(file_urls) = read_file_urls_from_pasteboard(GENERAL_PASTEBOARD_EXPR) {
+        if let Some(snapshot) = normalize_file_snapshot(file_urls, &source_app) {
+            return Ok(Some(snapshot));
+        }
+    }
+
     let plain_text = run_pbpaste("txt").unwrap_or_default();
 
     if let Some(html) = read_html_from_nspasteboard() {
@@ -2163,7 +2319,7 @@ fn write_payload_to_clipboard(payload: &ClipboardPayloadSnapshot) -> Result<(), 
     }
 
     if let Some(paths) = payload.file_urls.as_ref() {
-        return write_text_with_pbcopy(&paths.join("\n"));
+        return write_file_urls_into_pasteboard(GENERAL_PASTEBOARD_EXPR, paths);
     }
 
     if let Some(text) = payload.text_plain.as_deref() {
@@ -5916,6 +6072,43 @@ mod tests {
         let results = search_clipboard_items(&connection, "copy-only", None, false, None).expect("search should pass");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].kind, "file");
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn file_urls_roundtrip_via_named_pasteboard() {
+        let pasteboard_name = format!(
+            "com.superclip.test.file-roundtrip.{}",
+            std::process::id()
+        );
+        let pasteboard_expr = format!(
+            "current application's NSPasteboard's pasteboardWithName:{}",
+            applescript_string_literal(&pasteboard_name)
+        );
+        let dir = std::env::temp_dir().join(format!(
+            "superclip-file-roundtrip-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).expect("test dir should be created");
+        let paths = vec![
+            dir.join("文件 A.txt").display().to_string(),
+            dir.join("b markdown.md").display().to_string(),
+        ];
+        for path in &paths {
+            fs::write(path, b"content").expect("test file should be written");
+        }
+
+        write_file_urls_into_pasteboard(&pasteboard_expr, &paths)
+            .expect("file urls should write to named pasteboard");
+        let read =
+            read_file_urls_from_pasteboard(&pasteboard_expr).expect("file urls should read back");
+        assert_eq!(read, paths);
+
+        // 清理命名 pasteboard，避免残留（需 framework 才能访问 NSPasteboard）
+        let clear = format!(
+            "use framework \"AppKit\"\n\nset pb to {pasteboard_expr}\npb's clearContents()\nreturn \"ok\""
+        );
+        run_osascript_stdin(&clear).expect("named pasteboard should clear");
     }
 
     #[test]
