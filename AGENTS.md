@@ -188,3 +188,16 @@ npm run quality:search-benchmark  # 搜索质量基准
 - 前端测试：vitest + jsdom + @testing-library/react，setup 在 `src/test/setup.ts`
 - hover/active 一律由 React state 驱动，禁止直接操作 `e.currentTarget.style`
 - 交互设计基准见 `CONTEXT.md`（五个表面重设计 + 统一视觉语言），原型在 `src/prototype/variants/`
+
+
+<!-- CODEGRAPH_START -->
+## CodeGraph
+
+In repositories indexed by CodeGraph (a `.codegraph/` directory exists at the repo root), reach for it BEFORE grep/find or reading files when you need to understand or locate code:
+
+- **MCP tool** (when available): `codegraph_explore` answers most code questions in one call — the relevant symbols' verbatim source plus the call paths between them, including dynamic-dispatch hops grep can't follow. Name a file or symbol in the query to read its current line-numbered source. If it's listed but deferred, load it by name via tool search.
+- **Shell** (always works): `codegraph explore "<symbol names or question>"` prints the same output.
+
+If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is the user's decision.
+<!-- CODEGRAPH_END -->
+
