@@ -1,0 +1,1981 @@
+<!-- ============================================================================
+     SuperClip 重设计 · PC 线框流程原型
+     表面：Popup 320×480 / Main 900×620 / QuickPanel 248×400 / Preview 320×360
+     每个窗口通过内联 --frame-w/--frame-h/--frame-radius 局部覆写实现真实尺寸
+     （模板变量在 :root，元素级声明优先；JS 的落点/行距公式从计算样式读取，自动适配）
+     分组：取用与预览 / 主管理台 / 设置 / 菜单栏与反馈
+     ============================================================================ -->
+
+<!-- ========================= 组 1：取用与预览 ========================= -->
+
+<!-- ① Popup 默认态 -->
+<div class="stage" data-group="取用与预览" data-cell="1,1" style="--frame-w:320px;--frame-h:480px;--frame-radius:12px">
+  <div class="stage-label">① Popup · 默认态</div>
+  <div class="screen" id="popup-default">
+    <div class="main" style="background:var(--white)">
+      <!-- 顶部搜索框 -->
+      <div style="flex-shrink:0;padding:10px 10px 8px">
+        <div class="pc-search" style="height:32px" data-hot="go-search">
+          <i data-lucide="search"></i>
+          <span class="sph">搜索剪贴板…</span>
+          <span style="margin-left:auto;font-size:10px;color:var(--line);letter-spacing:0.5px">⌥⌘V</span>
+        </div>
+      </div>
+
+      <!-- 历史列表 -->
+      <div style="flex:1;padding:0 4px">
+        <div class="section-cap" style="font-size:11px;padding:4px 8px 6px">今天</div>
+
+        <!-- 选中行（无 hover 操作、无置顶星） -->
+        <div data-hot="go-preview" style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;background:var(--fill-2);margin:0 2px 1px">
+          <span class="thumb" style="width:28px;height:28px;border-radius:7px;flex-shrink:0"><i data-lucide="type"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden">发布命令片段</span>
+            <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">npm run tauri dev -- --no-watch, 先验证…</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10px;color:var(--muted)">刚刚</span>
+        </div>
+
+        <!-- 普通行 -->
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;margin:0 2px 1px">
+          <span class="thumb" style="width:28px;height:28px;border-radius:7px;flex-shrink:0"><i data-lucide="file-text"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden">客户邮件摘要</span>
+            <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">本周只交付本地壳<br>体、搜索路径与诊断导出。</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10px;color:var(--muted)">2 分钟前</span>
+        </div>
+
+        <!-- 带置顶星 -->
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;margin:0 2px 1px">
+          <span class="thumb" style="width:28px;height:28px;border-radius:7px;flex-shrink:0"><i data-lucide="file-image"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--ink)">
+              <span style="white-space:nowrap;overflow:hidden">发布预览截图</span>
+              <i data-lucide="star" style="width:10px;height:10px;color:var(--line);flex-shrink:0"></i>
+            </span>
+            <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">标准双栏 popover 预览图，包含历史列表…</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10px;color:var(--muted)">8 分钟前</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;margin:0 2px 1px">
+          <span class="thumb" style="width:28px;height:28px;border-radius:7px;flex-shrink:0"><i data-lucide="file"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden">交付清单.pdf</span>
+            <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">包含 P0 风险关闭门、演示脚本、录屏…</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10px;color:var(--muted)">13 分钟前</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;margin:0 2px 1px">
+          <span class="thumb" style="width:28px;height:28px;border-radius:7px;flex-shrink:0"><i data-lucide="type"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden">接口地址</span>
+            <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">http://localhost:1420/panel.html</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10px;color:var(--muted)">1 小时前</span>
+        </div>
+
+        <div class="section-cap" style="font-size:11px;padding:10px 8px 6px">昨天</div>
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;margin:0 2px 1px">
+          <span class="thumb" style="width:28px;height:28px;border-radius:7px;flex-shrink:0"><i data-lucide="type"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden">Sketch 授权码</span>
+            <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">SC-2026-XXXX-XXXX-XXXX</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10px;color:var(--muted)">昨天</span>
+        </div>
+      </div>
+
+      <!-- 底部键盘提示条 -->
+      <div style="flex-shrink:0;height:34px;border-top:1px solid var(--hairline);display:flex;align-items:center;padding:0 12px;gap:14px;font-size:10.5px;color:var(--muted)">
+        <span>↑↓ 选择</span>
+        <span>↵ 粘贴</span>
+        <span>⌘⌫ 删除</span>
+        <span style="margin-left:auto">共 428 条</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="popup-default">
+    <div class="note-title">① Popup · 默认态</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>顶部固定搜索框（32 高），右侧显示唤起快捷键 <b>⌥⌘V</b></li>
+        <li>历史列表按「今天 / 昨天 / 更早」分组，行高 46，一屏 8 条</li>
+        <li>行 = 28 缩略图 + 标题 13/600 + 预览 11 + 右侧时间 10</li>
+        <li>置顶项在标题后显示星标</li>
+        <li>底部键盘提示条：↑↓ 选择 / ↵ 粘贴 / ⌘⌫ 删除 / 总数</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>输入即搜（150ms 防抖）→ 搜索态</li>
+        <li>鼠标悬停行 200ms → 弹出 Preview 浮窗</li>
+        <li>行悬停显示操作图标 → 行操作态</li>
+        <li>↑↓ 移动选中 · ↵ 直接粘贴 · Esc 清空搜索后再按关闭</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ② Popup 搜索态 -->
+<div class="stage" data-group="取用与预览" data-cell="1,2" style="--frame-w:320px;--frame-h:480px;--frame-radius:12px">
+  <div class="stage-label">② Popup · 搜索态</div>
+  <div class="screen" id="popup-search">
+    <div class="main" style="background:var(--white)">
+      <div style="flex-shrink:0;padding:10px 10px 8px">
+        <div class="pc-search" style="height:32px;border-color:var(--line)">
+          <i data-lucide="search"></i>
+          <span class="sph" style="color:var(--ink)">发布</span>
+          <span style="margin-left:auto;width:14px;height:14px;border-radius:50%;background:var(--fill-2);display:flex;align-items:center;justify-content:center"><i data-lucide="x" style="width:9px;height:9px;color:var(--ink)"></i></span>
+        </div>
+      </div>
+
+      <!-- 匹配结果（命中词高亮：线框用颜色 + 下划线表达） -->
+      <div style="flex:1;padding:0 4px">
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;background:var(--fill-2);margin:0 2px 1px">
+          <span class="thumb" style="width:28px;height:28px;border-radius:7px;flex-shrink:0"><i data-lucide="type"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden"><span style="border-bottom:2px solid var(--ink)">发布</span>命令片段</span>
+            <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">npm run tauri dev -- --no-watch…</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10px;color:var(--muted)">刚刚</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;margin:0 2px 1px">
+          <span class="thumb" style="width:28px;height:28px;border-radius:7px;flex-shrink:0"><i data-lucide="file-image"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--ink)">
+              <span style="white-space:nowrap;overflow:hidden"><span style="border-bottom:2px solid var(--ink)">发布</span>预览截图</span>
+              <i data-lucide="star" style="width:10px;height:10px;color:var(--line);flex-shrink:0"></i>
+            </span>
+            <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">标准双栏 popover 预览图…</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10px;color:var(--muted)">8 分钟前</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;margin:0 2px 1px">
+          <span class="thumb" style="width:28px;height:28px;border-radius:7px;flex-shrink:0"><i data-lucide="file-text"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden">本周<i data-lucide="x" style="width:0;height:0"></i><span style="border-bottom:2px solid var(--ink)">发布</span>计划</span>
+            <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">周一：本地壳体验收；周三：…</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10px;color:var(--muted)">2 小时前</span>
+        </div>
+
+        <!-- 无结果空态（同页展示两种状态：这是线框表达法，虚线框标出另一个分支） -->
+        <div style="margin:18px 10px 0;border:1px dashed var(--line);border-radius:10px;padding:16px 12px;text-align:center">
+          <div style="font-size:11px;color:var(--muted);letter-spacing:0.6px;margin-bottom:10px">↓ 若查询无结果 ↓</div>
+          <div class="empty" style="padding:8px 0 0">
+            <div class="eic"><i data-lucide="search"></i></div>
+            <div class="e1" style="font-size:14px">没有匹配的内容</div>
+            <div class="e2" style="font-size:12px">试试更短的关键词，或按 Esc 清空</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex-shrink:0;height:34px;border-top:1px solid var(--hairline);display:flex;align-items:center;padding:0 12px;gap:14px;font-size:10.5px;color:var(--muted)">
+        <span>↑↓ 选择</span>
+        <span>↵ 粘贴</span>
+        <span>Esc 清空</span>
+        <span style="margin-left:auto">匹配 3 条</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="popup-search">
+    <div class="note-title">② Popup · 搜索态</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>搜索框出现清空按钮（×），右侧显示「匹配 N 条」</li>
+        <li>命中词在标题/预览中高亮（下划线表达）</li>
+        <li>FTS5 全文检索 → 无结果自动降级 LIKE 兜底</li>
+        <li>无结果时显示空态：图标 + 主文 + 建议</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>输入即搜，150ms 防抖，不阻塞输入</li>
+        <li>Esc：先清空搜索，再按一次才关闭面板（两级退出）</li>
+        <li>点 × 清空并回到默认列表</li>
+      </ul>
+      <div class="note-sec">设计要点</div>
+      <ul>
+        <li>空态与列表共用同一容器高度，切换时不跳动</li>
+        <li>本页用虚线框并列展示「有结果 / 无结果」两种状态，实现时按数据二选一</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ③ Popup 行操作态 -->
+<div class="stage" data-group="取用与预览" data-cell="1,3" style="--frame-w:320px;--frame-h:480px;--frame-radius:12px">
+  <div class="stage-label">③ Popup · 行操作</div>
+  <div class="screen" id="popup-actions">
+    <div class="main" style="background:var(--white)">
+      <div style="flex-shrink:0;padding:10px 10px 8px">
+        <div class="pc-search" style="height:32px">
+          <i data-lucide="search"></i>
+          <span class="sph">搜索剪贴板…</span>
+          <span style="margin-left:auto;font-size:10px;color:var(--line);letter-spacing:0.5px">⌥⌘V</span>
+        </div>
+      </div>
+
+      <div style="flex:1;padding:0 4px">
+        <!-- 悬停行：右侧时间被操作图标替换 -->
+        <div style="position:relative;display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;background:var(--fill);margin:6px 2px 1px">
+          <span class="thumb" style="width:28px;height:28px;border-radius:7px;flex-shrink:0"><i data-lucide="type"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden">发布命令片段</span>
+            <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">npm run tauri dev -- --no-watch, 先验证…</span>
+          </span>
+          <span style="flex-shrink:0;display:flex;align-items:center;gap:2px">
+            <span style="width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--ink)"><i data-lucide="star" style="width:13px;height:13px"></i></span>
+            <span style="width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--ink)"><i data-lucide="trash-2" style="width:13px;height:13px"></i></span>
+          </span>
+
+          <!-- 右键菜单 -->
+          <div class="menu" style="top:42px;right:8px;min-width:176px">
+            <div class="menu-item"><i data-lucide="clipboard"></i>复制</div>
+            <div class="menu-item"><i data-lucide="clipboard-paste"></i>粘贴到前台应用</div>
+            <div class="menu-item"><i data-lucide="type"></i>粘贴为纯文本</div>
+            <div class="menu-sep"></div>
+            <div class="menu-item"><i data-lucide="star"></i>置顶</div>
+            <div class="menu-item"><i data-lucide="eye"></i>查看详情</div>
+            <div class="menu-sep"></div>
+            <div class="menu-item danger"><i data-lucide="trash-2"></i>删除</div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;margin:0 2px 1px">
+          <span class="thumb" style="width:28px;height:28px;border-radius:7px;flex-shrink:0"><i data-lucide="file-text"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden">客户邮件摘要</span>
+            <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">本周只交付本地壳体、搜索路径…</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10px;color:var(--muted)">2 分钟前</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;margin:0 2px 1px">
+          <span class="thumb" style="width:28px;height:28px;border-radius:7px;flex-shrink:0"><i data-lucide="file-image"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--ink)">
+              <span style="white-space:nowrap;overflow:hidden">发布预览截图</span>
+              <i data-lucide="star" style="width:10px;height:10px;color:var(--ink);flex-shrink:0"></i>
+            </span>
+            <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">标准双栏 popover 预览图…</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10px;color:var(--muted)">8 分钟前</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;margin:0 2px 1px">
+          <span class="thumb" style="width:28px;height:28px;border-radius:7px;flex-shrink:0"><i data-lucide="file"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden">交付清单.pdf</span>
+            <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">包含 P0 风险关闭门、演示脚本…</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10px;color:var(--muted)">13 分钟前</span>
+        </div>
+      </div>
+
+      <!-- 删除后的可撤销 Toast -->
+      <div class="toast" style="bottom:52px;font-size:12px">
+        <i data-lucide="trash-2"></i>已删除 1 条
+        <span style="margin-left:10px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.6)">撤销</span>
+      </div>
+
+      <div style="flex-shrink:0;height:34px;border-top:1px solid var(--hairline);display:flex;align-items:center;padding:0 12px;gap:14px;font-size:10.5px;color:var(--muted)">
+        <span>↵ 粘贴</span>
+        <span>⌘↵ 仅复制</span>
+        <span>⌘⌫ 删除</span>
+        <span style="margin-left:auto">共 428 条</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="popup-actions">
+    <div class="note-title">③ Popup · 行操作</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>行悬停：右侧时间换成 <b>置顶 / 删除</b> 图标按钮</li>
+        <li>右键菜单：复制 / 粘贴 / 粘贴为纯文本 / 置顶 / 查看详情 / 删除</li>
+        <li>删除后弹出可撤销 Toast（5 秒），点撤销走 <code>clipboard_restore</code></li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>悬停 150ms 过渡，图标淡入；移出恢复时间显示</li>
+        <li>删除不进二次确认，靠 Toast 撤销（与 macOS 习惯一致）</li>
+        <li>键盘同理：⌘⌫ 删除、⌘⇧P 置顶</li>
+      </ul>
+      <div class="note-sec">解决的问题</div>
+      <ul>
+        <li>原 Popup 只能键盘操作，鼠标用户无法删除单条记录</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ④ Preview 文本 -->
+<div class="stage" data-group="取用与预览" data-cell="2,1" style="--frame-w:320px;--frame-h:360px;--frame-radius:12px">
+  <div class="stage-label">④ Preview · 文本</div>
+  <div class="screen" id="preview-text">
+    <div class="main" style="background:var(--white)">
+      <!-- 头部：类型 + 时间 -->
+      <div style="flex-shrink:0;padding:11px 14px 9px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:8px">
+        <span style="font-size:12.5px;font-weight:600;color:var(--ink)">文本</span>
+        <span style="font-size:11px;color:var(--muted)">刚刚</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--muted);letter-spacing:0.3px">只读预览</span>
+      </div>
+
+      <!-- 内容区 -->
+      <div style="flex:1;padding:12px 14px;overflow:hidden">
+        <div style="font-size:12px;line-height:1.65;color:var(--ink)">先运行本地开发命令，确认克隆与快捷键都生效，再进入下一步。</div>
+        <div style="margin-top:10px;background:var(--fill);border:1px solid var(--hairline);border-radius:8px;padding:9px 10px;font-size:11.5px;line-height:1.7;color:var(--ink)">
+          <span style="color:var(--muted)">bash</span><br>
+          npm run tauri dev -- --no-watch<br>
+          ./scripts/check.sh --strict
+        </div>
+        <div style="margin-top:10px;font-size:12px;line-height:1.65;color:var(--ink)">通过后即可执行 <span style="border-bottom:1px solid var(--line)">诊断导出</span>，把结果贴进验收单。</div>
+      </div>
+
+      <!-- 底部元信息：来源 + 大小 -->
+      <div style="flex-shrink:0;padding:9px 14px;border-top:1px solid var(--hairline);display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--muted)">
+        <span class="avatar-cell" style="width:16px;height:16px;font-size:9px">W</span>
+        <span>来自 Warp · 1.2 KB · 428 字符</span>
+        <span style="margin-left:auto">复制过 6 次</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="preview-text">
+    <div class="note-title">④ Preview · 文本</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>头部：类型标签 + 时间 +「只读预览」提示</li>
+        <li>正文：普通段落与 <code>```</code> 代码块区分渲染（等宽 + 浅底）</li>
+        <li>底部：来源 App 首字母头像 + 体积 + 字符数 + 使用次数</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>纯只读，无任何按钮（不抢点击主路径）</li>
+        <li>内容超长时窗口内截断，不做滚动（保持浮窗轻量）</li>
+      </ul>
+      <div class="note-sec">设计要点</div>
+      <ul>
+        <li>原 Preview 只有「类型 + 时间」两行信息；新增来源与体积，让预览具备判断价值</li>
+        <li>不使用类型彩色，改用单色标签 + 头像区分</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ⑤ Preview 图片 / 文件 -->
+<div class="stage" data-group="取用与预览" data-cell="2,2" style="--frame-w:320px;--frame-h:360px;--frame-radius:12px">
+  <div class="stage-label">⑤ Preview · 图片 / 文件</div>
+  <div class="screen" id="preview-image">
+    <div class="main" style="background:var(--white)">
+      <div style="flex-shrink:0;padding:11px 14px 9px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:8px">
+        <span style="font-size:12.5px;font-weight:600;color:var(--ink)">图片</span>
+        <span style="font-size:11px;color:var(--muted)">8 分钟前</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--muted);letter-spacing:0.3px">只读预览</span>
+      </div>
+
+      <div style="flex:1;padding:12px 14px">
+        <!-- 图片预览占位：棋盘格表达「真实缩略图」 -->
+        <div style="height:118px;border-radius:8px;border:1px solid var(--hairline);background:repeating-conic-gradient(var(--fill) 0% 25%, var(--white) 0% 50%) 0 / 16px 16px;display:flex;align-items:center;justify-content:center">
+          <i data-lucide="image" style="width:26px;height:26px;color:var(--line)"></i>
+        </div>
+        <div style="margin-top:10px;font-size:12px;font-weight:600;color:var(--ink)">发布预览截图</div>
+        <div style="margin-top:4px;font-size:11px;color:var(--muted);line-height:1.6">2560 × 1600 · PNG · 842 KB</div>
+
+        <!-- 文件类条目示例 -->
+        <div style="margin-top:14px;border-top:1px solid var(--line-soft);padding-top:12px">
+          <div style="font-size:11px;color:var(--muted);letter-spacing:0.4px;margin-bottom:8px">文件类型预览</div>
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--hairline);border-radius:8px">
+            <span class="thumb" style="width:26px;height:26px;border-radius:6px;flex-shrink:0"><i data-lucide="file-text"></i></span>
+            <span style="flex:1;min-width:0;display:block">
+              <span style="display:block;font-size:12px;color:var(--ink);white-space:nowrap;overflow:hidden">交付清单.pdf</span>
+              <span style="display:block;font-size:10.5px;color:var(--muted);white-space:nowrap;overflow:hidden">~/Documents/交付/交付清单.pdf</span>
+            </span>
+            <i data-lucide="folder-open" style="width:14px;height:14px;color:var(--line);flex-shrink:0"></i>
+          </div>
+        </div>
+      </div>
+
+      <div style="flex-shrink:0;padding:9px 14px;border-top:1px solid var(--hairline);display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--muted)">
+        <span class="avatar-cell" style="width:16px;height:16px;font-size:9px">F</span>
+        <span>来自 Figma · 1 张图片 · 2 个文件</span>
+        <span style="margin-left:auto">复制过 2 次</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="preview-image">
+    <div class="note-title">⑤ Preview · 图片 / 文件</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>图片：真实缩略图（模板用棋盘格占位表达）+ 尺寸 / 格式 / 体积</li>
+        <li>文件：文件名 + 完整路径 + 在 Finder 中显示的入口</li>
+        <li>底部：来源 App + 条目构成 + 使用次数</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>图片超出高度时按宽度等比缩放，不滚动</li>
+        <li>文件行点击 → 在 Finder 中显示（file 类型固定仅复制，不承诺直接粘贴）</li>
+      </ul>
+      <div class="note-sec">设计要点</div>
+      <ul>
+        <li>用真实缩略图替代类型色图标——这才让用户「一眼看出是什么」</li>
+        <li>图片条目强调尺寸与体积，文件条目强调路径</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ========================= 组 2：主管理台 ========================= -->
+
+<!-- ⑥ Main 历史列表 -->
+<div class="stage" data-group="主管理台" data-cell="1,1" style="--frame-w:900px;--frame-h:620px;--frame-radius:12px">
+  <div class="stage-label">⑥ Main · 历史列表</div>
+  <div class="screen" id="main-history">
+    <div class="shell" style="flex:1;min-height:0">
+      <!-- 左栏导航 192 -->
+      <div class="sidebar" style="width:192px;padding:12px 10px">
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 14px">
+          <span class="logo" style="width:22px;height:22px;border-radius:6px;background:var(--ink);color:var(--white);display:flex;align-items:center;justify-content:center"><i data-lucide="clipboard" style="width:12px;height:12px"></i></span>
+          <span style="font-size:13.5px;font-weight:600;color:var(--ink)">SuperClip</span>
+        </div>
+
+        <div class="side-cap">历史</div>
+        <div class="side-item active" style="font-size:13.5px"><i data-lucide="layers"></i>全部记录<span class="side-tail">428</span></div>
+        <div class="side-item"><i data-lucide="star"></i>已置顶<span class="side-tail">12</span></div>
+        <div class="side-item" data-hot="go-trash"><i data-lucide="trash-2"></i>回收站<span class="side-tail">3</span></div>
+
+        <div class="side-cap">管理</div>
+        <div class="side-item"><i data-lucide="shield-off"></i>排除规则<span class="side-tail">4</span></div>
+        <div class="side-item" data-hot="go-settings"><i data-lucide="settings"></i>设置</div>
+
+        <div style="padding-top:16px">
+          <div class="side-item"><i data-lucide="pause"></i>暂停监听</div>
+        </div>
+        <div style="margin-top:8px;padding:9px 10px;border-radius:9px;background:var(--fill);display:flex;align-items:center;gap:7px">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--ink);flex-shrink:0"></span>
+          <span style="font-size:11px;color:var(--muted)">监听中 · 直接粘贴</span>
+        </div>
+      </div>
+
+      <!-- 内容区 -->
+      <div class="main">
+        <div class="main-hd" style="padding:18px 22px 14px">
+          <div class="hd-row">
+            <div>
+              <h2 style="font-size:19px">全部记录</h2>
+              <div class="hd-sub">共 428 条 · 最近 27 分钟内有 5 条新记录</div>
+            </div>
+            <div class="hd-actions">
+              <span class="pc-search" style="width:200px;height:32px"><i data-lucide="search"></i><span class="sph">搜索…</span></span>
+              <span style="display:flex;gap:2px;background:var(--fill);border-radius:8px;padding:2px">
+                <span style="width:26px;height:26px;border-radius:6px;background:var(--white);display:flex;align-items:center;justify-content:center"><i data-lucide="list" style="width:14px;height:14px;color:var(--ink)"></i></span>
+                <span data-hot="go-grid" style="width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center"><i data-lucide="layout-grid" style="width:14px;height:14px;color:var(--line)"></i></span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 筛选行 -->
+        <div class="filterbar" style="padding:0 22px 12px;margin:0;gap:7px">
+          <span class="chip active" style="height:26px;font-size:12px;background:var(--ink);color:var(--white);display:inline-flex;align-items:center;padding:0 11px;border-radius:13px">全部 <span style="margin-left:5px;opacity:0.7">428</span></span>
+          <span class="chip" style="height:26px;font-size:12px;border:1px solid var(--hairline);display:inline-flex;align-items:center;padding:0 11px;border-radius:13px;color:var(--muted)">文本 <span style="margin-left:5px">312</span></span>
+          <span class="chip" style="height:26px;font-size:12px;border:1px solid var(--hairline);display:inline-flex;align-items:center;padding:0 11px;border-radius:13px;color:var(--muted)">图片 <span style="margin-left:5px">86</span></span>
+          <span class="chip" style="height:26px;font-size:12px;border:1px solid var(--hairline);display:inline-flex;align-items:center;padding:0 11px;border-radius:13px;color:var(--muted)">文件 <span style="margin-left:5px">30</span></span>
+          <span class="fb-pill" style="height:26px;font-size:12px;margin-left:auto"><i data-lucide="calendar"></i>今天<span class="sph" style="margin-left:4px">▾</span></span>
+        </div>
+
+        <!-- 列表 -->
+        <div style="flex:1;padding:0 22px 22px;overflow:hidden">
+          <div class="section-cap" style="font-size:11px;padding:2px 0 6px">今天</div>
+
+          <div style="position:relative;display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:9px;background:var(--fill-2);margin-bottom:1px">
+            <span class="thumb" style="width:30px;height:30px;border-radius:8px;flex-shrink:0"><i data-lucide="type"></i></span>
+            <span style="flex:1;min-width:0;display:block">
+              <span style="display:flex;align-items:center;gap:5px;font-size:13px;font-weight:600;color:var(--ink)">
+                <span style="white-space:nowrap;overflow:hidden">发布命令片段</span>
+                <i data-lucide="star" style="width:10px;height:10px;color:var(--ink);flex-shrink:0"></i>
+              </span>
+              <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">npm run tauri dev -- --no-watch, 先验证壳体与焦点行为，再接 Rust IPC。</span>
+            </span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:70px">Warp</span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:56px;text-align:right">刚刚</span>
+            <span style="position:absolute;left:-6px;top:50%;transform:translateY(-50%);width:3px;height:16px;border-radius:2px;background:var(--ink)"></span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:9px;margin-bottom:1px">
+            <span class="thumb" style="width:30px;height:30px;border-radius:8px;flex-shrink:0"><i data-lucide="file-text"></i></span>
+            <span style="flex:1;min-width:0;display:block">
+              <span style="display:block;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden">客户邮件摘要</span>
+              <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">本周只交付本地壳体、搜索路径与诊断导出，不开启云同步或 AI 功能。</span>
+            </span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:70px">Mail</span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:56px;text-align:right">2 分钟前</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:9px;margin-bottom:1px">
+            <span class="thumb" style="width:30px;height:30px;border-radius:8px;flex-shrink:0"><i data-lucide="file-image"></i></span>
+            <span style="flex:1;min-width:0;display:block">
+              <span style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--ink)">
+                <span style="white-space:nowrap;overflow:hidden">发布预览截图</span>
+                <i data-lucide="star" style="width:10px;height:10px;color:var(--ink);flex-shrink:0"></i>
+              </span>
+              <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">标准双栏 popover 预览图，包含历史列表、详情摘要与功能列表。</span>
+            </span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:70px">Figma</span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:56px;text-align:right">8 分钟前</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:9px;margin-bottom:1px">
+            <span class="thumb" style="width:30px;height:30px;border-radius:8px;flex-shrink:0"><i data-lucide="file"></i></span>
+            <span style="flex:1;min-width:0;display:block">
+              <span style="display:block;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden">交付清单.pdf</span>
+              <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">包含 P0 风险关闭门、演示脚本、录屏证据要求与回归检查项。</span>
+            </span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:70px">Finder</span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:56px;text-align:right">13 分钟前</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:9px;margin-bottom:1px">
+            <span class="thumb" style="width:30px;height:30px;border-radius:8px;flex-shrink:0"><i data-lucide="link"></i></span>
+            <span style="flex:1;min-width:0;display:block">
+              <span style="display:block;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden">会议纪要片段</span>
+              <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">多显示器回退、恢复模式只读与 diagnostics export 字段映射必须同时完成。</span>
+            </span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:70px">Notes</span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:56px;text-align:right">27 分钟前</span>
+          </div>
+
+          <div class="section-cap" style="font-size:11px;padding:12px 0 6px">昨天</div>
+          <div style="display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:9px;margin-bottom:1px">
+            <span class="thumb" style="width:30px;height:30px;border-radius:8px;flex-shrink:0"><i data-lucide="file-image"></i></span>
+            <span style="flex:1;min-width:0;display:block">
+              <span style="display:block;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden">设计稿 - 深色磨砂</span>
+              <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">1440 × 900，三个表面同屏对照。</span>
+            </span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:70px">Figma</span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:56px;text-align:right">昨天</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:9px;margin-bottom:1px">
+            <span class="thumb" style="width:30px;height:30px;border-radius:8px;flex-shrink:0"><i data-lucide="type"></i></span>
+            <span style="flex:1;min-width:0;display:block">
+              <span style="display:block;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden">接口地址</span>
+              <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">http://localhost:1420/panel.html</span>
+            </span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:70px">Warp</span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:56px;text-align:right">昨天</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="main-history">
+    <div class="note-title">⑥ Main · 历史列表</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>左栏导航 192：全部记录 / 已置顶 / 回收站 / 排除规则 / 设置 + 监听状态卡</li>
+        <li>内容头：标题 + 计数副标题 + 内联搜索 + 列表/网格切换</li>
+        <li>筛选行：全部 / 文本 / 图片 / 文件（带计数）+ 时间范围</li>
+        <li>列表按日期分组，列 = 缩略图 / 标题+预览 / 来源 App / 时间</li>
+        <li>选中行左侧 3px 指示条 + 浅底</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>点行选中并高亮；⌘1–5 切换导航；⌘F 聚焦搜索</li>
+        <li>行悬停 → 悬浮预览（复用 Preview 浮窗）</li>
+        <li>点行右侧区域进入多选批量（见⑧）</li>
+      </ul>
+      <div class="note-sec">解决的问题</div>
+      <ul>
+        <li>原 Main 顶栏 + chips + 列表三层挤压，无侧栏、无回收站入口</li>
+        <li>非文本类型用真实缩略图，不再用 4 种彩色图标制造噪声</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ⑦ Main 网格视图 -->
+<div class="stage" data-group="主管理台" data-cell="1,2" style="--frame-w:900px;--frame-h:620px;--frame-radius:12px">
+  <div class="stage-label">⑦ Main · 网格视图</div>
+  <div class="screen" id="main-grid">
+    <div class="shell" style="flex:1;min-height:0">
+      <div class="sidebar" style="width:192px;padding:12px 10px">
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 14px">
+          <span class="logo" style="width:22px;height:22px;border-radius:6px;background:var(--ink);color:var(--white);display:flex;align-items:center;justify-content:center"><i data-lucide="clipboard" style="width:12px;height:12px"></i></span>
+          <span style="font-size:13.5px;font-weight:600;color:var(--ink)">SuperClip</span>
+        </div>
+        <div class="side-cap">历史</div>
+        <div class="side-item active" style="font-size:13.5px"><i data-lucide="layers"></i>全部记录<span class="side-tail">428</span></div>
+        <div class="side-item"><i data-lucide="star"></i>已置顶<span class="side-tail">12</span></div>
+        <div class="side-item"><i data-lucide="trash-2"></i>回收站<span class="side-tail">3</span></div>
+        <div class="side-cap">管理</div>
+        <div class="side-item"><i data-lucide="shield-off"></i>排除规则<span class="side-tail">4</span></div>
+        <div class="side-item"><i data-lucide="settings"></i>设置</div>
+        <div style="margin-top:8px;padding:9px 10px;border-radius:9px;background:var(--fill);display:flex;align-items:center;gap:7px">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--ink);flex-shrink:0"></span>
+          <span style="font-size:11px;color:var(--muted)">监听中 · 直接粘贴</span>
+        </div>
+      </div>
+
+      <div class="main">
+        <div class="main-hd" style="padding:18px 22px 14px">
+          <div class="hd-row">
+            <div>
+              <h2 style="font-size:19px">全部记录</h2>
+              <div class="hd-sub">共 428 条 · 网格视图</div>
+            </div>
+            <div class="hd-actions">
+              <span class="pc-search" style="width:160px;height:32px"><i data-lucide="search"></i><span class="sph">搜索…</span></span>
+              <span style="display:flex;gap:2px;background:var(--fill);border-radius:8px;padding:2px">
+                <span style="width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center"><i data-lucide="list" style="width:14px;height:14px;color:var(--line)"></i></span>
+                <span style="width:26px;height:26px;border-radius:6px;background:var(--white);display:flex;align-items:center;justify-content:center"><i data-lucide="layout-grid" style="width:14px;height:14px;color:var(--ink)"></i></span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="filterbar" style="padding:0 22px 12px;margin:0;gap:7px">
+          <span class="chip active" style="height:26px;font-size:12px;background:var(--ink);color:var(--white);display:inline-flex;align-items:center;padding:0 11px;border-radius:13px">全部 <span style="margin-left:5px;opacity:0.7">428</span></span>
+          <span class="chip" style="height:26px;font-size:12px;border:1px solid var(--hairline);display:inline-flex;align-items:center;padding:0 11px;border-radius:13px;color:var(--muted)">文本 <span style="margin-left:5px">312</span></span>
+          <span class="chip" style="height:26px;font-size:12px;border:1px solid var(--hairline);display:inline-flex;align-items:center;padding:0 11px;border-radius:13px;color:var(--muted)">图片 <span style="margin-left:5px">86</span></span>
+          <span class="chip" style="height:26px;font-size:12px;border:1px solid var(--hairline);display:inline-flex;align-items:center;padding:0 11px;border-radius:13px;color:var(--muted)">文件 <span style="margin-left:5px">30</span></span>
+          <span class="fb-pill" style="height:26px;font-size:12px;margin-left:auto"><i data-lucide="calendar"></i>今天<span class="sph" style="margin-left:4px">▾</span></span>
+        </div>
+
+        <div style="flex:1;padding:0 22px 22px;overflow:hidden">
+          <div class="card-grid" style="grid-template-columns:repeat(3,1fr);gap:12px">
+            <!-- 选中卡片 -->
+            <div class="card" style="border-color:var(--ink)">
+              <div class="card-bd" style="padding:12px 13px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
+                  <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="type"></i></span>
+                  <span style="margin-left:auto;display:flex;align-items:center;gap:3px">
+                    <i data-lucide="star" style="width:11px;height:11px;color:var(--ink)"></i>
+                    <i data-lucide="trash-2" style="width:11px;height:11px;color:var(--muted)"></i>
+                  </span>
+                </div>
+                <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden">发布命令片段</div>
+                <div style="font-size:11px;color:var(--muted);line-height:1.55;margin-top:5px;height:34px;overflow:hidden">npm run tauri dev -- --no-watch, 先验证壳体与焦点行为。</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:9px;padding-top:8px;border-top:1px solid var(--line-soft);font-size:10.5px;color:var(--muted)">
+                  <span>Warp</span><span style="margin-left:auto">刚刚</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-bd" style="padding:12px 13px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
+                  <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="file-image"></i></span>
+                  <span style="margin-left:auto"><i data-lucide="star" style="width:11px;height:11px;color:var(--ink)"></i></span>
+                </div>
+                <div style="height:76px;border-radius:7px;border:1px solid var(--hairline);background:repeating-conic-gradient(var(--fill) 0% 25%, var(--white) 0% 50%) 0 / 12px 12px;margin-bottom:9px;display:flex;align-items:center;justify-content:center">
+                  <i data-lucide="image" style="width:18px;height:18px;color:var(--line)"></i>
+                </div>
+                <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden">发布预览截图</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:9px;font-size:10.5px;color:var(--muted)">
+                  <span>Figma</span><span style="margin-left:auto">8 分钟前</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-bd" style="padding:12px 13px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
+                  <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="file-text"></i></span>
+                </div>
+                <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden">客户邮件摘要</div>
+                <div style="font-size:11px;color:var(--muted);line-height:1.55;margin-top:5px;height:51px;overflow:hidden">本周只交付本地壳体、搜索路径与诊断导出，不开启云同步或 AI 功能。下周再排批量与多显示器。</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:9px;padding-top:8px;border-top:1px solid var(--line-soft);font-size:10.5px;color:var(--muted)">
+                  <span>Mail</span><span style="margin-left:auto">2 分钟前</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-bd" style="padding:12px 13px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
+                  <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="file"></i></span>
+                </div>
+                <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden">交付清单.pdf</div>
+                <div style="font-size:11px;color:var(--muted);line-height:1.55;margin-top:5px;height:51px;overflow:hidden">包含 P0 风险关闭门、演示脚本、录屏证据要求与回归检查项。文件类型固定仅复制。</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:9px;padding-top:8px;border-top:1px solid var(--line-soft);font-size:10.5px;color:var(--muted)">
+                  <span>Finder</span><span style="margin-left:auto">13 分钟前</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-bd" style="padding:12px 13px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
+                  <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="link"></i></span>
+                </div>
+                <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden">会议纪要片段</div>
+                <div style="font-size:11px;color:var(--muted);line-height:1.55;margin-top:5px;height:51px;overflow:hidden">多显示器回退、恢复模式只读与 diagnostics export 字段映射必须同时完成。</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:9px;padding-top:8px;border-top:1px solid var(--line-soft);font-size:10.5px;color:var(--muted)">
+                  <span>Notes</span><span style="margin-left:auto">27 分钟前</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-bd" style="padding:12px 13px">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
+                  <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="type"></i></span>
+                </div>
+                <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden">接口地址</div>
+                <div style="font-size:11px;color:var(--muted);line-height:1.55;margin-top:5px;height:51px;overflow:hidden">http://localhost:1420/panel.html</div>
+                <div style="display:flex;align-items:center;gap:6px;margin-top:9px;padding-top:8px;border-top:1px solid var(--line-soft);font-size:10.5px;color:var(--muted)">
+                  <span>Warp</span><span style="margin-left:auto">昨天</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="main-grid">
+    <div class="note-title">⑦ Main · 网格视图</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>900 宽下固定 <b>3 列</b>（每列约 250），卡片间距 12</li>
+        <li>卡片：缩略图 + 操作图标 + 标题 + 摘要（截断）+ 底部分隔线 + 来源/时间</li>
+        <li>图片卡片直接显示缩略图，文本卡片显示 3 行摘要</li>
+        <li>选中卡片：描边加重</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>列表/网格切换记忆在 localStorage</li>
+        <li>卡片右上角悬停显示 置顶 / 删除</li>
+        <li>双击卡片 = 直接粘贴</li>
+      </ul>
+      <div class="note-sec">解决的问题</div>
+      <ul>
+        <li>原 760 宽下 4 列，卡片仅 160，标题与摘要几乎全被截断</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ⑧ Main 多选批量 -->
+<div class="stage" data-group="主管理台" data-cell="1,3" style="--frame-w:900px;--frame-h:620px;--frame-radius:12px">
+  <div class="stage-label">⑧ Main · 多选批量</div>
+  <div class="screen" id="main-selection">
+    <div class="shell" style="flex:1;min-height:0">
+      <div class="sidebar" style="width:192px;padding:12px 10px">
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 14px">
+          <span class="logo" style="width:22px;height:22px;border-radius:6px;background:var(--ink);color:var(--white);display:flex;align-items:center;justify-content:center"><i data-lucide="clipboard" style="width:12px;height:12px"></i></span>
+          <span style="font-size:13.5px;font-weight:600;color:var(--ink)">SuperClip</span>
+        </div>
+        <div class="side-cap">历史</div>
+        <div class="side-item active" style="font-size:13.5px"><i data-lucide="layers"></i>全部记录<span class="side-tail">428</span></div>
+        <div class="side-item"><i data-lucide="star"></i>已置顶<span class="side-tail">12</span></div>
+        <div class="side-item"><i data-lucide="trash-2"></i>回收站<span class="side-tail">3</span></div>
+        <div class="side-cap">管理</div>
+        <div class="side-item"><i data-lucide="shield-off"></i>排除规则<span class="side-tail">4</span></div>
+        <div class="side-item"><i data-lucide="settings"></i>设置</div>
+      </div>
+
+      <div class="main">
+        <div class="main-hd" style="padding:18px 22px 14px">
+          <div class="hd-row">
+            <div>
+              <h2 style="font-size:19px">全部记录</h2>
+              <div class="hd-sub">已选择 3 条 · ⌘A 全选</div>
+            </div>
+            <div class="hd-actions">
+              <span class="pc-search" style="width:200px;height:32px"><i data-lucide="search"></i><span class="sph">搜索…</span></span>
+              <span style="display:flex;gap:2px;background:var(--fill);border-radius:8px;padding:2px">
+                <span style="width:26px;height:26px;border-radius:6px;background:var(--white);display:flex;align-items:center;justify-content:center"><i data-lucide="list" style="width:14px;height:14px;color:var(--ink)"></i></span>
+                <span style="width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center"><i data-lucide="layout-grid" style="width:14px;height:14px;color:var(--line)"></i></span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;padding:0 22px 22px;overflow:hidden">
+          <div class="section-cap" style="font-size:11px;padding:2px 0 6px">今天</div>
+
+          <div style="display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:9px;background:var(--fill-2);margin-bottom:1px">
+            <span class="cbox on" style="flex-shrink:0"></span>
+            <span class="thumb" style="width:30px;height:30px;border-radius:8px;flex-shrink:0"><i data-lucide="type"></i></span>
+            <span style="flex:1;min-width:0;display:block">
+              <span style="display:block;font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden">发布命令片段</span>
+              <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">npm run tauri dev -- --no-watch, 先验证壳体与焦点行为。</span>
+            </span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:70px">Warp</span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:56px;text-align:right">刚刚</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:9px;background:var(--fill-2);margin-bottom:1px">
+            <span class="cbox on" style="flex-shrink:0"></span>
+            <span class="thumb" style="width:30px;height:30px;border-radius:8px;flex-shrink:0"><i data-lucide="file-text"></i></span>
+            <span style="flex:1;min-width:0;display:block">
+              <span style="display:block;font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden">客户邮件摘要</span>
+              <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">本周只交付本地壳体、搜索路径与诊断导出。</span>
+            </span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:70px">Mail</span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:56px;text-align:right">2 分钟前</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:9px;background:var(--fill-2);margin-bottom:1px">
+            <span class="cbox on" style="flex-shrink:0"></span>
+            <span class="thumb" style="width:30px;height:30px;border-radius:8px;flex-shrink:0"><i data-lucide="file-image"></i></span>
+            <span style="flex:1;min-width:0;display:block">
+              <span style="display:block;font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden">发布预览截图</span>
+              <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">标准双栏 popover 预览图。</span>
+            </span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:70px">Figma</span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:56px;text-align:right">8 分钟前</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:9px;margin-bottom:1px">
+            <span class="cbox" style="flex-shrink:0"></span>
+            <span class="thumb" style="width:30px;height:30px;border-radius:8px;flex-shrink:0"><i data-lucide="file"></i></span>
+            <span style="flex:1;min-width:0;display:block">
+              <span style="display:block;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden">交付清单.pdf</span>
+              <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">包含 P0 风险关闭门、演示脚本与回归检查项。</span>
+            </span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:70px">Finder</span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:56px;text-align:right">13 分钟前</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:9px;margin-bottom:1px">
+            <span class="cbox" style="flex-shrink:0"></span>
+            <span class="thumb" style="width:30px;height:30px;border-radius:8px;flex-shrink:0"><i data-lucide="link"></i></span>
+            <span style="flex:1;min-width:0;display:block">
+              <span style="display:block;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden">会议纪要片段</span>
+              <span style="display:block;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden">多显示器回退与恢复模式只读。</span>
+            </span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:70px">Notes</span>
+            <span style="flex-shrink:0;font-size:11px;color:var(--muted);width:56px;text-align:right">27 分钟前</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部批量操作栏 -->
+    <div style="position:absolute;left:0;right:0;bottom:0;height:52px;background:var(--ink);color:var(--white);display:flex;align-items:center;gap:14px;padding:0 20px">
+      <span style="font-size:12.5px">已选择 <b>3</b> 条</span>
+      <span style="font-size:12px;opacity:0.65;border-bottom:1px solid rgba(255,255,255,0.5)">全选 428 条</span>
+      <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <span style="height:30px;border-radius:8px;border:1px solid rgba(255,255,255,0.28);display:inline-flex;align-items:center;gap:6px;padding:0 12px;font-size:12px"><i data-lucide="copy" style="width:13px;height:13px"></i>复制</span>
+        <span style="height:30px;border-radius:8px;border:1px solid rgba(255,255,255,0.28);display:inline-flex;align-items:center;gap:6px;padding:0 12px;font-size:12px"><i data-lucide="star" style="width:13px;height:13px"></i>置顶</span>
+        <span style="height:30px;border-radius:8px;background:var(--white);color:var(--ink);display:inline-flex;align-items:center;gap:6px;padding:0 12px;font-size:12px;font-weight:600"><i data-lucide="trash-2" style="width:13px;height:13px"></i>删除</span>
+        <span style="width:30px;height:30px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;opacity:0.75"><i data-lucide="x" style="width:14px;height:14px"></i></span>
+      </span>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="main-selection">
+    <div class="note-title">⑧ Main · 多选批量</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>进入多选后每行左侧出现勾选框，选中行加浅底</li>
+        <li>底部滑入深色操作栏：已选数量 + 全选 + 复制 / 置顶 / 删除 + 退出</li>
+        <li>头部副标题同步显示「已选择 N 条」</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>⌘A 全选 · Esc 退出多选 · ⇧ 点击范围选择</li>
+        <li>删除走批量删除 + 可撤销 Toast</li>
+        <li>操作栏从底部滑入（slide-in 180ms），不遮挡内容</li>
+      </ul>
+      <div class="note-sec">设计决策</div>
+      <ul>
+        <li>操作栏用深色底：与内容区形成明确层级，避免误以为普通工具栏</li>
+        <li>危险操作（删除）用白底反色强调，其余为描边按钮</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ⑨ Main 回收站（新增） -->
+<div class="stage" data-group="主管理台" data-cell="2,1" style="--frame-w:900px;--frame-h:620px;--frame-radius:12px">
+  <div class="stage-label">⑨ Main · 回收站（新增）</div>
+  <div class="screen" id="main-trash">
+    <div class="shell" style="flex:1;min-height:0">
+      <div class="sidebar" style="width:192px;padding:12px 10px">
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 14px">
+          <span class="logo" style="width:22px;height:22px;border-radius:6px;background:var(--ink);color:var(--white);display:flex;align-items:center;justify-content:center"><i data-lucide="clipboard" style="width:12px;height:12px"></i></span>
+          <span style="font-size:13.5px;font-weight:600;color:var(--ink)">SuperClip</span>
+        </div>
+        <div class="side-cap">历史</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="layers"></i>全部记录<span class="side-tail">428</span></div>
+        <div class="side-item"><i data-lucide="star"></i>已置顶<span class="side-tail">12</span></div>
+        <div class="side-item active" style="font-size:13.5px"><i data-lucide="trash-2"></i>回收站<span class="side-tail">3</span></div>
+        <div class="side-cap">管理</div>
+        <div class="side-item"><i data-lucide="shield-off"></i>排除规则<span class="side-tail">4</span></div>
+        <div class="side-item"><i data-lucide="settings"></i>设置</div>
+      </div>
+
+      <div class="main">
+        <div class="main-hd" style="padding:18px 22px 14px">
+          <div class="hd-row">
+            <div>
+              <h2 style="font-size:19px">回收站</h2>
+              <div class="hd-sub">3 条记录 · 30 天后自动清空</div>
+            </div>
+            <div class="hd-actions">
+              <span class="btn outline sm" style="height:32px;font-size:12.5px"><i data-lucide="rotate-ccw" style="width:14px;height:14px"></i>全部恢复</span>
+              <span class="btn danger sm" style="height:32px;font-size:12.5px"><i data-lucide="trash-2" style="width:14px;height:14px"></i>清空回收站</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;padding:0 22px 22px">
+          <div class="panel" style="margin:0">
+            <div class="panel-bd flush">
+              <div class="table">
+                <div class="thead tr">
+                  <span class="th" style="width:44px"></span>
+                  <span class="th" style="flex:1">内容</span>
+                  <span class="th" style="width:120px">来源</span>
+                  <span class="th" style="width:110px">删除时间</span>
+                  <span class="th" style="width:100px">剩余</span>
+                  <span class="th" style="width:52px"></span>
+                </div>
+                <div class="tbody">
+                  <div class="tr">
+                    <span class="td" style="width:44px"><span class="cbox on"></span></span>
+                    <span class="td cell" style="flex:1"><span class="avatar-cell" style="font-size:11px"><i data-lucide="type" style="width:14px;height:14px"></i></span>发布命令片段</span>
+                    <span class="td" style="width:120px">Warp</span>
+                    <span class="td" style="width:110px">3 分钟前</span>
+                    <span class="td" style="width:100px">29 天</span>
+                    <span class="td row-act" style="width:52px"><i data-lucide="more-horizontal"></i></span>
+                  </div>
+                  <div class="tr">
+                    <span class="td" style="width:44px"><span class="cbox"></span></span>
+                    <span class="td cell" style="flex:1"><span class="avatar-cell" style="font-size:11px"><i data-lucide="file-text" style="width:14px;height:14px"></i></span>旧版交付说明.md</span>
+                    <span class="td" style="width:120px">Finder</span>
+                    <span class="td" style="width:110px">昨天</span>
+                    <span class="td" style="width:100px">28 天</span>
+                    <span class="td row-act" style="width:52px"><i data-lucide="more-horizontal"></i></span>
+                  </div>
+                  <div class="tr selected">
+                    <span class="td" style="width:44px"><span class="cbox on"></span></span>
+                    <span class="td cell" style="flex:1"><span class="avatar-cell" style="font-size:11px"><i data-lucide="file-image" style="width:14px;height:14px"></i></span>临时截图_2026.png</span>
+                    <span class="td" style="width:120px">Figma</span>
+                    <span class="td" style="width:110px">2 天前</span>
+                    <span class="td" style="width:100px">27 天</span>
+                    <span class="td row-act" style="width:52px"><i data-lucide="more-horizontal"></i></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;padding:12px 14px;border:1px solid var(--hairline);border-radius:10px;display:flex;align-items:flex-start;gap:10px">
+            <i data-lucide="info" style="width:15px;height:15px;color:var(--muted);flex-shrink:0;margin-top:1px"></i>
+            <span style="font-size:12px;color:var(--muted);line-height:1.65">回收站记录保留 30 天。恢复后回到原位置与置顶状态；清空后无法找回。<b style="color:var(--ink)">已排除的敏感内容不会被回收站留存。</b></span>
+          </div>
+
+          <div style="margin-top:14px;display:flex;align-items:center;gap:8px">
+            <span class="btn ghost sm" style="height:30px;font-size:12.5px;background:var(--ink);color:var(--white);border-color:var(--ink)">恢复所选</span>
+            <span class="btn ghost sm" style="height:30px;font-size:12.5px">彻底删除所选</span>
+            <span style="margin-left:auto;font-size:11.5px;color:var(--muted)">已选择 2 条</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="main-trash">
+    <div class="note-title">⑨ Main · 回收站（新增）</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>表格列出被删除记录：内容 / 来源 / 删除时间 / 剩余天数</li>
+        <li>顶部：全部恢复 · 清空回收站</li>
+        <li>底部：恢复所选 · 彻底删除所选 · 已选计数</li>
+        <li>说明卡：保留 30 天，恢复回原位，敏感内容不留存</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>单条恢复走 <code>clipboard_restore(undo_token)</code>；整表由 <code>clipboard_trash</code> 提供</li>
+        <li>清空 = 二次确认弹窗（🟥 危险操作）</li>
+        <li>行操作菜单：恢复 / 彻底删除 / 复制内容</li>
+      </ul>
+      <div class="note-sec">解决的问题</div>
+      <ul>
+        <li>后端 <b>clipboard_trash / restore / clear 三个命令早已实现</b>，前端零引用 —— 删除即永久丢失，用户无任何挽回入口</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ⑩ Main 空态与状态横幅 -->
+<div class="stage" data-group="主管理台" data-cell="2,2" style="--frame-w:900px;--frame-h:620px;--frame-radius:12px">
+  <div class="stage-label">⑩ Main · 空态与状态</div>
+  <div class="screen" id="main-empty">
+    <div class="shell" style="flex:1;min-height:0">
+      <div class="sidebar" style="width:192px;padding:12px 10px">
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 14px">
+          <span class="logo" style="width:22px;height:22px;border-radius:6px;background:var(--ink);color:var(--white);display:flex;align-items:center;justify-content:center"><i data-lucide="clipboard" style="width:12px;height:12px"></i></span>
+          <span style="font-size:13.5px;font-weight:600;color:var(--ink)">SuperClip</span>
+        </div>
+        <div class="side-cap">历史</div>
+        <div class="side-item active" style="font-size:13.5px"><i data-lucide="layers"></i>全部记录<span class="side-tail">0</span></div>
+        <div class="side-item"><i data-lucide="star"></i>已置顶<span class="side-tail">0</span></div>
+        <div class="side-item"><i data-lucide="trash-2"></i>回收站<span class="side-tail">0</span></div>
+        <div class="side-cap">管理</div>
+        <div class="side-item"><i data-lucide="shield-off"></i>排除规则<span class="side-tail">4</span></div>
+        <div class="side-item"><i data-lucide="settings"></i>设置</div>
+        <div style="margin-top:8px;padding:9px 10px;border-radius:9px;background:var(--fill);display:flex;align-items:center;gap:7px">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--line);flex-shrink:0"></span>
+          <span style="font-size:11px;color:var(--muted)">已暂停</span>
+        </div>
+      </div>
+
+      <div class="main">
+        <div class="main-hd" style="padding:18px 22px 14px">
+          <div class="hd-row">
+            <div>
+              <h2 style="font-size:19px">全部记录</h2>
+              <div class="hd-sub">暂无记录</div>
+            </div>
+            <div class="hd-actions">
+              <span class="pc-search" style="width:200px;height:32px"><i data-lucide="search"></i><span class="sph">搜索…</span></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 状态横幅：两种真实状态并列展示 -->
+        <div style="padding:0 22px">
+          <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border:1px solid var(--hairline);border-radius:10px;background:var(--fill);margin-bottom:10px">
+            <i data-lucide="shield-alert" style="width:16px;height:16px;color:var(--ink);flex-shrink:0"></i>
+            <span style="flex:1;font-size:12.5px;color:var(--ink)">辅助功能权限未开启，将无法直接粘贴，只能复制到剪贴板。</span>
+            <span class="btn ghost sm" style="height:28px;font-size:12px">开启权限</span>
+            <i data-lucide="x" style="width:14px;height:14px;color:var(--muted);flex-shrink:0"></i>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border:1px solid var(--hairline);border-radius:10px;background:var(--fill);margin-bottom:10px">
+            <i data-lucide="database-backup" style="width:16px;height:16px;color:var(--ink);flex-shrink:0"></i>
+            <span style="flex:1;font-size:12.5px;color:var(--ink)">数据库打开失败，当前处于<b>恢复模式（只读）</b>，所有修改操作已禁用。</span>
+            <span class="btn ghost sm" style="height:28px;font-size:12px">导出诊断</span>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;align-items:center;justify-content:center">
+          <div class="empty" style="padding:0">
+            <div class="eic"><i data-lucide="clipboard"></i></div>
+            <div class="e1">还没有剪贴板记录</div>
+            <div class="e2">复制任意内容后，这里会自动出现。<br>也可以检查是否已暂停监听，或内容被排除规则过滤。</div>
+            <div style="display:flex;gap:8px;justify-content:center;margin-top:18px">
+              <span class="btn ghost sm" style="height:30px;font-size:12.5px"><i data-lucide="play" style="width:13px;height:13px"></i>恢复监听</span>
+              <span class="btn outline sm" style="height:30px;font-size:12.5px"><i data-lucide="shield-off" style="width:13px;height:13px"></i>查看排除规则</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="main-empty">
+    <div class="note-title">⑩ Main · 空态与状态</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>状态横幅位（可折叠）：权限未开启 / 恢复模式只读</li>
+        <li>空态：图标 + 主文 + 子文 + 两个恢复动作</li>
+        <li>侧栏监听状态卡同步显示「已暂停」灰色指示灯</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>权限横幅 → 一键打开系统设置的辅助功能页</li>
+        <li>恢复模式横幅 → 导出诊断数据；写操作全部禁用</li>
+        <li>横幅可关闭，状态恢复后不再出现</li>
+      </ul>
+      <div class="note-sec">设计要点</div>
+      <ul>
+        <li>空态文案解释「为什么没有记录」的三种可能，而不是干巴巴一句「暂无数据」</li>
+        <li>本页并列展示两种横幅，实现时按真实状态互斥出现</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ========================= 组 3：设置 ========================= -->
+
+<!-- ⑪ 设置 · 通用 -->
+<div class="stage" data-group="设置" data-cell="1,1" style="--frame-w:900px;--frame-h:620px;--frame-radius:12px">
+  <div class="stage-label">⑪ 设置 · 通用</div>
+  <div class="screen" id="settings-general">
+    <div class="shell" style="flex:1;min-height:0">
+      <div class="sidebar" style="width:192px;padding:12px 10px">
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 12px">
+          <span style="width:22px;height:22px;border-radius:6px;background:var(--fill-2);display:flex;align-items:center;justify-content:center"><i data-lucide="chevron-left" style="width:12px;height:12px;color:var(--ink)"></i></span>
+          <span style="font-size:13px;color:var(--muted)">返回历史</span>
+        </div>
+        <div class="side-cap">设置</div>
+        <div class="side-item active" style="font-size:13.5px"><i data-lucide="sliders-horizontal"></i>通用</div>
+        <div class="side-item" style="font-size:13.5px" data-hot="go-shortcuts"><i data-lucide="keyboard"></i>快捷键</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="shield-off"></i>排除规则</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="monitor"></i>高级</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="info"></i>关于</div>
+      </div>
+
+      <div class="main">
+        <div class="main-hd" style="padding:18px 22px 12px">
+          <div class="hd-row">
+            <div>
+              <h2 style="font-size:19px">通用</h2>
+              <div class="hd-sub">外观、保留上限与默认行为</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;padding:0 22px 22px;overflow:hidden">
+          <div class="panel" style="margin:0 0 12px">
+            <div class="panel-hd" style="padding:13px 16px">
+              <span class="pt">外观</span>
+            </div>
+            <div class="panel-bd" style="padding:0 16px 14px">
+              <div style="display:flex;align-items:center;gap:12px;padding:6px 0">
+                <span style="flex:1;font-size:13px;color:var(--ink)">主题</span>
+                <span class="segment" style="margin:0">
+                  <span class="seg" style="font-size:12.5px">浅色</span>
+                  <span class="seg active" style="font-size:12.5px">深色</span>
+                  <span class="seg" style="font-size:12.5px">跟随系统</span>
+                </span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line-soft)">
+                <span style="flex:1">
+                  <span style="display:block;font-size:13px;color:var(--ink)">列表字体大小</span>
+                  <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:2px">影响列表标题与预览字号，行高随之变化</span>
+                </span>
+                <span style="width:150px;height:4px;border-radius:2px;background:var(--fill-2);position:relative;flex-shrink:0">
+                  <span style="position:absolute;left:0;top:0;height:4px;width:44%;border-radius:2px;background:var(--ink)"></span>
+                  <span style="position:absolute;left:44%;top:50%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;background:var(--white);border:1px solid var(--line)"></span>
+                </span>
+                <span style="width:36px;text-align:right;font-size:12.5px;color:var(--ink);flex-shrink:0">13 px</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line-soft)">
+                <span style="flex:1">
+                  <span style="display:block;font-size:13px;color:var(--ink)">历史保留上限</span>
+                  <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:2px">超出上限时自动清理最早的记录（置顶项保留）</span>
+                </span>
+                <span style="width:150px;height:4px;border-radius:2px;background:var(--fill-2);position:relative;flex-shrink:0">
+                  <span style="position:absolute;left:0;top:0;height:4px;width:60%;border-radius:2px;background:var(--ink)"></span>
+                  <span style="position:absolute;left:60%;top:50%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:50%;background:var(--white);border:1px solid var(--line)"></span>
+                </span>
+                <span style="width:56px;text-align:right;font-size:12.5px;color:var(--ink);flex-shrink:0">1000 条</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin:0 0 12px">
+            <div class="panel-hd" style="padding:13px 16px"><span class="pt">行为</span></div>
+            <div class="panel-bd" style="padding:0 16px 14px">
+              <div style="display:flex;align-items:center;gap:12px;padding:6px 0">
+                <span style="flex:1">
+                  <span style="display:block;font-size:13px;color:var(--ink)">默认动作</span>
+                  <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:2px">按 ↵ 执行默认动作，⌘↵ 执行另一个</span>
+                </span>
+                <span class="segment" style="margin:0">
+                  <span class="seg active" style="font-size:12.5px">直接粘贴</span>
+                  <span class="seg" style="font-size:12.5px">仅复制</span>
+                </span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line-soft)">
+                <span style="flex:1">
+                  <span style="display:block;font-size:13px;color:var(--ink)">开机自动启动</span>
+                  <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:2px">登录后自动运行并开始记录</span>
+                </span>
+                <span class="switch on"><span class="knob"></span></span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line-soft)">
+                <span style="flex:1">
+                  <span style="display:block;font-size:13px;color:var(--ink)">启动时显示主窗口</span>
+                  <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:2px">关闭时仅驻留菜单栏</span>
+                </span>
+                <span class="switch"><span class="knob"></span></span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="settings-general">
+    <div class="note-title">⑪ 设置 · 通用</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>设置仍复用 Main 窗口框架，左栏换成 5 项设置导航 + 顶部「返回历史」</li>
+        <li>外观卡：主题分段 / 列表字体大小滑块 / 历史保留上限滑块</li>
+        <li>行为卡：默认动作分段 / 开机自启开关 / 启动显示主窗口开关</li>
+        <li>滑块实时显示数值，拖动即时预览</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>修改即保存（无「保存」按钮），失败回滚并提示</li>
+        <li>切换主题时所有窗口与磨砂外观同步变化</li>
+      </ul>
+      <div class="note-sec">设计要点</div>
+      <ul>
+        <li>每个面板用「一行一设置」结构：标题 + 说明在左，控件右对齐</li>
+        <li>说明文字解释「影响范围」而非重复标题</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ⑫ 设置 · 快捷键 -->
+<div class="stage" data-group="设置" data-cell="1,2" style="--frame-w:900px;--frame-h:620px;--frame-radius:12px">
+  <div class="stage-label">⑫ 设置 · 快捷键</div>
+  <div class="screen" id="settings-shortcuts">
+    <div class="shell" style="flex:1;min-height:0">
+      <div class="sidebar" style="width:192px;padding:12px 10px">
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 12px">
+          <span style="width:22px;height:22px;border-radius:6px;background:var(--fill-2);display:flex;align-items:center;justify-content:center"><i data-lucide="chevron-left" style="width:12px;height:12px;color:var(--ink)"></i></span>
+          <span style="font-size:13px;color:var(--muted)">返回历史</span>
+        </div>
+        <div class="side-cap">设置</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="sliders-horizontal"></i>通用</div>
+        <div class="side-item active" style="font-size:13.5px"><i data-lucide="keyboard"></i>快捷键</div>
+        <div class="side-item" style="font-size:13.5px" data-hot="go-rules"><i data-lucide="shield-off"></i>排除规则</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="monitor"></i>高级</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="info"></i>关于</div>
+      </div>
+
+      <div class="main">
+        <div class="main-hd" style="padding:18px 22px 12px">
+          <div class="hd-row">
+            <div>
+              <h2 style="font-size:19px">快捷键</h2>
+              <div class="hd-sub">全局唤起与应用内操作</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;padding:0 22px 22px;overflow:hidden">
+          <div class="panel" style="margin:0 0 12px">
+            <div class="panel-hd" style="padding:13px 16px">
+              <span class="pt">全局快捷键</span>
+              <span class="pcount">在任意应用中生效</span>
+            </div>
+            <div class="panel-bd" style="padding:0 16px 14px">
+              <div style="display:flex;align-items:center;gap:12px;padding:8px 0">
+                <span style="flex:1">
+                  <span style="display:block;font-size:13px;color:var(--ink)">唤起菜单栏面板</span>
+                  <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:2px">打开剪贴板历史面板并聚焦搜索框</span>
+                </span>
+                <span style="height:28px;border:1px solid var(--ink);border-radius:7px;display:inline-flex;align-items:center;gap:5px;padding:0 11px;font-size:12px;color:var(--ink)">⌥⌘V</span>
+                <span style="font-size:12px;color:var(--muted)">修改</span>
+              </div>
+              <!-- 录制态 -->
+              <div style="display:flex;align-items:center;gap:12px;padding:7px 8px;border-top:1px solid var(--line-soft);background:var(--fill);margin-top:0">
+                <span style="flex:1">
+                  <span style="display:block;font-size:13px;color:var(--ink)">录制中…</span>
+                  <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:2px">按下想要的组合键，Esc 取消</span>
+                </span>
+                <span style="height:28px;border:1px dashed var(--line);border-radius:7px;display:inline-flex;align-items:center;padding:0 14px;font-size:12px;color:var(--muted);letter-spacing:2px">……</span>
+              </div>
+              <!-- 冲突态 -->
+              <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line-soft)">
+                <span style="flex:1">
+                  <span style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--ink)"><i data-lucide="triangle-alert" style="width:13px;height:13px"></i>与其他应用冲突</span>
+                  <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:2px">已被「截图」占用，请换一个组合键</span>
+                </span>
+                <span style="height:28px;border:1px solid var(--line);border-radius:7px;display:inline-flex;align-items:center;padding:0 11px;font-size:12px;color:var(--muted)">⌘⇧4</span>
+                <span style="font-size:12px;color:var(--ink)">重设</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin:0">
+            <div class="panel-hd" style="padding:13px 16px">
+              <span class="pt">应用内快捷键</span>
+              <span class="pcount">仅在主窗口可用</span>
+            </div>
+            <div class="panel-bd flush">
+              <div class="table">
+                <div class="tbody">
+                  <div class="tr"><span class="td" style="flex:1">聚焦搜索</span><span class="td" style="width:90px"><span class="cell-tag">⌘F</span></span></div>
+                  <div class="tr"><span class="td" style="flex:1">切换导航（全部/置顶/回收站/规则/设置）</span><span class="td" style="width:90px"><span class="cell-tag">⌘1–5</span></span></div>
+                  <div class="tr"><span class="td" style="flex:1">列表 / 网格视图切换</span><span class="td" style="width:90px"><span class="cell-tag">⌘L</span></span></div>
+                  <div class="tr"><span class="td" style="flex:1">全选</span><span class="td" style="width:90px"><span class="cell-tag">⌘A</span></span></div>
+                  <div class="tr"><span class="td" style="flex:1">切换置顶</span><span class="td" style="width:90px"><span class="cell-tag">⌘P</span></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="settings-shortcuts">
+    <div class="note-title">⑫ 设置 · 快捷键</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>全局快捷键：唤起面板（含当前键位徽标 + 修改）</li>
+        <li>三种状态同页展示：正常 / <b>录制中</b>（虚线框 + ……）/ <b>冲突</b>（警示图标 + 冲突应用名）</li>
+        <li>应用内快捷键：只读表格，列出实装键位</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>点「修改」进入录制，直接按键即写入；Esc 取消</li>
+        <li>冲突时给出占用方，提供「重设」与「恢复默认」</li>
+        <li>应用内快捷键不提供修改（保持实现简单，避免与系统快捷键打架）</li>
+      </ul>
+      <div class="note-sec">设计要点</div>
+      <ul>
+        <li>键位用等宽胶囊，不用纯文字，扫读更快</li>
+        <li>录制态与冲突态用不同视觉（虚线 / 警示），一眼可辨</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ⑬ 设置 · 排除规则 -->
+<div class="stage" data-group="设置" data-cell="1,3" style="--frame-w:900px;--frame-h:620px;--frame-radius:12px">
+  <div class="stage-label">⑬ 设置 · 排除规则</div>
+  <div class="screen" id="settings-rules">
+    <div class="shell" style="flex:1;min-height:0">
+      <div class="sidebar" style="width:192px;padding:12px 10px">
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 12px">
+          <span style="width:22px;height:22px;border-radius:6px;background:var(--fill-2);display:flex;align-items:center;justify-content:center"><i data-lucide="chevron-left" style="width:12px;height:12px;color:var(--ink)"></i></span>
+          <span style="font-size:13px;color:var(--muted)">返回历史</span>
+        </div>
+        <div class="side-cap">设置</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="sliders-horizontal"></i>通用</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="keyboard"></i>快捷键</div>
+        <div class="side-item active" style="font-size:13.5px"><i data-lucide="shield-off"></i>排除规则</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="monitor"></i>高级</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="info"></i>关于</div>
+      </div>
+
+      <div class="main">
+        <div class="main-hd" style="padding:18px 22px 12px">
+          <div class="hd-row">
+            <div>
+              <h2 style="font-size:19px">排除规则</h2>
+              <div class="hd-sub">命中的内容不会被记录，也不会进入回收站</div>
+            </div>
+            <div class="hd-actions">
+              <span class="btn ghost sm" style="height:32px;font-size:12.5px"><i data-lucide="plus" style="width:14px;height:14px"></i>新增规则</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;padding:0 22px 22px;overflow:hidden">
+          <div class="panel" style="margin:0 0 12px">
+            <div class="panel-bd flush">
+              <div class="table">
+                <div class="thead tr">
+                  <span class="th" style="width:130px">类型</span>
+                  <span class="th" style="flex:1">匹配值</span>
+                  <span class="th" style="width:90px">状态</span>
+                  <span class="th" style="width:100px">来源</span>
+                  <span class="th" style="width:56px"></span>
+                </div>
+                <div class="tbody">
+                  <div class="tr">
+                    <span class="td" style="width:130px"><span class="cell-tag">App Bundle ID</span></span>
+                    <span class="td strong" style="flex:1">com.1password.1password</span>
+                    <span class="td" style="width:90px"><span class="switch on" style="transform:scale(0.72);transform-origin:left center"><span class="knob"></span></span></span>
+                    <span class="td" style="width:100px">默认</span>
+                    <span class="td row-act" style="width:56px"><i data-lucide="more-horizontal"></i></span>
+                  </div>
+                  <div class="tr">
+                    <span class="td" style="width:130px"><span class="cell-tag">关键词</span></span>
+                    <span class="td strong" style="flex:1">验证码</span>
+                    <span class="td" style="width:90px"><span class="switch on" style="transform:scale(0.72);transform-origin:left center"><span class="knob"></span></span></span>
+                    <span class="td" style="width:100px">默认</span>
+                    <span class="td row-act" style="width:56px"><i data-lucide="more-horizontal"></i></span>
+                  </div>
+                  <div class="tr">
+                    <span class="td" style="width:130px"><span class="cell-tag">内容类型</span></span>
+                    <span class="td strong" style="flex:1">Image</span>
+                    <span class="td" style="width:90px"><span class="switch" style="transform:scale(0.72);transform-origin:left center"><span class="knob"></span></span></span>
+                    <span class="td" style="width:100px">默认</span>
+                    <span class="td row-act" style="width:56px"><i data-lucide="more-horizontal"></i></span>
+                  </div>
+                  <div class="tr">
+                    <span class="td" style="width:130px"><span class="cell-tag">App Bundle ID</span></span>
+                    <span class="td strong" style="flex:1">com.apple.Passwords</span>
+                    <span class="td" style="width:90px"><span class="switch on" style="transform:scale(0.72);transform-origin:left center"><span class="knob"></span></span></span>
+                    <span class="td" style="width:100px">自定义</span>
+                    <span class="td row-act" style="width:56px"><i data-lucide="more-horizontal"></i></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+            <span class="pc-search" style="flex:1;height:32px"><i data-lucide="plus"></i><span class="sph">输入 Bundle ID 或关键词，回车添加…</span></span>
+            <span class="segment" style="margin:0">
+              <span class="seg active" style="font-size:12.5px">Bundle ID</span>
+              <span class="seg" style="font-size:12.5px">关键词</span>
+              <span class="seg" style="font-size:12.5px">类型</span>
+            </span>
+          </div>
+
+          <div style="padding:11px 14px;border-radius:10px;background:var(--fill);display:flex;align-items:flex-start;gap:10px">
+            <i data-lucide="lock" style="width:15px;height:15px;color:var(--muted);flex-shrink:0;margin-top:1px"></i>
+            <span style="font-size:12px;color:var(--muted);line-height:1.65">SuperClip 完全在本机处理数据，不联网、不上传。密码类应用默认排除；规则命中的内容在写入数据库之前就被丢弃。<b style="color:var(--ink)">「仅复制模式」下不会被任何应用读取。</b></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="settings-rules">
+    <div class="note-title">⑬ 设置 · 排除规则</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>规则表格：类型（Bundle ID / 关键词 / 内容类型）+ 匹配值 + 启用开关 + 来源（默认/自定义）</li>
+        <li>行内开关直接启用或停用，无需二次确认</li>
+        <li>底部新增行：输入框 + 类型分段，回车即添加</li>
+        <li>隐私说明卡：本地处理、写入前丢弃、密码类默认排除</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>重复规则会被后端 <code>UNIQUE(kind,value)</code> 拦住并提示已存在</li>
+        <li>默认规则可停用但不可删除（删除无意义，重启会重新下发）</li>
+        <li>行操作菜单：编辑 / 删除</li>
+      </ul>
+      <div class="note-sec">设计要点</div>
+      <ul>
+        <li>「来源」列区分默认与自定义，让用户知道哪些改动会被系统覆盖</li>
+        <li>隐私说明放在底部而非顶部：规则页本身就是隐私承诺的证据</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ⑭ 设置 · 高级 -->
+<div class="stage" data-group="设置" data-cell="2,1" style="--frame-w:900px;--frame-h:620px;--frame-radius:12px">
+  <div class="stage-label">⑭ 设置 · 高级</div>
+  <div class="screen" id="settings-advanced">
+    <div class="shell" style="flex:1;min-height:0">
+      <div class="sidebar" style="width:192px;padding:12px 10px">
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 12px">
+          <span style="width:22px;height:22px;border-radius:6px;background:var(--fill-2);display:flex;align-items:center;justify-content:center"><i data-lucide="chevron-left" style="width:12px;height:12px;color:var(--ink)"></i></span>
+          <span style="font-size:13px;color:var(--muted)">返回历史</span>
+        </div>
+        <div class="side-cap">设置</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="sliders-horizontal"></i>通用</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="keyboard"></i>快捷键</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="shield-off"></i>排除规则</div>
+        <div class="side-item active" style="font-size:13.5px"><i data-lucide="monitor"></i>高级</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="info"></i>关于</div>
+      </div>
+
+      <div class="main">
+        <div class="main-hd" style="padding:18px 22px 12px">
+          <div class="hd-row">
+            <div>
+              <h2 style="font-size:19px">高级</h2>
+              <div class="hd-sub">诊断数据与危险操作</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;padding:0 22px 22px;overflow:hidden">
+          <div class="panel" style="margin:0 0 12px">
+            <div class="panel-hd" style="padding:13px 16px"><span class="pt">诊断</span></div>
+            <div class="panel-bd" style="padding:0 16px 14px">
+              <div style="display:flex;align-items:center;gap:12px;padding:6px 0">
+                <span style="flex:1">
+                  <span style="display:block;font-size:13px;color:var(--ink)">导出诊断数据</span>
+                  <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:2px">导出运行状态、数据库版本、最近 50 条错误日志（不含剪贴板内容）</span>
+                </span>
+                <span class="btn ghost sm" style="height:30px;font-size:12.5px"><i data-lucide="download" style="width:13px;height:13px"></i>导出 JSON</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line-soft)">
+                <span style="flex:1">
+                  <span style="display:block;font-size:13px;color:var(--ink)">运行状态</span>
+                  <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:2px">监听线程 · 数据库连接 · 迁移版本 · 权限</span>
+                </span>
+                <span class="cell-tag"><span class="dot"></span>正常</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin:0 0 12px">
+            <div class="panel-hd" style="padding:13px 16px"><span class="pt">存储信息</span></div>
+            <div class="panel-bd" style="padding:0 16px 14px">
+              <div style="font-size:12px;line-height:1.9;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace">
+                ├── superclip.db &nbsp;<span style="color:var(--ink)">18.4 MB</span><br>
+                ├── config.json &nbsp;<span style="color:var(--ink)">Schema v1</span><br>
+                └── logs/ &nbsp;<span style="color:var(--ink)">最近 50 条</span>
+              </div>
+              <div style="display:flex;gap:8px;margin-top:12px">
+                <span class="btn ghost sm" style="height:30px;font-size:12.5px">在 Finder 中显示</span>
+                <span class="btn ghost sm" style="height:30px;font-size:12.5px">压缩数据库</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" style="margin:0">
+            <div class="panel-hd" style="padding:13px 16px"><span class="pt">危险操作</span></div>
+            <div class="panel-bd" style="padding:0 16px 14px">
+              <div style="display:flex;align-items:center;gap:12px;padding:6px 0">
+                <span style="flex:1">
+                  <span style="display:block;font-size:13px;color:var(--ink)">清空全部历史记录</span>
+                  <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:2px">删除后进入回收站，可保留 30 天</span>
+                </span>
+                <span class="btn danger sm" style="height:30px;font-size:12.5px">清空历史</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line-soft)">
+                <span style="flex:1">
+                  <span style="display:block;font-size:13px;color:var(--ink)">重置所有设置</span>
+                  <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:2px">恢复默认外观、行为、快捷键与排除规则</span>
+                </span>
+                <span class="btn danger sm" style="height:30px;font-size:12.5px">重置</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="settings-advanced">
+    <div class="note-title">⑭ 设置 · 高级</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>诊断卡：导出诊断 JSON（含 50 条环形错误日志，<b>不含剪贴板内容</b>）+ 运行状态胶囊</li>
+        <li>存储卡：数据库体积 / Schema 版本 / 日志 + 在 Finder 显示 + 压缩数据库</li>
+        <li>危险操作卡：清空全部历史 / 重置所有设置（均为红字按钮）</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>两项危险操作均需二次确认弹窗，文案写明影响范围</li>
+        <li>恢复模式（只读）下所有按钮禁用并显示原因</li>
+      </ul>
+      <div class="note-sec">设计要点</div>
+      <ul>
+        <li>危险操作单独成卡并与普通设置拉开距离，避免误触</li>
+        <li>存储信息用等宽字体，路径与体积对齐可读</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ⑮ 设置 · 关于 -->
+<div class="stage" data-group="设置" data-cell="2,2" style="--frame-w:900px;--frame-h:620px;--frame-radius:12px">
+  <div class="stage-label">⑮ 设置 · 关于</div>
+  <div class="screen" id="settings-about">
+    <div class="shell" style="flex:1;min-height:0">
+      <div class="sidebar" style="width:192px;padding:12px 10px">
+        <div style="display:flex;align-items:center;gap:8px;padding:4px 10px 12px">
+          <span style="width:22px;height:22px;border-radius:6px;background:var(--fill-2);display:flex;align-items:center;justify-content:center"><i data-lucide="chevron-left" style="width:12px;height:12px;color:var(--ink)"></i></span>
+          <span style="font-size:13px;color:var(--muted)">返回历史</span>
+        </div>
+        <div class="side-cap">设置</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="sliders-horizontal"></i>通用</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="keyboard"></i>快捷键</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="shield-off"></i>排除规则</div>
+        <div class="side-item" style="font-size:13.5px"><i data-lucide="monitor"></i>高级</div>
+        <div class="side-item active" style="font-size:13.5px"><i data-lucide="info"></i>关于</div>
+      </div>
+
+      <div class="main">
+        <div class="main-hd" style="padding:18px 22px 12px">
+          <div class="hd-row">
+            <div>
+              <h2 style="font-size:19px">关于</h2>
+              <div class="hd-sub">版本信息与帮助入口</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:1;padding:0 22px 22px;overflow:hidden">
+          <div class="panel" style="margin:0 0 12px">
+            <div class="panel-bd" style="padding:18px 16px;display:flex;align-items:center;gap:16px">
+              <span style="width:52px;height:52px;border-radius:14px;background:var(--ink);color:var(--white);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i data-lucide="clipboard" style="width:26px;height:26px"></i></span>
+              <span style="flex:1">
+                <span style="display:block;font-size:16px;font-weight:600;color:var(--ink)">SuperClip</span>
+                <span style="display:block;font-size:12px;color:var(--muted);margin-top:3px">版本 0.1.0 · 数据库 Schema v4 · 2026-10-11</span>
+                <span style="display:block;font-size:11.5px;color:var(--muted);margin-top:6px">macOS 菜单栏剪贴板管理器。所有数据保存在本机，不联网。</span>
+              </span>
+              <span class="btn ghost sm" style="height:30px;font-size:12.5px">检查更新</span>
+            </div>
+          </div>
+
+          <div class="panel" style="margin:0 0 12px">
+            <div class="panel-hd" style="padding:13px 16px"><span class="pt">帮助</span></div>
+            <div class="panel-bd flush">
+              <div class="table">
+                <div class="tbody">
+                  <div class="tr"><span class="td cell" style="flex:1"><i data-lucide="zap" style="width:15px;height:15px;color:var(--line)"></i>快速上手：三步开始使用</span><span class="td row-act" style="width:56px"><i data-lucide="chevron-right" style="width:15px;height:15px;color:var(--line)"></i></span></div>
+                  <div class="tr"><span class="td cell" style="flex:1"><i data-lucide="keyboard" style="width:15px;height:15px;color:var(--line)"></i>快捷键速查表</span><span class="td row-act" style="width:56px"><i data-lucide="chevron-right" style="width:15px;height:15px;color:var(--line)"></i></span></div>
+                  <div class="tr"><span class="td cell" style="flex:1"><i data-lucide="shield-check" style="width:15px;height:15px;color:var(--line)"></i>隐私说明：数据都存在哪里</span><span class="td row-act" style="width:56px"><i data-lucide="chevron-right" style="width:15px;height:15px;color:var(--line)"></i></span></div>
+                  <div class="tr"><span class="td cell" style="flex:1"><i data-lucide="message-circle" style="width:15px;height:15px;color:var(--line)"></i>反馈问题</span><span class="td row-act" style="width:56px"><i data-lucide="chevron-right" style="width:15px;height:15px;color:var(--line)"></i></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="padding:11px 14px;border-radius:10px;background:var(--fill);display:flex;align-items:flex-start;gap:10px">
+            <i data-lucide="heart" style="width:15px;height:15px;color:var(--muted);flex-shrink:0;margin-top:1px"></i>
+            <span style="font-size:12px;color:var(--muted);line-height:1.65">本地优先 · 无账号 · 无遥测。感谢使用 SuperClip。</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="settings-about">
+    <div class="note-title">⑮ 设置 · 关于</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>版本卡：图标 + 名称 + 版本号 + 数据库 Schema + 发布日 + 一句话简介 + 检查更新</li>
+        <li>帮助列表：快速上手 / 快捷键速查 / 隐私说明 / 反馈问题</li>
+        <li>底部一句话价值观说明：本地优先 · 无账号 · 无遥测</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>帮助项点击 → 打开内置帮助浮层（不跳浏览器）</li>
+        <li>反馈问题 → 打开系统默认邮件或链接</li>
+      </ul>
+      <div class="note-sec">设计要点</div>
+      <ul>
+        <li>原来「关于」塞在「高级」里，语义不清；独立成区后高级只放诊断与危险操作</li>
+        <li>版本号与 Schema 版本并列显示，排查问题时可直接读给支持人员</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ========================= 组 4：菜单栏与反馈 ========================= -->
+
+<!-- ⑯ QuickPanel 默认态 -->
+<div class="stage" data-group="菜单栏与反馈" data-cell="1,1" style="--frame-w:248px;--frame-h:400px;--frame-radius:12px">
+  <div class="stage-label">⑯ QuickPanel · 默认态</div>
+  <div class="screen" id="panel-default">
+    <div class="main" style="background:var(--white)">
+      <!-- 头部：品牌 + 状态胶囊 -->
+      <div style="flex-shrink:0;padding:12px 12px 10px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:20px;height:20px;border-radius:6px;background:var(--ink);color:var(--white);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i data-lucide="clipboard" style="width:11px;height:11px"></i></span>
+          <span style="font-size:13px;font-weight:600;color:var(--ink)">SuperClip</span>
+          <span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;height:19px;padding:0 7px;border-radius:10px;background:var(--fill-2);font-size:10.5px;color:var(--muted)">
+            <span style="width:5px;height:5px;border-radius:50%;background:var(--ink)"></span>监听中
+          </span>
+        </div>
+      </div>
+
+      <div style="height:1px;background:var(--hairline)"></div>
+
+      <!-- 分组项 -->
+      <div style="flex:1;padding:6px 6px">
+        <div data-hot="go-paused" style="display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:8px">
+          <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="pause"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:12.5px;color:var(--ink)">暂停监听</span>
+            <span style="display:block;font-size:10.5px;color:var(--muted);margin-top:1px">停止记录新内容</span>
+          </span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:8px">
+          <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="layers"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:12.5px;color:var(--ink)">打开主管理台</span>
+            <span style="display:block;font-size:10.5px;color:var(--muted);margin-top:1px">浏览、搜索与批量整理</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10.5px;color:var(--line)">⌘M</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:8px">
+          <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="settings"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:12.5px;color:var(--ink)">设置</span>
+            <span style="display:block;font-size:10.5px;color:var(--muted);margin-top:1px">快捷键、排除规则与外观</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10.5px;color:var(--line)">⌘,</span>
+        </div>
+      </div>
+
+      <div style="height:1px;background:var(--hairline)"></div>
+
+      <!-- 粘贴模式 -->
+      <div style="flex-shrink:0;padding:10px 12px 12px">
+        <div style="font-size:10.5px;color:var(--muted);letter-spacing:0.5px;margin-bottom:7px">默认动作</div>
+        <div class="segment" style="margin:0;width:100%">
+          <span class="seg active" style="flex:1;text-align:center;font-size:11.5px;padding:6px 0">直接粘贴</span>
+          <span class="seg" style="flex:1;text-align:center;font-size:11.5px;padding:6px 0">仅复制</span>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.5">选中条目后自动粘贴到前台应用</div>
+      </div>
+
+      <div style="height:1px;background:var(--hairline)"></div>
+
+      <!-- 退出 -->
+      <div style="flex-shrink:0;padding:8px 6px">
+        <div style="display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:8px">
+          <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="log-out"></i></span>
+          <span style="flex:1;font-size:12.5px;color:var(--ink)">退出 SuperClip</span>
+          <span style="flex-shrink:0;font-size:10.5px;color:var(--line)">⌘Q</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="panel-default">
+    <div class="note-title">⑯ QuickPanel · 默认态</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>头部：品牌 + 状态胶囊（监听中 / 已暂停）</li>
+        <li>操作组：暂停监听 / 打开主管理台 / 设置（后两项带快捷键徽标）</li>
+        <li>默认动作：直接粘贴 / 仅复制 分段控件 + 一行说明</li>
+        <li>退出项独立在底部，与功能项用分隔线隔开</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>尺寸 248×400，内容按高度精确排布，<b>底部不溢出</b></li>
+        <li>Esc 关闭面板；点任意操作项执行后关闭</li>
+        <li>切换默认动作立即生效并同步主窗口</li>
+      </ul>
+      <div class="note-sec">解决的问题</div>
+      <ul>
+        <li>原面板 280×420 下底部状态条被裁切（实测溢出 3–8px）</li>
+        <li>原面板把「外观主题」也塞进来，与设置页职责重叠，已移出</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ⑰ QuickPanel 暂停态 -->
+<div class="stage" data-group="菜单栏与反馈" data-cell="1,2" style="--frame-w:248px;--frame-h:400px;--frame-radius:12px">
+  <div class="stage-label">⑰ QuickPanel · 暂停态</div>
+  <div class="screen" id="panel-paused">
+    <div class="main" style="background:var(--white)">
+      <div style="flex-shrink:0;padding:12px 12px 10px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:20px;height:20px;border-radius:6px;background:var(--ink);color:var(--white);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i data-lucide="clipboard" style="width:11px;height:11px"></i></span>
+          <span style="font-size:13px;font-weight:600;color:var(--ink)">SuperClip</span>
+          <span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;height:19px;padding:0 7px;border-radius:10px;border:1px solid var(--line);font-size:10.5px;color:var(--ink)">
+            <span style="width:5px;height:5px;border-radius:50%;border:1px solid var(--ink)"></span>已暂停
+          </span>
+        </div>
+      </div>
+
+      <div style="height:1px;background:var(--hairline)"></div>
+
+      <div style="flex:1;padding:8px 6px">
+        <div style="display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:8px;background:var(--fill)">
+          <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="play"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:12.5px;font-weight:600;color:var(--ink)">恢复监听</span>
+            <span style="display:block;font-size:10.5px;color:var(--muted);margin-top:1px">继续记录复制内容</span>
+          </span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:8px">
+          <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="layers"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:12.5px;color:var(--ink)">打开主管理台</span>
+            <span style="display:block;font-size:10.5px;color:var(--muted);margin-top:1px">浏览、搜索与批量整理</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10.5px;color:var(--line)">⌘M</span>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:8px">
+          <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="settings"></i></span>
+          <span style="flex:1;min-width:0;display:block">
+            <span style="display:block;font-size:12.5px;color:var(--ink)">设置</span>
+            <span style="display:block;font-size:10.5px;color:var(--muted);margin-top:1px">快捷键、排除规则与外观</span>
+          </span>
+          <span style="flex-shrink:0;font-size:10.5px;color:var(--line)">⌘,</span>
+        </div>
+
+        <!-- 暂停时的提示 -->
+        <div style="margin:4px 8px 0;padding:7px 9px;border:1px solid var(--line);border-radius:8px;display:flex;align-items:flex-start;gap:6px">
+          <i data-lucide="info" style="width:11px;height:11px;color:var(--muted);flex-shrink:0;margin-top:1px"></i>
+          <span style="font-size:10px;color:var(--muted);line-height:1.5">暂停期间复制的内容不会被记录，已有历史不受影响。</span>
+        </div>
+      </div>
+
+      <div style="height:1px;background:var(--hairline)"></div>
+
+      <div style="flex-shrink:0;padding:10px 12px 12px">
+        <div style="font-size:10.5px;color:var(--muted);letter-spacing:0.5px;margin-bottom:7px">默认动作</div>
+        <div class="segment" style="margin:0;width:100%">
+          <span class="seg" style="flex:1;text-align:center;font-size:11.5px;padding:6px 0">直接粘贴</span>
+          <span class="seg active" style="flex:1;text-align:center;font-size:11.5px;padding:6px 0">仅复制</span>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:6px;line-height:1.5">选中条目后仅写入剪贴板，不自动粘贴</div>
+      </div>
+
+      <div style="height:1px;background:var(--hairline)"></div>
+
+      <div style="flex-shrink:0;padding:8px 6px">
+        <div style="display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:8px">
+          <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="log-out"></i></span>
+          <span style="flex:1;font-size:12.5px;color:var(--ink)">退出 SuperClip</span>
+          <span style="flex-shrink:0;font-size:10.5px;color:var(--line)">⌘Q</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="panel-paused">
+    <div class="note-title">⑰ QuickPanel · 暂停态</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>状态胶囊换为「已暂停」描边样式（不再是实心点）</li>
+        <li>首项变为「恢复监听」+ 播放图标，并用浅底高亮提示当前主操作</li>
+        <li>新增一行说明：暂停期间的内容不会被记录，已有历史不受影响</li>
+        <li>默认动作切换为「仅复制」时，说明文字同步变化</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>点「恢复监听」立即恢复，胶囊与图标联动变回默认态</li>
+        <li>面板位置与尺寸不因状态变化而跳动（内容高度保持一致）</li>
+      </ul>
+      <div class="note-sec">设计要点</div>
+      <ul>
+        <li>暂停是低频但高风险的状态：必须在最显眼处提供一键恢复，并解释影响</li>
+        <li>图标语义严格对应状态（暂停中显示播放、监听中显示暂停）</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ⑱ 操作反馈 Toast -->
+<div class="stage" data-group="菜单栏与反馈" data-cell="1,3" style="--frame-w:248px;--frame-h:400px;--frame-radius:12px">
+  <div class="stage-label">⑱ 操作反馈</div>
+  <div class="screen" id="toast-feedback">
+    <div class="main" style="background:var(--white)">
+      <div style="flex-shrink:0;padding:12px 12px 10px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="width:20px;height:20px;border-radius:6px;background:var(--ink);color:var(--white);display:flex;align-items:center;justify-content:center;flex-shrink:0"><i data-lucide="clipboard" style="width:11px;height:11px"></i></span>
+          <span style="font-size:13px;font-weight:600;color:var(--ink)">SuperClip</span>
+          <span style="margin-left:auto;display:inline-flex;align-items:center;gap:4px;height:19px;padding:0 7px;border-radius:10px;background:var(--fill-2);font-size:10.5px;color:var(--muted)">
+            <span style="width:5px;height:5px;border-radius:50%;background:var(--ink)"></span>监听中
+          </span>
+        </div>
+      </div>
+
+      <div style="height:1px;background:var(--hairline)"></div>
+
+      <div style="flex:1;padding:8px 6px">
+        <div style="display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:8px">
+          <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="pause"></i></span>
+          <span style="flex:1;font-size:12.5px;color:var(--ink)">暂停监听</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:8px">
+          <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="layers"></i></span>
+          <span style="flex:1;font-size:12.5px;color:var(--ink)">打开主管理台</span>
+          <span style="font-size:10.5px;color:var(--line)">⌘M</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:9px;padding:8px 8px;border-radius:8px">
+          <span class="thumb" style="width:26px;height:26px;border-radius:7px;flex-shrink:0"><i data-lucide="settings"></i></span>
+          <span style="flex:1;font-size:12.5px;color:var(--ink)">设置</span>
+          <span style="font-size:10.5px;color:var(--line)">⌘,</span>
+        </div>
+
+        <!-- 三种反馈并列展示 -->
+        <div style="margin:14px 8px 0;border-top:1px dashed var(--line);padding-top:14px">
+          <div style="font-size:10px;color:var(--muted);letter-spacing:0.6px;margin-bottom:10px">三种反馈状态（互斥出现）</div>
+
+          <div class="toast" style="position:static;transform:none;max-width:none;font-size:11.5px;padding:8px 10px;margin-bottom:9px;border-radius:9px;justify-content:flex-start">
+            <i data-lucide="copy"></i>已复制到剪贴板
+          </div>
+
+          <div class="toast" style="position:static;transform:none;max-width:none;font-size:11.5px;padding:8px 10px;margin-bottom:9px;border-radius:9px;justify-content:flex-start;background:var(--white);color:var(--ink);border:1px solid var(--line);box-shadow:none">
+            <i data-lucide="triangle-alert" style="color:var(--ink)"></i>
+            <span>已复制 · 富文本降级为纯文本</span>
+          </div>
+
+          <div class="toast" style="position:static;transform:none;max-width:none;font-size:11.5px;padding:8px 10px;border-radius:9px;justify-content:flex-start">
+            <i data-lucide="trash-2"></i>已删除
+            <span style="margin-left:auto;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.6)">撤销</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block" data-for="toast-feedback">
+    <div class="note-title">⑱ 操作反馈</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>成功反馈：深色胶囊 + 图标 + 文案（已复制到剪贴板）</li>
+        <li>降级反馈：白底描边胶囊 + 警示图标 + 原因（富文本降级为纯文本）</li>
+        <li>可撤销反馈：深色胶囊 + 「撤销」文字按钮，5 秒后自动消失</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>同一时刻只显示一个反馈，新反馈替换旧反馈</li>
+        <li>点「撤销」立即恢复并显示确认</li>
+        <li>反馈不阻塞操作，不夺焦点</li>
+      </ul>
+      <div class="note-sec">设计要点</div>
+      <ul>
+        <li>区分「成功」与「降级」两种语气：降级必须让用户知道内容形态变了</li>
+        <li>删除这类不可逆操作必须有撤销通道（后端 undo_token 已具备）</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ========================= 连线 ========================= -->
+
+<!-- 取用与预览 -->
+<div class="link" data-from="popup-default" data-to="popup-search" data-tag="输入关键词" data-trigger="go-search"></div>
+<div class="link" data-from="popup-default" data-to="preview-text" data-tag="悬停行 200ms" data-trigger="go-preview" data-side="auto"></div>
+<div class="link" data-from="popup-actions" data-to="preview-image" data-tag="悬停图片行" data-side="auto" data-dash="1"></div>
+<div class="link" data-from="popup-default" data-to="popup-actions" data-tag="右键 / 行内操作" data-side="auto" data-dash="1"></div>
+<div class="link" data-from="popup-search" data-to="popup-default" data-tag="Esc 清空" data-dash="1" data-side="auto"></div>
+
+<!-- 取用与预览 → 主管理台 -->
+<div class="link" data-from="popup-default" data-to="main-history" data-tag="⌘M 打开主管理台" data-side="auto" data-dash="1"></div>
+
+<!-- 主管理台 -->
+<div class="link" data-from="main-history" data-to="main-grid" data-tag="切换网格视图" data-trigger="go-grid"></div>
+<div class="link" data-from="main-grid" data-to="main-selection" data-tag="进入多选" data-side="auto"></div>
+<div class="link" data-from="main-history" data-to="main-selection" data-tag="⌘点击多选" data-side="auto"></div>
+<div class="link" data-from="main-history" data-to="main-trash" data-tag="侧栏 · 回收站" data-trigger="go-trash" data-side="auto"></div>
+<div class="link" data-from="main-trash" data-to="main-history" data-tag="恢复所选" data-dash="1" data-side="auto"></div>
+<div class="link" data-from="main-history" data-to="main-empty" data-tag="无记录 / 状态横幅" data-side="auto" data-dash="1"></div>
+
+<!-- 主管理台 → 设置 -->
+<div class="link" data-from="main-history" data-to="settings-general" data-tag="侧栏 · 设置" data-trigger="go-settings" data-side="auto"></div>
+<div class="link" data-from="main-trash" data-to="settings-general" data-tag="⌘," data-dash="1" data-side="auto"></div>
+
+<!-- 设置内部 -->
+<div class="link" data-from="settings-general" data-to="settings-shortcuts" data-tag="侧栏 · 快捷键" data-trigger="go-shortcuts"></div>
+<div class="link" data-from="settings-shortcuts" data-to="settings-rules" data-tag="侧栏 · 排除规则" data-trigger="go-rules"></div>
+<div class="link" data-from="settings-rules" data-to="settings-advanced" data-tag="侧栏 · 高级" data-side="auto"></div>
+<div class="link" data-from="settings-advanced" data-to="settings-about" data-tag="侧栏 · 关于" data-side="auto"></div>
+<div class="link" data-from="settings-advanced" data-to="settings-general" data-tag="返回历史" data-dash="1" data-side="auto"></div>
+
+<!-- 设置 → 菜单栏与反馈 -->
+<div class="link" data-from="settings-general" data-to="panel-default" data-tag="菜单栏右键" data-side="auto" data-dash="1"></div>
+
+<!-- 菜单栏与反馈 -->
+<div class="link" data-from="panel-default" data-to="panel-paused" data-tag="暂停监听" data-trigger="go-paused"></div>
+<div class="link" data-from="panel-paused" data-to="panel-default" data-tag="恢复监听" data-dash="1" data-side="auto"></div>
+<div class="link" data-from="panel-default" data-to="main-history" data-tag="⌘M 打开主管理台" data-side="auto" data-dash="1"></div>
+<div class="link" data-from="panel-default" data-to="toast-feedback" data-tag="操作反馈（示意）" data-side="auto"></div>
+<div class="link" data-from="toast-feedback" data-to="main-history" data-tag="撤销删除" data-side="auto" data-dash="1"></div>
+<div class="link" data-from="main-selection" data-to="toast-feedback" data-tag="批量删除 → 可撤销" data-side="auto" data-dash="1"></div>

@@ -1,0 +1,1498 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SuperClip · 高保真设计稿</title>
+<style>
+/* ============================================================
+   SuperClip 配色系统 · 单一强调色
+   核心决策：4 个类型色 → 0（中性灰）；强调色只有 1 个（Apple system blue）
+   ============================================================ */
+:root {
+  /* ---- 深色主题（主用） ---- */
+  --bg-window: rgba(20, 22, 26, 0.82);
+  --bg-window-solid: #14161a;
+  --bg-elevated: rgba(255, 255, 255, 0.055);
+  --bg-elevated-hover: rgba(255, 255, 255, 0.085);
+  --bg-selected: rgba(10, 132, 255, 0.14);
+  --bg-sidebar: rgba(255, 255, 255, 0.028);
+
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.13);
+  --divider: rgba(255, 255, 255, 0.055);
+
+  --text-primary: #f2f3f5;
+  --text-secondary: #a0a6b0;
+  --text-tertiary: #6e747e;
+
+  /* 唯一强调色：Apple system blue */
+  --accent: #0a84ff;
+  --accent-hover: #2a95ff;
+  --accent-text: #4da3ff;
+  --accent-soft: rgba(10, 132, 255, 0.13);
+
+  --warn: #ff9f0a;
+  --danger: #ff453a;
+  --success: #32d74b;
+
+  --icon-idle: #8b919b;
+  --icon-bg: rgba(255, 255, 255, 0.07);
+
+  --radius-sm: 7px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
+  --radius-win: 12px;
+
+  --shadow-window: 0 0 0 0.5px rgba(255, 255, 255, 0.07), 0 18px 50px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-raised: 0 6px 20px rgba(0, 0, 0, 0.35);
+
+  --font: "Inter", "SF Pro Text", -apple-system, "PingFang SC", system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+html[data-theme="light"] {
+  --bg-window: rgba(250, 250, 252, 0.86);
+  --bg-window-solid: #fafafc;
+  --bg-elevated: rgba(15, 20, 30, 0.035);
+  --bg-elevated-hover: rgba(15, 20, 30, 0.06);
+  --bg-selected: rgba(0, 102, 214, 0.1);
+  --bg-sidebar: rgba(15, 20, 30, 0.02);
+
+  --border: rgba(15, 20, 30, 0.09);
+  --border-strong: rgba(15, 20, 30, 0.16);
+  --divider: rgba(15, 20, 30, 0.06);
+
+  --text-primary: #14171c;
+  --text-secondary: #5a6270;
+  --text-tertiary: #868d99;
+
+  --accent: #0066d6;
+  --accent-hover: #0a76f0;
+  --accent-text: #0066d6;
+  --accent-soft: rgba(0, 102, 214, 0.1);
+
+  --warn: #c76a00;
+  --danger: #d92d20;
+  --success: #14804a;
+
+  --icon-idle: #6b7280;
+  --icon-bg: rgba(15, 20, 30, 0.055);
+
+  --shadow-window: 0 0 0 0.5px rgba(15, 20, 30, 0.07), 0 18px 50px rgba(15, 20, 30, 0.16), 0 4px 12px rgba(15, 20, 30, 0.1);
+  --shadow-raised: 0 6px 20px rgba(15, 20, 30, 0.1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  background: #0b0d10;
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  padding: 0 0 80px;
+  min-height: 100vh;
+}
+html[data-theme="light"] body { background: #eceef2; }
+
+/* ---------- 页头 ---------- */
+.head {
+  max-width: 1680px; margin: 0 auto; padding: 44px 40px 28px;
+  display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;
+}
+.head h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.4px; }
+.head .sub { font-size: 13.5px; color: var(--text-secondary); margin-top: 8px; line-height: 1.6; max-width: 760px; }
+.head .spacer { flex: 1; }
+.theme-switch { display: flex; gap: 2px; background: var(--bg-elevated); border-radius: 10px; padding: 3px; }
+.theme-switch button {
+  font: inherit; font-size: 12.5px; padding: 7px 15px; border: 0; border-radius: 7px;
+  background: transparent; color: var(--text-secondary); cursor: pointer; transition: all .15s;
+}
+.theme-switch button.on { background: var(--accent); color: #fff; font-weight: 600; }
+
+/* ---------- 分区 ---------- */
+.sec { max-width: 1680px; margin: 0 auto; padding: 0 40px; }
+.sec-hd { display: flex; align-items: baseline; gap: 12px; margin: 44px 0 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.sec-hd h2 { font-size: 17px; font-weight: 650; letter-spacing: -0.2px; }
+.sec-hd .tag {
+  font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px;
+  background: var(--accent-soft); color: var(--accent-text); letter-spacing: 0.3px;
+}
+.sec-hd .note { font-size: 12.5px; color: var(--text-tertiary); margin-left: auto; }
+
+/* ---------- 窗口框 ---------- */
+.win {
+  background: var(--bg-window);
+  backdrop-filter: blur(40px) saturate(1.7);
+  -webkit-backdrop-filter: blur(40px) saturate(1.7);
+  border-radius: var(--radius-win);
+  box-shadow: var(--shadow-window);
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  position: relative;
+  flex-shrink: 0;
+}
+.win-label {
+  font-size: 11.5px; color: var(--text-tertiary); margin-bottom: 9px;
+  display: flex; align-items: center; gap: 7px; letter-spacing: 0.3px;
+}
+.win-label b { color: var(--text-secondary); font-weight: 600; }
+.win-label .dim { font-family: var(--mono); font-size: 10.5px; padding: 2px 6px; border-radius: 5px; background: var(--bg-elevated); }
+
+/* 红色交通灯（仅 Main 显示） */
+.traffic { display: flex; gap: 7px; align-items: center; }
+.traffic i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+.traffic i:nth-child(1) { background: #ff5f57; }
+.traffic i:nth-child(2) { background: #febc2e; }
+.traffic i:nth-child(3) { background: #28c840; }
+
+/* ---------- 通用部件 ---------- */
+.row { display: flex; align-items: center; }
+.mono { font-family: var(--mono); }
+.trunc { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.thumb {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--icon-bg); color: var(--icon-idle);
+  border-radius: 8px; flex-shrink: 0;
+}
+.thumb svg { width: 15px; height: 15px; }
+
+.star { color: var(--warn); flex-shrink: 0; }
+.star-off { color: var(--text-tertiary); flex-shrink: 0; }
+
+.kbd {
+  font-family: var(--mono); font-size: 10.5px; color: var(--text-tertiary);
+  letter-spacing: 0.4px;
+}
+.tag-pill {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.4px;
+  padding: 2.5px 7px; border-radius: 5px;
+  background: var(--bg-elevated); color: var(--text-secondary);
+}
+
+.seg { display: flex; gap: 2px; background: var(--bg-elevated); border-radius: 8px; padding: 2px; }
+.seg span {
+  font-size: 11.5px; padding: 5px 12px; border-radius: 6px;
+  color: var(--text-secondary); transition: all .15s; white-space: nowrap;
+}
+.seg span.on { background: var(--accent); color: #fff; font-weight: 600; }
+
+.switch { width: 34px; height: 20px; border-radius: 10px; background: var(--bg-elevated-hover); position: relative; flex-shrink: 0; transition: background .18s; }
+.switch.on { background: var(--accent); }
+.switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+  border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.3); transition: transform .18s;
+}
+.switch.on::after { transform: translateX(14px); }
+
+.btn {
+  font-size: 12px; font-weight: 550; padding: 6px 12px; border-radius: var(--radius-md);
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.btn svg { width: 13px; height: 13px; }
+.btn.primary { background: var(--accent); color: #fff; }
+.btn.ghost { background: var(--bg-elevated); color: var(--text-primary); }
+.btn.outline { border: 1px solid var(--border-strong); color: var(--text-primary); }
+.btn.danger { background: rgba(255, 69, 58, 0.14); color: var(--danger); }
+.btn.danger-solid { background: var(--danger); color: #fff; }
+
+.search {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--bg-elevated); border: 1px solid transparent;
+  border-radius: var(--radius-md); padding: 7px 10px; transition: all .15s;
+}
+.search.focus { border-color: var(--accent); background: var(--accent-soft); }
+.search svg { width: 13px; height: 13px; color: var(--text-tertiary); flex-shrink: 0; }
+.search .ph { font-size: 12.5px; color: var(--text-tertiary); }
+
+.side-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 9px; border-radius: 8px; font-size: 13px;
+  color: var(--text-secondary); margin-bottom: 1px; transition: all .12s;
+}
+.side-item svg { width: 15px; height: 15px; flex-shrink: 0; }
+.side-item.on { background: var(--bg-selected); color: var(--text-primary); font-weight: 600; }
+.side-item.on svg { color: var(--accent-text); }
+.side-item .tail { margin-left: auto; font-size: 11px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.side-item.danger { color: var(--danger); }
+.side-item.danger svg { color: var(--danger); }
+.side-cap { font-size: 10.5px; font-weight: 600; color: var(--text-tertiary); letter-spacing: 0.7px; padding: 14px 9px 6px; text-transform: uppercase; }
+.side-cap:first-child { padding-top: 4px; }
+
+.tooltip-note {
+  font-size: 11px; color: var(--text-tertiary); margin-top: 10px;
+  padding: 9px 11px; border-radius: 8px; background: var(--bg-elevated); line-height: 1.6;
+}
+.tooltip-note b { color: var(--text-secondary); }
+
+/* ============================================================
+   1 · Popup 320×480
+   ============================================================ */
+.popup { width: 320px; height: 480px; }
+
+.p-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 9px; border-radius: 8px; margin: 0 4px 1px;
+  position: relative;
+}
+.p-row.sel { background: var(--bg-selected); }
+.p-row.sel::before {
+  content: ""; position: absolute; left: -4px; top: 50%; transform: translateY(-50%);
+  width: 2.5px; height: 15px; border-radius: 2px; background: var(--accent);
+}
+.p-row .thumb { width: 26px; height: 26px; }
+.p-row .tx { flex: 1; min-width: 0; }
+.p-row .t1 { font-size: 12.5px; color: var(--text-secondary); line-height: 1.35; }
+.p-row.sel .t1 { color: var(--text-primary); font-weight: 600; }
+.p-row .t2 { font-size: 11px; color: var(--text-tertiary); line-height: 1.35; margin-top: 1px; }
+.p-row .tm { font-size: 10px; color: var(--text-tertiary); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.p-row .acts { display: flex; gap: 1px; flex-shrink: 0; }
+.p-row .acts i {
+  width: 21px; height: 21px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  color: var(--text-secondary); background: var(--bg-elevated);
+}
+.p-row .acts i svg { width: 12px; height: 12px; }
+.p-row .acts i.del { color: var(--danger); }
+
+.p-foot {
+  height: 32px; border-top: 1px solid var(--divider); flex-shrink: 0;
+  display: flex; align-items: center; gap: 13px; padding: 0 12px;
+  font-size: 10.5px; color: var(--text-tertiary);
+}
+.p-grp { font-size: 10.5px; font-weight: 600; color: var(--text-tertiary); letter-spacing: 0.5px; padding: 8px 13px 5px; }
+
+/* Toast */
+.toast {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border-radius: 9px; font-size: 12px;
+  background: rgba(38, 40, 45, 0.96); color: #fff;
+  box-shadow: var(--shadow-raised);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+html[data-theme="light"] .toast { background: rgba(28, 30, 35, 0.94); }
+.toast svg { width: 14px; height: 14px; flex-shrink: 0; }
+.toast .undo { margin-left: auto; font-weight: 600; color: #7dbaff; border-bottom: 1px solid rgba(125, 186, 255, 0.5); }
+.toast.warn { background: var(--bg-window-solid); color: var(--text-primary); border: 1px solid var(--warn); }
+.toast.warn svg { color: var(--warn); }
+
+/* ============================================================
+   2 · Preview 320×360
+   ============================================================ */
+.pv { width: 320px; height: 360px; }
+.pv-hd { padding: 11px 14px 9px; border-bottom: 1px solid var(--divider); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.pv-hd .kind { font-size: 12.5px; font-weight: 650; }
+.pv-hd .tm { font-size: 11px; color: var(--text-tertiary); }
+.pv-only { margin-left: auto; font-size: 10px; color: var(--text-tertiary); letter-spacing: 0.4px; }
+.pv-bd { flex: 1; padding: 12px 14px; overflow: hidden; }
+.pv-code {
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 10px; font-family: var(--mono);
+  font-size: 11px; line-height: 1.75; color: var(--text-secondary); margin-top: 10px;
+}
+.pv-code .lbl { color: var(--text-tertiary); font-size: 10px; letter-spacing: 0.4px; }
+.pv-foot {
+  flex-shrink: 0; padding: 9px 14px; border-top: 1px solid var(--divider);
+  display: flex; align-items: center; gap: 7px; font-size: 10.5px; color: var(--text-tertiary);
+}
+.pv-foot .av {
+  width: 16px; height: 16px; border-radius: 5px; background: var(--icon-bg);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8.5px; font-weight: 700; color: var(--text-secondary); flex-shrink: 0;
+}
+.pv-meta { display: flex; align-items: center; gap: 7px; margin-top: 10px; }
+.pv-meta .chipx { font-size: 10px; color: var(--text-tertiary); padding: 2px 6px; border-radius: 5px; background: var(--bg-elevated); font-family: var(--mono); }
+.pv-img {
+  height: 118px; border-radius: 8px; border: 1px solid var(--border);
+  background:
+    linear-gradient(135deg, rgba(10,132,255,0.10) 0%, rgba(255,159,10,0.08) 100%),
+    var(--bg-elevated);
+  display: flex; align-items: center; justify-content: center;
+}
+.pv-img svg { width: 22px; height: 22px; color: var(--text-tertiary); }
+.pv-file {
+  display: flex; align-items: center; gap: 9px;
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px;
+}
+.pv-file .thumb { width: 24px; height: 24px; border-radius: 7px; }
+.pv-file .thumb svg { width: 13px; height: 13px; }
+
+/* ============================================================
+   3 · QuickPanel 248×400
+   ============================================================ */
+.qp { width: 248px; height: 400px; }
+.qp-hd { padding: 11px 12px 10px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.qp-logo {
+  width: 19px; height: 19px; border-radius: 6px; background: var(--accent);
+  color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.qp-logo svg { width: 11px; height: 11px; }
+.qp-name { font-size: 13px; font-weight: 650; }
+.qp-pill {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 5px;
+  height: 19px; padding: 0 8px; border-radius: 10px;
+  background: var(--bg-elevated); font-size: 10.5px; color: var(--text-secondary);
+}
+.qp-pill .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--success); }
+.qp-pill.paused { border: 1px solid var(--border-strong); background: transparent; color: var(--text-secondary); }
+.qp-pill.paused .dot { background: transparent; border: 1.5px solid var(--text-tertiary); width: 6px; height: 6px; }
+.qp-div { height: 1px; background: var(--divider); flex-shrink: 0; }
+.qp-item {
+  display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 8px;
+}
+.qp-item.hl { background: var(--bg-elevated); }
+.qp-item .thumb { width: 25px; height: 25px; border-radius: 7px; }
+.qp-item .tt { flex: 1; min-width: 0; }
+.qp-item .t1 { font-size: 12.5px; color: var(--text-primary); }
+.qp-item .t1.strong { font-weight: 600; }
+.qp-item .t2 { font-size: 10.5px; color: var(--text-tertiary); margin-top: 1px; }
+
+/* ============================================================
+   4 · Main 900×620
+   ============================================================ */
+.main-win { width: 900px; height: 620px; flex-direction: row; }
+.main-side {
+  width: 192px; flex-shrink: 0; background: var(--bg-sidebar);
+  border-right: 1px solid var(--divider); padding: 10px;
+  display: flex; flex-direction: column;
+}
+.main-side .top { padding: 12px 8px 8px; display: flex; align-items: center; gap: 8px; }
+.main-side .top .brand { font-size: 13px; font-weight: 650; }
+.main-side .status {
+  margin-top: auto; padding: 8px 9px; border-radius: 8px; background: var(--bg-elevated);
+  display: flex; align-items: center; gap: 7px; font-size: 10.5px; color: var(--text-secondary);
+}
+.main-side .status .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--success); }
+
+.main-bd { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.main-hd { padding: 16px 20px 12px; flex-shrink: 0; }
+.main-hd h2 { font-size: 18px; font-weight: 650; letter-spacing: -0.2px; }
+.main-hd .sub { font-size: 11.5px; color: var(--text-tertiary); margin-top: 4px; }
+.main-hd .ac { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+/* 顶部拖动区（Overlay 标题栏） */
+.dragstrip { height: 30px; flex-shrink: 0; display: flex; align-items: center; padding: 0 14px; }
+
+.chips { display: flex; align-items: center; gap: 6px; padding: 0 20px 11px; flex-shrink: 0; }
+.chipx2 {
+  font-size: 11.5px; padding: 4px 10px; border-radius: 11px;
+  color: var(--text-secondary); border: 1px solid var(--border); display: inline-flex; align-items: center; gap: 5px;
+}
+.chipx2 .n { font-size: 10px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.chipx2.on { background: var(--accent-soft); border-color: rgba(10,132,255,0.35); color: var(--accent-text); font-weight: 600; }
+.chipx2.on .n { color: var(--accent-text); opacity: 0.75; }
+
+.list { flex: 1; padding: 0 20px 18px; overflow: hidden; }
+.l-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 9px; border-radius: 9px; margin-bottom: 1px; position: relative;
+}
+.l-row:hover, .l-row.sel { background: var(--bg-elevated); }
+.l-row.sel::before {
+  content: ""; position: absolute; left: -5px; top: 50%; transform: translateY(-50%);
+  width: 2.5px; height: 16px; border-radius: 2px; background: var(--accent);
+}
+.l-row .thumb { width: 29px; height: 29px; border-radius: 8px; }
+.l-row .thumb svg { width: 15px; height: 15px; }
+.l-row .tx { flex: 1; min-width: 0; }
+.l-row .t1 { font-size: 12.5px; color: var(--text-primary); display: flex; align-items: center; gap: 5px; }
+.l-row .t1 .tt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.l-row.sel .t1 { font-weight: 600; }
+.l-row .t2 { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.l-row .app { font-size: 11px; color: var(--text-tertiary); width: 68px; flex-shrink: 0; }
+.l-row .tm { font-size: 11px; color: var(--text-tertiary); width: 62px; text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.l-row .star { width: 11px; height: 11px; }
+.l-grp { font-size: 10.5px; font-weight: 600; color: var(--text-tertiary); letter-spacing: 0.5px; padding: 10px 0 6px; }
+
+/* 网格 */
+.grid { flex: 1; padding: 0 20px 18px; overflow: hidden; display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px; align-content: start; }
+.g-card {
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 11px 12px; background: var(--bg-elevated); display: flex; flex-direction: column;
+}
+.g-card.sel { border-color: var(--accent); background: var(--accent-soft); }
+.g-card .hd { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.g-card .hd .thumb { width: 25px; height: 25px; border-radius: 7px; }
+.g-card .hd .acts { margin-left: auto; display: flex; gap: 4px; }
+.g-card .hd .acts svg { width: 11px; height: 11px; }
+.g-card .ttl { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-card .desc { font-size: 11px; color: var(--text-tertiary); line-height: 1.55; margin-top: 5px; }
+.g-card .thumbimg {
+  height: 72px; border-radius: 7px; border: 1px solid var(--border); margin-bottom: 9px;
+  background: linear-gradient(135deg, rgba(10,132,255,0.10) 0%, rgba(255,159,10,0.08) 100%), var(--bg-elevated);
+  display: flex; align-items: center; justify-content: center;
+}
+.g-card .thumbimg svg { width: 17px; height: 17px; color: var(--text-tertiary); }
+.g-card .ft { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-tertiary); margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--divider); }
+.g-card .ft .sp { margin-left: auto; }
+
+/* 批量栏 */
+.bulk {
+  height: 50px; flex-shrink: 0; background: rgba(10, 132, 255, 0.1);
+  border-top: 1px solid rgba(10, 132, 255, 0.25);
+  display: flex; align-items: center; gap: 13px; padding: 0 20px;
+}
+.bulk .cnt { font-size: 12.5px; color: var(--text-primary); }
+.bulk .cnt b { color: var(--accent-text); font-weight: 700; }
+
+/* 表格 */
+.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tbl th {
+  text-align: left; font-size: 10.5px; font-weight: 600; letter-spacing: 0.5px;
+  color: var(--text-tertiary); text-transform: uppercase;
+  padding: 9px 12px; border-bottom: 1px solid var(--divider); background: var(--bg-elevated);
+}
+.tbl td { padding: 10px 12px; border-bottom: 1px solid var(--divider); color: var(--text-secondary); }
+.tbl tr:last-child td { border-bottom: 0; }
+.tbl tr.on td { background: var(--accent-soft); }
+.tbl td.strong { color: var(--text-primary); font-weight: 550; }
+
+.cbox {
+  width: 15px; height: 15px; border-radius: 5px; border: 1.5px solid var(--border-strong);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.cbox.on { background: var(--accent); border-color: var(--accent); }
+.cbox.on::after { content: ""; width: 7px; height: 4px; border-left: 1.8px solid #fff; border-bottom: 1.8px solid #fff; transform: rotate(-45deg) translateY(-1px); }
+
+/* 面板 */
+.panel { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.panel-hd { padding: 12px 15px; border-bottom: 1px solid var(--divider); display: flex; align-items: center; gap: 9px; }
+.panel-hd .pt { font-size: 13px; font-weight: 650; }
+.panel-hd .pc { font-size: 11px; color: var(--text-tertiary); }
+.panel-hd .rt { margin-left: auto; display: flex; gap: 7px; }
+.panel-bd { padding: 0 15px 13px; }
+.set-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.set-row + .set-row { border-top: 1px solid var(--divider); }
+.set-row .lb { flex: 1; }
+.set-row .lb .t { display: block; font-size: 12.5px; color: var(--text-primary); }
+.set-row .lb .d { display: block; font-size: 11px; color: var(--text-tertiary); margin-top: 3px; line-height: 1.5; }
+
+/* 滑块 */
+.slider { width: 140px; height: 4px; border-radius: 2px; background: var(--bg-elevated-hover); position: relative; flex-shrink: 0; }
+.slider .fill { position: absolute; left: 0; top: 0; height: 4px; border-radius: 2px; background: var(--accent); }
+.slider .knob {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  width: 13px; height: 13px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.4), 0 0 0 0.5px rgba(0,0,0,.1);
+}
+.slider-val { width: 52px; text-align: right; font-size: 12px; color: var(--text-primary); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+/* 空态 */
+.empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.empty .ic {
+  width: 52px; height: 52px; border-radius: 15px; background: var(--bg-elevated);
+  display: flex; align-items: center; justify-content: center; margin-bottom: 15px;
+}
+.empty .ic svg { width: 23px; height: 23px; color: var(--text-tertiary); }
+.empty .e1 { font-size: 14px; font-weight: 600; }
+.empty .e2 { font-size: 12px; color: var(--text-tertiary); margin-top: 6px; line-height: 1.65; max-width: 340px; }
+
+/* 状态横幅 */
+.banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 13px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--bg-elevated); margin-bottom: 9px;
+}
+.banner svg { width: 15px; height: 15px; color: var(--warn); flex-shrink: 0; }
+.banner .tx { flex: 1; font-size: 12px; color: var(--text-primary); line-height: 1.5; }
+.banner .tx b { color: var(--warn); }
+
+/* 菜单 */
+.menu {
+  position: absolute; min-width: 178px; padding: 5px;
+  background: var(--bg-window-solid); border: 1px solid var(--border-strong);
+  border-radius: 10px; box-shadow: var(--shadow-raised); z-index: 10;
+  backdrop-filter: blur(30px);
+}
+.menu-item { display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 6px; font-size: 12.5px; color: var(--text-primary); }
+.menu-item.hl { background: var(--accent); color: #fff; }
+.menu-item.hl svg { color: #fff; }
+.menu-item svg { width: 13px; height: 13px; color: var(--text-tertiary); }
+.menu-item.danger, .menu-item.danger svg { color: var(--danger); }
+.menu-sep { height: 1px; background: var(--divider); margin: 4px 5px; }
+.menu-item .kb { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--text-tertiary); }
+
+/* 高亮搜索命中的文字 */
+mark {
+  background: rgba(10, 132, 255, 0.28); color: var(--accent-text);
+  border-radius: 3px; padding: 0 1px;
+}
+
+/* 布局容器 */
+.duo { display: flex; gap: 40px; flex-wrap: wrap; align-items: flex-start; }
+.trio { display: flex; gap: 40px; flex-wrap: wrap; align-items: flex-start; }
+.col { display: flex; flex-direction: column; gap: 24px; }
+.hint { font-size: 11.5px; color: var(--text-tertiary); margin-top: auto; padding-top: 14px; line-height: 1.65; }
+.hint b { color: var(--text-secondary); }
+</style>
+</head>
+<body>
+
+<div class="head">
+  <div>
+    <h1>SuperClip · 高保真设计稿</h1>
+    <div class="sub">
+      配色与排版的真实效果。<b>核心改动</b>：4 个类型色 → 0（改中性灰 + 真实缩略图），全表面只保留
+      <b>1 个强调色</b>（Apple system blue <span class="mono">#0A84FF</span>），仅置顶保留琥珀色。
+      尺寸：Main 900×620 / Popup 320×480 / QuickPanel 248×400 / Preview 320×360。
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <div class="theme-switch">
+    <button data-t="dark" class="on">深色</button>
+    <button data-t="light">浅色</button>
+  </div>
+</div>
+
+<!-- ==================== 1 · Popup ==================== -->
+<div class="sec">
+  <div class="sec-hd">
+    <h2>Popup</h2>
+    <span class="tag">320 × 480</span>
+    <span class="note">Tray 左键 / ⌥⌘V 唤起 · 一屏 8 条</span>
+  </div>
+
+  <div class="trio">
+    <!-- 默认态 -->
+    <div>
+      <div class="win-label"><b>默认态</b><span class="dim">320×480</span> 单选高亮 + 悬停预览</div>
+      <div class="win popup">
+        <div style="padding:10px 10px 8px;flex-shrink:0">
+          <div class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <span class="ph">搜索剪贴板…</span>
+            <span class="kbd" style="margin-left:auto">⌥⌘V</span>
+          </div>
+        </div>
+
+        <div class="p-grp">今天</div>
+        <div class="p-row sel">
+          <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></span>
+          <span class="tx">
+            <span class="t1 trunc" style="display:block">发布命令片段</span>
+            <span class="t2 trunc" style="display:block">npm run tauri dev -- --no-watch, 先验证…</span>
+          </span>
+          <span class="tm">刚刚</span>
+        </div>
+        <div class="p-row">
+          <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v6h6"/></svg></span>
+          <span class="tx">
+            <span class="t1 trunc" style="display:block">客户邮件摘要</span>
+            <span class="t2 trunc" style="display:block">本周只交付本地壳体、搜索路径与诊断导出。</span>
+          </span>
+          <span class="tm">2 分钟前</span>
+        </div>
+        <div class="p-row">
+          <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.35-4.35L6 21"/></svg></span>
+          <span class="tx">
+            <span class="t1" style="display:flex"><span class="trunc">发布预览截图</span><svg class="star" viewBox="0 0 24 24" fill="currentColor" style="width:10px;height:10px"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg></span>
+            <span class="t2 trunc" style="display:block">标准双栏 popover 预览图，包含历史列表…</span>
+          </span>
+          <span class="tm">8 分钟前</span>
+        </div>
+        <div class="p-row">
+          <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v6h6"/></svg></span>
+          <span class="tx">
+            <span class="t1 trunc" style="display:block">交付清单.pdf</span>
+            <span class="t2 trunc" style="display:block">包含 P0 风险关闭门、演示脚本、录屏…</span>
+          </span>
+          <span class="tm">13 分钟前</span>
+        </div>
+        <div class="p-row">
+          <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></span>
+          <span class="tx">
+            <span class="t1 trunc" style="display:block">会议纪要片段</span>
+            <span class="t2 trunc" style="display:block">多显示器回退、恢复模式只读与 diagn…</span>
+          </span>
+          <span class="tm">27 分钟前</span>
+        </div>
+        <div class="p-row">
+          <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></span>
+          <span class="tx">
+            <span class="t1 trunc" style="display:block">接口地址</span>
+            <span class="t2 trunc" style="display:block">http://localhost:1420/panel.html</span>
+          </span>
+          <span class="tm">1 小时前</span>
+        </div>
+
+        <div class="p-grp">昨天</div>
+        <div class="p-row">
+          <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.35-4.35L6 21"/></svg></span>
+          <span class="tx">
+            <span class="t1 trunc" style="display:block">设计稿 - 深色磨砂</span>
+            <span class="t2 trunc" style="display:block">1440 × 900，三个表面同屏对照</span>
+          </span>
+          <span class="tm">昨天</span>
+        </div>
+
+        <div class="p-foot">
+          <span>↑↓ 选择</span><span>↵ 粘贴</span><span>⌘⌫ 删除</span>
+          <span style="margin-left:auto">共 428 条</span>
+        </div>
+      </div>
+      <div class="hint">行高 46 · 选中行左侧 2.5px 蓝色指示条 + 蓝色淡底；类型图标统一中性灰，置顶星保持琥珀。</div>
+    </div>
+
+    <!-- 搜索态 -->
+    <div>
+      <div class="win-label"><b>搜索态</b>关键词高亮 + 空态</div>
+      <div class="win popup">
+        <div style="padding:10px 10px 8px;flex-shrink:0">
+          <div class="search focus">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="color:var(--accent-text)"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <span style="font-size:12.5px;color:var(--text-primary)">发布</span>
+            <span style="margin-left:auto;width:15px;height:15px;border-radius:50%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:9px;height:9px;color:var(--text-secondary)"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </span>
+          </div>
+        </div>
+
+        <div class="p-row sel">
+          <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></span>
+          <span class="tx">
+            <span class="t1 trunc" style="display:block"><mark>发布</mark>命令片段</span>
+            <span class="t2 trunc" style="display:block">npm run tauri dev -- --no-watch…</span>
+          </span>
+          <span class="tm">刚刚</span>
+        </div>
+        <div class="p-row">
+          <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.35-4.35L6 21"/></svg></span>
+          <span class="tx">
+            <span class="t1" style="display:flex"><span class="trunc"><mark>发布</mark>预览截图</span><svg class="star" viewBox="0 0 24 24" fill="currentColor" style="width:10px;height:10px"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg></span>
+            <span class="t2 trunc" style="display:block">标准双栏 popover 预览图…</span>
+          </span>
+          <span class="tm">8 分钟前</span>
+        </div>
+        <div class="p-row">
+          <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v6h6"/></svg></span>
+          <span class="tx">
+            <span class="t1 trunc" style="display:block">本周<mark>发布</mark>计划</span>
+            <span class="t2 trunc" style="display:block">周一：本地壳体验收；周三：…</span>
+          </span>
+          <span class="tm">2 小时前</span>
+        </div>
+
+        <div style="flex:1"></div>
+        <div style="margin:0 14px 14px;border-top:1px dashed var(--border-strong);padding-top:12px">
+          <div style="font-size:10px;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:10px">无结果时 ↓</div>
+          <div class="empty" style="flex:none">
+            <div class="ic" style="width:40px;height:40px;border-radius:12px;margin-bottom:10px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:18px;height:18px"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            </div>
+            <div class="e1" style="font-size:13px">没有匹配的内容</div>
+            <div class="e2" style="font-size:11px;margin-top:4px">试试更短的关键词，或按 Esc 清空</div>
+          </div>
+        </div>
+
+        <div class="p-foot">
+          <span>↑↓ 选择</span><span>↵ 粘贴</span><span>Esc 清空</span>
+          <span style="margin-left:auto">匹配 3 条</span>
+        </div>
+      </div>
+      <div class="hint">命中词用蓝色淡底高亮，一眼看清为什么匹配。空态与列表共用高度，切换不跳动。</div>
+    </div>
+
+    <!-- 行操作 -->
+    <div>
+      <div class="win-label"><b>行操作</b>悬停图标 + 右键菜单 + 撤销 Toast</div>
+      <div class="win popup" style="position:relative">
+        <div style="padding:10px 10px 8px;flex-shrink:0">
+          <div class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            <span class="ph">搜索剪贴板…</span>
+            <span class="kbd" style="margin-left:auto">⌥⌘V</span>
+          </div>
+        </div>
+        <div class="p-grp" style="padding-top:2px">今天</div>
+
+        <div class="p-row" style="background:var(--bg-elevated)">
+          <span class="thumb" style="background:var(--accent-soft);color:var(--accent-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></span>
+          <span class="tx">
+            <span class="t1 trunc" style="display:block;color:var(--text-primary);font-weight:600">发布命令片段</span>
+            <span class="t2 trunc" style="display:block">npm run tauri dev -- --no-watch…</span>
+          </span>
+          <span class="acts">
+            <i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg></i>
+            <i class="del"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></i>
+          </span>
+        </div>
+        <div class="p-row">
+          <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v6h6"/></svg></span>
+          <span class="tx"><span class="t1 trunc" style="display:block">客户邮件摘要</span><span class="t2 trunc" style="display:block">本周只交付本地壳体…</span></span>
+          <span class="tm">2 分钟前</span>
+        </div>
+        <div class="p-row">
+          <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.35-4.35L6 21"/></svg></span>
+          <span class="tx"><span class="t1 trunc" style="display:block">发布预览截图</span><span class="t2 trunc" style="display:block">标准双栏 popover…</span></span>
+          <span class="tm">8 分钟前</span>
+        </div>
+
+        <!-- 右键菜单 -->
+        <div class="menu" style="top:96px;right:12px">
+          <div class="menu-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>复制<span class="kb">⌘C</span></div>
+          <div class="menu-item hl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>粘贴到前台应用<span class="kb">↵</span></div>
+          <div class="menu-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>粘贴为纯文本<span class="kb">⌥↵</span></div>
+          <div class="menu-sep"></div>
+          <div class="menu-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>置顶<span class="kb">⌘P</span></div>
+          <div class="menu-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>查看详情</div>
+          <div class="menu-sep"></div>
+          <div class="menu-item danger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>删除<span class="kb">⌘⌫</span></div>
+        </div>
+
+        <div style="position:absolute;left:12px;right:12px;bottom:44px">
+          <div class="toast" style="font-size:11.5px;padding:8px 11px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+            已删除 1 条
+            <span class="undo">撤销</span>
+          </div>
+        </div>
+
+        <div class="p-foot">
+          <span>↵ 粘贴</span><span>⌥↵ 纯文本</span><span>⌘⌫ 删除</span>
+          <span style="margin-left:auto">共 428 条</span>
+        </div>
+      </div>
+      <div class="hint">悬停行右侧时间换成置顶/删除图标。删除不弹二次确认，靠 5 秒 Toast 撤销。</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 2 · Preview ==================== -->
+<div class="sec">
+  <div class="sec-hd">
+    <h2>Preview</h2>
+    <span class="tag">320 × 360</span>
+    <span class="note">悬停 Popup 行 200ms 后出现 · 只读</span>
+  </div>
+
+  <div class="duo">
+    <div>
+      <div class="win-label"><b>文本 · 代码块</b></div>
+      <div class="win pv">
+        <div class="pv-hd">
+          <span class="kind">文本</span>
+          <span class="tm">刚刚</span>
+          <span class="pv-only">只读预览</span>
+        </div>
+        <div class="pv-bd">
+          <div style="font-size:12px;line-height:1.68;color:var(--text-secondary)">先运行本地开发命令，确认克隆与快捷键都生效，再进入下一步。</div>
+          <div class="pv-code">
+            <span class="lbl">bash</span><br>
+            npm run tauri dev -- --no-watch<br>
+            ./scripts/check.sh --strict
+          </div>
+          <div style="font-size:12px;line-height:1.68;color:var(--text-secondary);margin-top:10px">通过后即可执行<b style="color:var(--text-primary)">诊断导出</b>，把结果贴进验收单。</div>
+        </div>
+        <div class="pv-foot">
+          <span class="av">W</span>
+          <span>来自 Warp</span>
+          <span style="opacity:.5">·</span>
+          <span>1.2 KB</span>
+          <span style="opacity:.5">·</span>
+          <span>428 字符</span>
+          <span style="margin-left:auto">复制过 6 次</span>
+        </div>
+      </div>
+      <div class="hint">代码块剥离语言标注、等宽浅底。底部补齐来源 App、体积、字符数、使用次数。</div>
+    </div>
+
+    <div>
+      <div class="win-label"><b>图片 / 文件</b></div>
+      <div class="win pv">
+        <div class="pv-hd">
+          <span class="kind">图片</span>
+          <span class="tm">8 分钟前</span>
+          <span class="pv-only">只读预览</span>
+        </div>
+        <div class="pv-bd">
+          <div class="pv-img">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.35-4.35L6 21"/></svg>
+          </div>
+          <div style="font-size:12.5px;font-weight:600;margin-top:10px">发布预览截图</div>
+          <div class="pv-meta">
+            <span class="chipx">2560 × 1600</span>
+            <span class="chipx">PNG</span>
+            <span class="chipx">842 KB</span>
+          </div>
+          <div style="font-size:10.5px;color:var(--text-tertiary);letter-spacing:0.4px;margin:14px 0 8px">文件类型</div>
+          <div class="pv-file">
+            <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v6h6"/></svg></span>
+            <span style="flex:1;min-width:0">
+              <span style="display:block;font-size:11.5px;color:var(--text-primary)" class="trunc">交付清单.pdf</span>
+              <span style="display:block;font-size:10.5px;color:var(--text-tertiary)" class="trunc mono">~/Documents/交付/</span>
+            </span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;color:var(--text-tertiary);flex-shrink:0"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>
+          </div>
+        </div>
+        <div class="pv-foot">
+          <span class="av">F</span>
+          <span>来自 Figma</span>
+          <span style="opacity:.5">·</span>
+          <span>1 张图片 · 2 个文件</span>
+          <span style="margin-left:auto">复制过 2 次</span>
+        </div>
+      </div>
+      <div class="hint">图片用真实缩略图替代类型色图标；图片强调尺寸体积，文件强调完整路径。</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 3 · QuickPanel ==================== -->
+<div class="sec">
+  <div class="sec-hd">
+    <h2>Quick Panel</h2>
+    <span class="tag">248 × 400</span>
+    <span class="note">Tray 右键唤起 · 修复底部溢出</span>
+  </div>
+
+  <div class="trio">
+    <div>
+      <div class="win-label"><b>默认态</b><span class="dim">248×400</span></div>
+      <div class="win qp">
+        <div class="qp-hd">
+          <span class="qp-logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></span>
+          <span class="qp-name">SuperClip</span>
+          <span class="qp-pill"><span class="dot"></span>监听中</span>
+        </div>
+        <div class="qp-div"></div>
+        <div style="flex:1;padding:6px">
+          <div class="qp-item">
+            <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span>
+            <span class="tt"><span class="t1" style="display:block">暂停监听</span><span class="t2" style="display:block">停止记录新内容</span></span>
+          </div>
+          <div class="qp-item">
+            <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12.83 2.18 8.36 4.18a1 1 0 0 1 0 1.79l-8.36 4.18a2 2 0 0 1-1.66 0L2.81 8.15a1 1 0 0 1 0-1.79l8.36-4.18a2 2 0 0 1 1.66 0Z"/><path d="m22 12.5-9.17 4.58a2 2 0 0 1-1.66 0L2 12.5"/><path d="m22 17.5-9.17 4.58a2 2 0 0 1-1.66 0L2 17.5"/></svg></span>
+            <span class="tt"><span class="t1" style="display:block">打开主管理台</span><span class="t2" style="display:block">浏览、搜索与批量整理</span></span>
+            <span class="kbd">⌘M</span>
+          </div>
+          <div class="qp-item">
+            <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></span>
+            <span class="tt"><span class="t1" style="display:block">设置</span><span class="t2" style="display:block">快捷键、排除规则与外观</span></span>
+            <span class="kbd">⌘,</span>
+          </div>
+        </div>
+        <div class="qp-div"></div>
+        <div style="flex-shrink:0;padding:9px 11px 11px">
+          <div style="font-size:10px;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:6px">默认动作</div>
+          <div class="seg" style="width:100%">
+            <span class="on" style="flex:1;text-align:center">直接粘贴</span>
+            <span style="flex:1;text-align:center">仅复制</span>
+          </div>
+          <div style="font-size:10px;color:var(--text-tertiary);margin-top:6px;line-height:1.5">选中条目后自动粘贴到前台应用</div>
+        </div>
+        <div class="qp-div"></div>
+        <div style="flex-shrink:0;padding:5px 6px">
+          <div class="qp-item"><span class="thumb" style="background:rgba(255,69,58,.13);color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></span><span class="tt"><span class="t1" style="display:block;color:var(--danger)">退出 SuperClip</span></span><span class="kbd">⌘Q</span></div>
+        </div>
+      </div>
+      <div class="hint">原 280×420 下底部状态条被裁切。新尺寸 248×400 内容精确排布，退出项用红色语义色。</div>
+    </div>
+
+    <div>
+      <div class="win-label"><b>暂停态</b></div>
+      <div class="win qp">
+        <div class="qp-hd">
+          <span class="qp-logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></span>
+          <span class="qp-name">SuperClip</span>
+          <span class="qp-pill paused"><span class="dot"></span>已暂停</span>
+        </div>
+        <div class="qp-div"></div>
+        <div style="flex:1;padding:6px">
+          <div class="qp-item hl">
+            <span class="thumb" style="background:var(--accent-soft);color:var(--accent-text)"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M6 4l14 8-14 8z"/></svg></span>
+            <span class="tt"><span class="t1 strong" style="display:block;color:var(--accent-text)">恢复监听</span><span class="t2" style="display:block">继续记录复制内容</span></span>
+          </div>
+          <div class="qp-item">
+            <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12.83 2.18 8.36 4.18a1 1 0 0 1 0 1.79l-8.36 4.18a2 2 0 0 1-1.66 0L2.81 8.15a1 1 0 0 1 0-1.79l8.36-4.18a2 2 0 0 1 1.66 0Z"/><path d="m22 12.5-9.17 4.58a2 2 0 0 1-1.66 0L2 12.5"/></svg></span>
+            <span class="tt"><span class="t1" style="display:block">打开主管理台</span><span class="t2" style="display:block">浏览、搜索与批量整理</span></span>
+            <span class="kbd">⌘M</span>
+          </div>
+          <div class="qp-item">
+            <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg></span>
+            <span class="tt"><span class="t1" style="display:block">设置</span><span class="t2" style="display:block">快捷键、排除规则与外观</span></span>
+            <span class="kbd">⌘,</span>
+          </div>
+          <div style="margin:4px 8px 0;padding:7px 9px;border:1px solid var(--border);border-radius:8px;display:flex;gap:6px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;color:var(--text-tertiary);flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            <span style="font-size:10px;color:var(--text-tertiary);line-height:1.5">暂停期间复制的内容不会被记录，已有历史不受影响。</span>
+          </div>
+        </div>
+        <div class="qp-div"></div>
+        <div style="flex-shrink:0;padding:9px 11px 11px">
+          <div style="font-size:10px;color:var(--text-tertiary);letter-spacing:0.5px;margin-bottom:6px">默认动作</div>
+          <div class="seg" style="width:100%">
+            <span style="flex:1;text-align:center">直接粘贴</span>
+            <span class="on" style="flex:1;text-align:center">仅复制</span>
+          </div>
+          <div style="font-size:10px;color:var(--text-tertiary);margin-top:6px;line-height:1.5">选中条目后仅写入剪贴板，不自动粘贴</div>
+        </div>
+        <div class="qp-div"></div>
+        <div style="flex-shrink:0;padding:5px 6px">
+          <div class="qp-item"><span class="thumb" style="background:rgba(255,69,58,.13);color:var(--danger)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></span><span class="tt"><span class="t1" style="display:block;color:var(--danger)">退出 SuperClip</span></span><span class="kbd">⌘Q</span></div>
+        </div>
+      </div>
+      <div class="hint">暂停态：状态胶囊变描边样式，首项变「恢复监听」并用蓝色高亮 + 说明影响范围。</div>
+    </div>
+
+    <!-- 反馈 Toast -->
+    <div>
+      <div class="win-label"><b>操作反馈</b>三态</div>
+      <div class="win" style="width:248px">
+        <div style="padding:14px 12px;display:flex;flex-direction:column;gap:9px">
+          <div class="toast" style="font-size:11.5px;padding:8px 11px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+            已复制到剪贴板
+          </div>
+          <div class="toast warn" style="font-size:11.5px;padding:8px 11px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3Z"/><path d="M12 9v4M12 17h.01"/></svg>
+            富文本已降级为纯文本
+          </div>
+          <div class="toast" style="font-size:11.5px;padding:8px 11px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+            已删除
+            <span class="undo">撤销</span>
+          </div>
+          <div class="hint" style="padding-top:4px">
+            成功用深色；<b>降级用琥珀描边</b>（必须让用户知道内容形态变了）；可撤销用蓝色链接文字。
+            同一时刻只显示一个，5 秒后自动消失。
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 4 · Main ==================== -->
+<div class="sec">
+  <div class="sec-hd">
+    <h2>Main · 历史列表</h2>
+    <span class="tag">900 × 620</span>
+    <span class="note">Dock / ⌘M 唤起 · 左栏 192</span>
+  </div>
+
+  <div style="display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap">
+    <div>
+      <div class="win-label"><b>列表视图</b><span class="dim">900×620</span></div>
+      <div class="win main-win">
+        <!-- 侧栏 -->
+        <div class="main-side">
+          <div class="top">
+            <span class="qp-logo" style="width:21px;height:21px;border-radius:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:12px;height:12px"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></span>
+            <span class="brand">SuperClip</span>
+          </div>
+          <div class="side-cap">历史</div>
+          <div class="side-item on">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12.83 2.18 8.36 4.18a1 1 0 0 1 0 1.79l-8.36 4.18a2 2 0 0 1-1.66 0L2.81 8.15a1 1 0 0 1 0-1.79l8.36-4.18a2 2 0 0 1 1.66 0Z"/><path d="m22 12.5-9.17 4.58a2 2 0 0 1-1.66 0L2 12.5"/></svg>
+            全部记录<span class="tail">428</span>
+          </div>
+          <div class="side-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>
+            已置顶<span class="tail">12</span>
+          </div>
+          <div class="side-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+            回收站<span class="tail">3</span>
+          </div>
+          <div class="side-cap">管理</div>
+          <div class="side-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z"/><path d="m2 2 20 20"/></svg>
+            排除规则<span class="tail">4</span>
+          </div>
+          <div class="side-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/><circle cx="12" cy="12" r="3"/></svg>
+            设置
+          </div>
+          <div class="status"><span class="dot"></span>监听中 · 直接粘贴</div>
+        </div>
+
+        <!-- 内容 -->
+        <div class="main-bd">
+          <div class="dragstrip">
+            <div class="traffic"><i></i><i></i><i></i></div>
+          </div>
+          <div class="main-hd">
+            <div class="row">
+              <div>
+                <h2>全部记录</h2>
+                <div class="sub">共 428 条 · 最近 27 分钟内有 5 条新记录</div>
+              </div>
+              <div class="ac">
+                <div class="search" style="width:196px">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                  <span class="ph">搜索…</span>
+                </div>
+                <div class="seg">
+                  <span class="on" style="padding:5px 8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="width:14px;height:14px"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span>
+                  <span style="padding:5px 8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:14px;height:14px"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="chips">
+            <span class="chipx2 on">全部<span class="n">428</span></span>
+            <span class="chipx2">文本<span class="n">312</span></span>
+            <span class="chipx2">图片<span class="n">86</span></span>
+            <span class="chipx2">文件<span class="n">30</span></span>
+            <span class="chipx2" style="margin-left:auto">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              最近 30 天
+            </span>
+          </div>
+
+          <div class="list">
+            <div class="l-grp">今天</div>
+            <div class="l-row sel">
+              <span class="thumb" style="background:var(--accent-soft);color:var(--accent-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></span>
+              <span class="tx">
+                <span class="t1"><span class="tt">发布命令片段</span><svg class="star" viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg></span>
+                <span class="t2">npm run tauri dev -- --no-watch, 先验证壳体与焦点行为，再接 Rust IPC。</span>
+              </span>
+              <span class="app">Warp</span>
+              <span class="tm">刚刚</span>
+            </div>
+            <div class="l-row">
+              <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v6h6"/></svg></span>
+              <span class="tx">
+                <span class="t1"><span class="tt">客户邮件摘要</span></span>
+                <span class="t2">本周只交付本地壳体、搜索路径与诊断导出，不开启云同步或 AI 功能。</span>
+              </span>
+              <span class="app">Mail</span>
+              <span class="tm">2 分钟前</span>
+            </div>
+            <div class="l-row">
+              <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.35-4.35L6 21"/></svg></span>
+              <span class="tx">
+                <span class="t1"><span class="tt">发布预览截图</span><svg class="star" viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg></span>
+                <span class="t2">标准双栏 popover 预览图，包含历史列表、详情摘要与功能列表。</span>
+              </span>
+              <span class="app">Figma</span>
+              <span class="tm">8 分钟前</span>
+            </div>
+            <div class="l-row">
+              <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v6h6"/></svg></span>
+              <span class="tx">
+                <span class="t1"><span class="tt">交付清单.pdf</span></span>
+                <span class="t2">包含 P0 风险关闭门、演示脚本、录屏证据要求与回归检查项。</span>
+              </span>
+              <span class="app">Finder</span>
+              <span class="tm">13 分钟前</span>
+            </div>
+            <div class="l-row">
+              <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></span>
+              <span class="tx">
+                <span class="t1"><span class="tt">会议纪要片段</span></span>
+                <span class="t2">多显示器回退、恢复模式只读与 diagnostics export 字段映射必须同时完成。</span>
+              </span>
+              <span class="app">Notes</span>
+              <span class="tm">27 分钟前</span>
+            </div>
+            <div class="l-grp">昨天</div>
+            <div class="l-row">
+              <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.35-4.35L6 21"/></svg></span>
+              <span class="tx">
+                <span class="t1"><span class="tt">设计稿 - 深色磨砂</span></span>
+                <span class="t2">1440 × 900，三个表面同屏对照。</span>
+              </span>
+              <span class="app">Figma</span>
+              <span class="tm">昨天</span>
+            </div>
+            <div class="l-row">
+              <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></span>
+              <span class="tx">
+                <span class="t1"><span class="tt">接口地址</span></span>
+                <span class="t2">http://localhost:1420/panel.html</span>
+              </span>
+              <span class="app">Warp</span>
+              <span class="tm">昨天</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="hint">左栏导航替代原顶栏 + chips 的双层结构；回收站有入口。选中行蓝色指示条 + 蓝色淡底，来源/时间靠右对齐成两列。</div>
+    </div>
+
+    <div class="col">
+      <!-- 网格 -->
+      <div>
+        <div class="win-label"><b>网格视图</b>3 列（原 4 列过挤）</div>
+        <div class="win main-win" style="height:620px">
+          <div class="main-side">
+            <div class="top"><span class="qp-logo" style="width:21px;height:21px;border-radius:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:12px;height:12px"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></span><span class="brand">SuperClip</span></div>
+            <div class="side-cap">历史</div>
+            <div class="side-item on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12.83 2.18 8.36 4.18a1 1 0 0 1 0 1.79l-8.36 4.18a2 2 0 0 1-1.66 0L2.81 8.15a1 1 0 0 1 0-1.79l8.36-4.18a2 2 0 0 1 1.66 0Z"/><path d="m22 12.5-9.17 4.58a2 2 0 0 1-1.66 0L2 12.5"/></svg>全部记录<span class="tail">428</span></div>
+            <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>已置顶<span class="tail">12</span></div>
+            <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>回收站<span class="tail">3</span></div>
+            <div class="side-cap">管理</div>
+            <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z"/><path d="m2 2 20 20"/></svg>排除规则<span class="tail">4</span></div>
+            <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/></svg>设置</div>
+          </div>
+          <div class="main-bd">
+            <div class="dragstrip"><div class="traffic"><i></i><i></i><i></i></div></div>
+            <div class="main-hd" style="padding-bottom:8px">
+              <div class="row">
+                <div><h2>全部记录</h2><div class="sub">共 428 条 · 网格视图</div></div>
+                <div class="ac">
+                  <div class="search" style="width:150px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span class="ph">搜索…</span></div>
+                  <div class="seg">
+                    <span style="padding:5px 8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:14px;height:14px"><path d="M3 6h18M3 12h18M3 18h18"/></svg></span>
+                    <span class="on" style="padding:5px 8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="width:14px;height:14px"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="chips">
+              <span class="chipx2 on">全部<span class="n">428</span></span>
+              <span class="chipx2">图片<span class="n">86</span></span>
+              <span class="chipx2">文件<span class="n">30</span></span>
+            </div>
+            <div class="grid">
+              <div class="g-card sel">
+                <div class="hd">
+                  <span class="thumb" style="background:var(--accent-soft);color:var(--accent-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></span>
+                  <span class="acts"><svg class="star" viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg><svg style="color:var(--text-tertiary)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></span>
+                </div>
+                <div class="ttl">发布命令片段</div>
+                <div class="desc">npm run tauri dev -- --no-watch, 先验证壳体与焦点行为。</div>
+                <div class="ft"><span>Warp</span><span class="sp">刚刚</span></div>
+              </div>
+              <div class="g-card">
+                <div class="hd">
+                  <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.35-4.35L6 21"/></svg></span>
+                  <span class="acts"><svg class="star" viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg></span>
+                </div>
+                <div class="thumbimg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.35-4.35L6 21"/></svg></div>
+                <div class="ttl">发布预览截图</div>
+                <div class="ft"><span>Figma</span><span class="sp">8 分钟前</span></div>
+              </div>
+              <div class="g-card">
+                <div class="hd"><span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v6h6"/></svg></span></div>
+                <div class="ttl">客户邮件摘要</div>
+                <div class="desc">本周只交付本地壳体、搜索路径与诊断导出，不开启云同步或 AI 功能。</div>
+                <div class="ft"><span>Mail</span><span class="sp">2 分钟前</span></div>
+              </div>
+              <div class="g-card">
+                <div class="hd"><span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v6h6"/></svg></span></div>
+                <div class="ttl">交付清单.pdf</div>
+                <div class="desc">包含 P0 风险关闭门、演示脚本、录屏证据要求。</div>
+                <div class="ft"><span>Finder</span><span class="sp">13 分钟前</span></div>
+              </div>
+              <div class="g-card">
+                <div class="hd"><span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></span></div>
+                <div class="ttl">会议纪要片段</div>
+                <div class="desc">多显示器回退、恢复模式只读与 diagnostics export 字段映射。</div>
+                <div class="ft"><span>Notes</span><span class="sp">27 分钟前</span></div>
+              </div>
+              <div class="g-card">
+                <div class="hd"><span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></span></div>
+                <div class="ttl">接口地址</div>
+                <div class="desc mono">http://localhost:1420/panel.html</div>
+                <div class="ft"><span>Warp</span><span class="sp">昨天</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 多选 -->
+      <div>
+        <div class="win-label"><b>多选批量</b>底部操作栏</div>
+        <div class="win main-win" style="height:330px">
+          <div class="main-side">
+            <div class="top"><span class="qp-logo" style="width:21px;height:21px;border-radius:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:12px;height:12px"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></span><span class="brand">SuperClip</span></div>
+            <div class="side-cap">历史</div>
+            <div class="side-item on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12.83 2.18 8.36 4.18a1 1 0 0 1 0 1.79l-8.36 4.18a2 2 0 0 1-1.66 0L2.81 8.15a1 1 0 0 1 0-1.79l8.36-4.18a2 2 0 0 1 1.66 0Z"/><path d="m22 12.5-9.17 4.58a2 2 0 0 1-1.66 0L2 12.5"/></svg>全部记录<span class="tail">428</span></div>
+            <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>已置顶<span class="tail">12</span></div>
+            <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>回收站<span class="tail">3</span></div>
+          </div>
+          <div class="main-bd">
+            <div class="dragstrip"><div class="traffic"><i></i><i></i><i></i></div></div>
+            <div class="main-hd" style="padding-bottom:10px">
+              <div class="row">
+                <div><h2>全部记录</h2><div class="sub">已选择 <b style="color:var(--accent-text)">3</b> 条 · ⌘A 全选</div></div>
+              </div>
+            </div>
+            <div class="list">
+              <div class="l-row" style="background:var(--bg-selected)">
+                <span class="cbox on"></span>
+                <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></span>
+                <span class="tx"><span class="t1"><span class="tt">发布命令片段</span></span><span class="t2">npm run tauri dev -- --no-watch…</span></span>
+                <span class="app">Warp</span><span class="tm">刚刚</span>
+              </div>
+              <div class="l-row" style="background:var(--bg-selected)">
+                <span class="cbox on"></span>
+                <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v6h6"/></svg></span>
+                <span class="tx"><span class="t1"><span class="tt">客户邮件摘要</span></span><span class="t2">本周只交付本地壳体、搜索路径…</span></span>
+                <span class="app">Mail</span><span class="tm">2 分钟前</span>
+              </div>
+              <div class="l-row" style="background:var(--bg-selected)">
+                <span class="cbox on"></span>
+                <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.35-4.35L6 21"/></svg></span>
+                <span class="tx"><span class="t1"><span class="tt">发布预览截图</span></span><span class="t2">标准双栏 popover 预览图…</span></span>
+                <span class="app">Figma</span><span class="tm">8 分钟前</span>
+              </div>
+              <div class="l-row">
+                <span class="cbox"></span>
+                <span class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v6h6"/></svg></span>
+                <span class="tx"><span class="t1"><span class="tt">交付清单.pdf</span></span><span class="t2">包含 P0 风险关闭门…</span></span>
+                <span class="app">Finder</span><span class="tm">13 分钟前</span>
+              </div>
+            </div>
+            <div class="bulk">
+              <span class="cnt">已选择 <b>3</b> 条</span>
+              <span style="font-size:11.5px;color:var(--accent-text);border-bottom:1px solid rgba(10,132,255,.4)">全选 428 条</span>
+              <span style="margin-left:auto;display:flex;gap:7px">
+                <span class="btn outline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>复制</span>
+                <span class="btn outline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>置顶</span>
+                <span class="btn danger-solid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>删除</span>
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="hint">批量栏用强调色淡底 + 强调色描边，与内容区形成层级；删除用实心红强调危险。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 5 · Main 回收站 ==================== -->
+<div class="sec">
+  <div class="sec-hd">
+    <h2>Main · 回收站</h2>
+    <span class="tag">新增表面</span>
+    <span class="note">后端 clipboard_trash / restore / clear 已实现，前端此前零引用</span>
+  </div>
+
+  <div style="display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap">
+    <div>
+      <div class="win-label"><b>回收站列表</b></div>
+      <div class="win main-win" style="height:520px">
+        <div class="main-side">
+          <div class="top"><span class="qp-logo" style="width:21px;height:21px;border-radius:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:12px;height:12px"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></span><span class="brand">SuperClip</span></div>
+          <div class="side-cap">历史</div>
+          <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12.83 2.18 8.36 4.18a1 1 0 0 1 0 1.79l-8.36 4.18a2 2 0 0 1-1.66 0L2.81 8.15a1 1 0 0 1 0-1.79l8.36-4.18a2 2 0 0 1 1.66 0Z"/><path d="m22 12.5-9.17 4.58a2 2 0 0 1-1.66 0L2 12.5"/></svg>全部记录<span class="tail">428</span></div>
+          <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg>已置顶<span class="tail">12</span></div>
+          <div class="side-item on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>回收站<span class="tail">3</span></div>
+          <div class="side-cap">管理</div>
+          <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z"/><path d="m2 2 20 20"/></svg>排除规则<span class="tail">4</span></div>
+          <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2Z"/></svg>设置</div>
+        </div>
+        <div class="main-bd">
+          <div class="dragstrip"><div class="traffic"><i></i><i></i><i></i></div></div>
+          <div class="main-hd">
+            <div class="row">
+              <div><h2>回收站</h2><div class="sub">3 条记录 · 30 天后自动清空</div></div>
+              <div class="ac">
+                <span class="btn ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>全部恢复</span>
+                <span class="btn outline" style="color:var(--danger);border-color:rgba(255,69,58,.35)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>清空回收站</span>
+              </div>
+            </div>
+          </div>
+          <div style="flex:1;padding:0 20px 18px;overflow:hidden">
+            <div class="panel">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th style="width:40px"></th>
+                    <th>内容</th>
+                    <th style="width:110px">来源</th>
+                    <th style="width:100px">删除时间</th>
+                    <th style="width:84px">剩余</th>
+                    <th style="width:44px"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td><span class="cbox on"></span></td><td class="strong">发布命令片段</td><td>Warp</td><td>3 分钟前</td><td>29 天</td><td style="color:var(--text-tertiary)">⋯</td></tr>
+                  <tr><td><span class="cbox"></span></td><td class="strong">旧版交付说明.md</td><td>Finder</td><td>昨天</td><td>28 天</td><td style="color:var(--text-tertiary)">⋯</td></tr>
+                  <tr class="on"><td><span class="cbox on"></span></td><td class="strong">临时截图_2026.png</td><td>Figma</td><td>2 天前</td><td>27 天</td><td style="color:var(--text-tertiary)">⋯</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div style="margin-top:14px;padding:11px 13px;border:1px solid var(--border);border-radius:10px;display:flex;gap:9px;align-items:flex-start">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;color:var(--text-tertiary);flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              <span style="font-size:11.5px;color:var(--text-tertiary);line-height:1.65">回收站记录保留 30 天。恢复后回到原位置与置顶状态；清空后无法找回。<b style="color:var(--text-secondary)">已排除的敏感内容不会被回收站留存。</b></span>
+            </div>
+            <div style="margin-top:14px;display:flex;align-items:center;gap:8px">
+              <span class="btn primary">恢复所选</span>
+              <span class="btn outline" style="color:var(--danger);border-color:rgba(255,69,58,.35)">彻底删除所选</span>
+              <span style="margin-left:auto;font-size:11.5px;color:var(--text-tertiary)">已选择 2 条</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="hint">回收站是本次新增的唯一功能表面。数据层无需改动，只需接通三个已有命令。</div>
+    </div>
+
+    <!-- Main 设置页 -->
+    <div class="col">
+      <div>
+        <div class="win-label"><b>设置 · 通用</b>复用 Main 框架，左栏换 5 项</div>
+        <div class="win main-win" style="height:620px">
+          <div class="main-side">
+            <div style="padding:2px 8px 10px;display:flex;align-items:center;gap:7px">
+              <span style="width:20px;height:20px;border-radius:6px;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" style="width:11px;height:11px;color:var(--text-secondary)"><path d="m15 18-6-6 6-6"/></svg>
+              </span>
+              <span style="font-size:12.5px;color:var(--text-secondary)">返回历史</span>
+            </div>
+            <div class="side-cap" style="padding-top:2px">设置</div>
+            <div class="side-item on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 4H14M10 4H3M21 12h-7M10 12H3M21 20h-7M10 20H3"/><circle cx="12" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="12" cy="20" r="2"/></svg>通用</div>
+            <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>快捷键</div>
+            <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1Z"/><path d="m2 2 20 20"/></svg>排除规则</div>
+            <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>高级</div>
+            <div class="side-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>关于</div>
+          </div>
+          <div class="main-bd">
+            <div class="dragstrip"><div class="traffic"><i></i><i></i><i></i></div></div>
+            <div class="main-hd" style="padding-bottom:14px">
+              <h2>通用</h2>
+              <div class="sub">外观、保留上限与默认行为</div>
+            </div>
+            <div style="flex:1;padding:0 20px 18px;overflow:hidden;display:flex;flex-direction:column;gap:11px">
+              <div class="panel">
+                <div class="panel-hd"><span class="pt">外观</span></div>
+                <div class="panel-bd">
+                  <div class="set-row">
+                    <span class="lb"><span class="t">主题</span></span>
+                    <span class="seg"><span>浅色</span><span class="on">深色</span><span>跟随系统</span></span>
+                  </div>
+                  <div class="set-row">
+                    <span class="lb"><span class="t">列表字体大小</span><span class="d">影响列表标题与预览字号，行高随之变化</span></span>
+                    <span class="slider"><span class="fill" style="width:44%"></span><span class="knob" style="left:44%"></span></span>
+                    <span class="slider-val">13 px</span>
+                  </div>
+                  <div class="set-row">
+                    <span class="lb"><span class="t">历史保留上限</span><span class="d">超出上限时自动清理最早的记录（置顶项保留）</span></span>
+                    <span class="slider"><span class="fill" style="width:60%"></span><span class="knob" style="left:60%"></span></span>
+                    <span class="slider-val">1000 条</span>
+                  </div>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-hd"><span class="pt">行为</span></div>
+                <div class="panel-bd">
+                  <div class="set-row">
+                    <span class="lb"><span class="t">默认动作</span><span class="d">按 ↵ 执行默认动作，⌥↵ 执行另一个</span></span>
+                    <span class="seg"><span class="on">直接粘贴</span><span>仅复制</span></span>
+                  </div>
+                  <div class="set-row">
+                    <span class="lb"><span class="t">开机自动启动</span><span class="d">登录后自动运行并开始记录</span></span>
+                    <span class="switch on"></span>
+                  </div>
+                  <div class="set-row">
+                    <span class="lb"><span class="t">启动时显示主窗口</span><span class="d">关闭时仅驻留菜单栏</span></span>
+                    <span class="switch"></span>
+                  </div>
+                </div>
+              </div>
+              <div style="padding:10px 13px;border-radius:10px;background:var(--bg-elevated);display:flex;gap:9px;align-items:center;font-size:11.5px;color:var(--text-tertiary)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                修改后立即生效，并同步到所有窗口与菜单栏面板。
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="hint">设置分区从 4 项扩为 5 项（拆出「关于」）。一行一设置：标题/说明在左，控件右对齐。</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 6 · 配色对照 ==================== -->
+<div class="sec">
+  <div class="sec-hd">
+    <h2>配色系统</h2>
+    <span class="tag">改动核心</span>
+    <span class="note">类型色 4 → 0</span>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:34px;max-width:1100px">
+    <div>
+      <div class="win-label"><b>改动前</b>4 个类型色同时出现</div>
+      <div class="win" style="padding:16px">
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <div class="row" style="gap:9px">
+            <span class="thumb" style="width:26px;height:26px;background:rgba(56,189,248,.16);color:#38bdf8"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></span>
+            <span style="font-size:12.5px;color:var(--text-secondary)">文本 · <span class="mono" style="color:#38bdf8">#38bdf8</span></span>
+          </div>
+          <div class="row" style="gap:9px">
+            <span class="thumb" style="width:26px;height:26px;background:rgba(251,113,133,.16);color:#fb7185"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.35-4.35L6 21"/></svg></span>
+            <span style="font-size:12.5px;color:var(--text-secondary)">图片 · <span class="mono" style="color:#fb7185">#fb7185</span></span>
+          </div>
+          <div class="row" style="gap:9px">
+            <span class="thumb" style="width:26px;height:26px;background:rgba(96,165,250,.16);color:#60a5fa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v6h6"/></svg></span>
+            <span style="font-size:12.5px;color:var(--text-secondary)">文件 · <span class="mono" style="color:#60a5fa">#60a5fa</span></span>
+          </div>
+          <div class="row" style="gap:9px">
+            <span class="thumb" style="width:26px;height:26px;background:rgba(167,139,250,.16);color:#a78bfa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></span>
+            <span style="font-size:12.5px;color:var(--text-secondary)">HTML · <span class="mono" style="color:#a78bfa">#a78bfa</span></span>
+          </div>
+        </div>
+        <div class="hint">4 种彩色图标同时出现 → 视觉噪声。强调色与类型色都是蓝色系，无法区分「选中」与「类型」。</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="win-label"><b>改动后</b>中性灰 + 只留 1 个强调色</div>
+      <div class="win" style="padding:16px">
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <div class="row" style="gap:9px">
+            <span class="thumb" style="width:26px;height:26px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></span>
+            <span style="font-size:12.5px;color:var(--text-secondary)">文本 · <span class="mono">var(--icon-idle)</span></span>
+          </div>
+          <div class="row" style="gap:9px">
+            <span class="thumb" style="width:26px;height:26px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-4.35-4.35L6 21"/></svg></span>
+            <span style="font-size:12.5px;color:var(--text-secondary)">图片 · 同上（真实缩略图替代图标）</span>
+          </div>
+          <div class="row" style="gap:9px">
+            <span class="thumb" style="width:26px;height:26px;background:var(--accent-soft);color:var(--accent-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></span>
+            <span style="font-size:12.5px;color:var(--text-secondary)">选中态 · <span class="mono" style="color:var(--accent-text)">var(--accent-soft)</span></span>
+          </div>
+          <div class="row" style="gap:9px">
+            <span class="thumb" style="width:26px;height:26px;background:rgba(255,159,10,.15);color:var(--warn)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg></span>
+            <span style="font-size:12.5px;color:var(--text-secondary)">置顶 · <span class="mono" style="color:var(--warn)">var(--warn)</span>（唯一保留的语义色）</span>
+          </div>
+        </div>
+        <div class="hint">中性灰图标让内容成为主角；只有「选中 / 置顶 / 危险」三种语义用色，扫读成本大幅下降。</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:30px;display:flex;gap:11px;flex-wrap:wrap">
+    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;width:150px">
+      <div style="height:62px;background:var(--accent)"></div>
+      <div style="padding:9px 11px"><div style="font-size:11.5px;font-weight:600">强调</div><div class="mono" style="font-size:10.5px;color:var(--text-tertiary);margin-top:3px">--accent</div></div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;width:150px">
+      <div style="height:62px;background:var(--warn)"></div>
+      <div style="padding:9px 11px"><div style="font-size:11.5px;font-weight:600">置顶 / 降级</div><div class="mono" style="font-size:10.5px;color:var(--text-tertiary);margin-top:3px">--warn</div></div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;width:150px">
+      <div style="height:62px;background:var(--danger)"></div>
+      <div style="padding:9px 11px"><div style="font-size:11.5px;font-weight:600">危险 / 退出</div><div class="mono" style="font-size:10.5px;color:var(--text-tertiary);margin-top:3px">--danger</div></div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;width:150px">
+      <div style="height:62px;background:var(--success)"></div>
+      <div style="padding:9px 11px"><div style="font-size:11.5px;font-weight:600">监听中</div><div class="mono" style="font-size:10.5px;color:var(--text-tertiary);margin-top:3px">--success</div></div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;width:150px">
+      <div style="height:62px;background:var(--bg-window-solid);border-bottom:1px solid var(--border)"></div>
+      <div style="padding:9px 11px"><div style="font-size:11.5px;font-weight:600">窗口底</div><div class="mono" style="font-size:10.5px;color:var(--text-tertiary);margin-top:3px">--bg-window</div></div>
+    </div>
+    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;width:150px">
+      <div style="height:62px;background:var(--icon-idle)"></div>
+      <div style="padding:9px 11px"><div style="font-size:11.5px;font-weight:600">图标中性</div><div class="mono" style="font-size:10.5px;color:var(--text-tertiary);margin-top:3px">--icon-idle</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll(".theme-switch button").forEach((b) => {
+  b.addEventListener("click", () => {
+    document.documentElement.dataset.theme = b.dataset.t;
+    document.querySelectorAll(".theme-switch button").forEach((x) => x.classList.toggle("on", x === b));
+  });
+});
+</script>
+</body>
+</html>
