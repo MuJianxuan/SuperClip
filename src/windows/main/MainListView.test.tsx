@@ -32,11 +32,20 @@ describe("MainListView", () => {
     expect(screen.getByText("Screenshot")).toBeInTheDocument();
   });
 
-  it("groups items by 今天/昨天/更早 based on time label", () => {
+  it("groups items by 已置顶/今天/更早（置顶单独成组，避免重复组头）", () => {
     render(<MainListView {...defaultProps} />);
+    expect(screen.getByText("已置顶")).toBeInTheDocument();
     expect(screen.getByText("今天")).toBeInTheDocument();
-    expect(screen.getByText("昨天")).toBeInTheDocument();
     expect(screen.getByText("更早")).toBeInTheDocument();
+  });
+
+  it("不产生重复的时间组头（置顶项排在前面也不再切回更早）", () => {
+    render(<MainListView {...defaultProps} />);
+    // mockItems 顺序：3 分钟前(false) / 1 天前(true) / 3 天前(false)
+    // 修复前会渲染 今天 → 昨天 → 更早；修复后置顶项归入「已置顶」，每个组头只出现一次
+    expect(screen.getAllByText("今天")).toHaveLength(1);
+    expect(screen.getAllByText("更早")).toHaveLength(1);
+    expect(screen.queryByText("昨天")).not.toBeInTheDocument();
   });
 
   it("renders source app and time", () => {

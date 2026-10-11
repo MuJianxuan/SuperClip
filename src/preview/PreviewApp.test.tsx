@@ -78,10 +78,91 @@ describe("PreviewApp", () => {
     expect(screen.getByText(/来自/)).toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
 
-    // Footer：Clock 图标 + 「来自 · App」单行
-    const clock = container.querySelector(".lucide-clock");
-    expect(clock).not.toBeNull();
-    expect(container.textContent).toContain("来自 · Terminal");
+    // Footer：来源 App 头像首字母 + 「来自 App」+ 元信息
+    expect(screen.getByTestId("preview-source-avatar")).toHaveTextContent("T");
+    expect(container.textContent).toContain("来自 Terminal");
+  });
+
+  it("renders footer metadata: size / char count / use count", async () => {
+    // 字符数只在全量 payload（detail）就绪后统计：item.preview 是截断预览，
+    // 拿它计数会先小后跳（R2-14）
+    const invoke = (await import("@tauri-apps/api/core")).invoke as ReturnType<typeof vi.fn>;
+    // invokeOrFallback 传的是后端命令名 clipboard_get（superclip.ts COMMANDS 映射）
+    invoke.mockImplementation((cmd: string) =>
+      cmd === "clipboard_get"
+        ? Promise.resolve({
+            item: baseItem({ preview: "hello world", useCount: 6, payloadSizeBytes: 1229 }),
+            payload: { textPlain: "hello world" },
+            version: 1,
+          })
+        : Promise.resolve(null),
+    );
+    render(<PreviewApp />);
+    await vi.waitFor(() => expect(listenHandler).not.toBeNull());
+
+    emitShow(
+      baseItem({
+        preview: "hello world",
+        useCount: 6,
+        payloadSizeBytes: 1229,
+      }),
+    );
+
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("preview-meta-size")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("preview-meta-size")).toHaveTextContent("1.2 KB");
+    expect(screen.getByTestId("preview-meta-chars")).toHaveTextContent("11 字符");
+    expect(screen.getByTestId("preview-meta-uses")).toHaveTextContent("复制过 6 次");
+    // 恢复模块级 mock，避免 impl 泄漏到后续用例（beforeEach 只 clear 调用记录不重置 impl）
+    invoke.mockResolvedValue(null);
+  });
+
+  it("hide 使用次数为 0 / 体积缺失时的元信息胶囊", async () => {
+    render(<PreviewApp />);
+    await vi.waitFor(() => expect(listenHandler).not.toBeNull());
+
+    emitShow(baseItem({ preview: "plain", useCount: 0, payloadSizeBytes: 0 }));
+
+    await vi.waitFor(() =>
+      expect(screen.getByText("plain")).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId("preview-meta-size")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("preview-meta-uses")).not.toBeInTheDocument();
+  });
+
+  it("图片类型不显示字符数，但仍显示体积与使用次数", async () => {
+    render(<PreviewApp />);
+    await vi.waitFor(() => expect(listenHandler).not.toBeNull());
+
+    emitShow(
+      baseItem({
+        id: "clip-img-meta",
+        kind: "image",
+        title: "Screenshot",
+        preview: "",
+        meta: "2560 × 1600 PNG",
+        useCount: 2,
+        payloadSizeBytes: 862208,
+      }),
+    );
+
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("preview-meta-size")).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("preview-meta-size")).toHaveTextContent("842.0 KB");
+    expect(screen.queryByTestId("preview-meta-chars")).not.toBeInTheDocument();
+    expect(screen.getByTestId("preview-meta-uses")).toHaveTextContent("复制过 2 次");
+  });
+
+  it("header 展示只读预览标识", async () => {
+    render(<PreviewApp />);
+    await vi.waitFor(() => expect(listenHandler).not.toBeNull());
+    emitShow(baseItem());
+    await vi.waitFor(() =>
+      expect(screen.getByText("Preview content here")).toBeInTheDocument(),
+    );
+    expect(screen.getByText("只读预览")).toBeInTheDocument();
   });
 
   it("renders code block distinctly with language line stripped", async () => {

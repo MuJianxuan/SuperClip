@@ -49,10 +49,11 @@ describe("QuickPanelApp", () => {
     vi.clearAllMocks();
   });
 
-  it("renders monitoring status in footer bar without brand text", async () => {
+  it("renders brand header with live status pill", async () => {
     render(<QuickPanelApp />);
-    expect(screen.queryByText("SuperClip")).not.toBeInTheDocument();
-    expect(await screen.findByText("监听中")).toBeInTheDocument();
+    expect(await screen.findByText("SuperClip")).toBeInTheDocument();
+    expect(screen.getByTestId("panel-status-pill")).toHaveTextContent("监听中");
+    expect(screen.getByTestId("panel-status-pill")).not.toHaveAttribute("data-paused");
   });
 
   it("loads paste mode from settings on mount", async () => {
@@ -67,7 +68,10 @@ describe("QuickPanelApp", () => {
     const toggleButton = await screen.findByRole("button", { name: /暂停监听/ });
     fireEvent.click(toggleButton);
     expect(monitorToggle).toHaveBeenCalledWith(false);
-    expect(await screen.findByText("已暂停")).toBeInTheDocument();
+    // 暂停态：头部胶囊变描边样式，首项变「恢复监听」
+    const pill = await screen.findByTestId("panel-status-pill");
+    expect(pill).toHaveTextContent("已暂停");
+    expect(pill).toHaveAttribute("data-paused");
     expect(screen.getByRole("button", { name: /恢复监听/ })).toBeInTheDocument();
   });
 
@@ -78,22 +82,22 @@ describe("QuickPanelApp", () => {
     expect(screen.getByText("仅复制到剪贴板，需手动粘贴")).toBeInTheDocument();
   });
 
-  it("renders three theme options with active state from settings", async () => {
+  it("移到设置页的主题切换不再出现在面板（D8 移出外观分组）", async () => {
     render(<QuickPanelApp />);
-    await screen.findByText("监听中");
-    // settingsGet mock 返回 themeMode: "system" → 「跟随系统」为激活态
-    expect(screen.getByRole("button", { name: /跟随系统/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /浅色/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /深色/ })).toBeInTheDocument();
+    await screen.findByText("SuperClip");
+    expect(screen.queryByText("外观")).not.toBeInTheDocument();
+    expect(screen.queryByText("跟随系统")).not.toBeInTheDocument();
+    expect(screen.queryByText("浅色")).not.toBeInTheDocument();
+    expect(screen.queryByText("深色")).not.toBeInTheDocument();
   });
 
-  it("switches theme via segmented control and persists", async () => {
-    render(<QuickPanelApp />);
-    await screen.findByText("监听中");
-    fireEvent.click(screen.getByRole("button", { name: /深色/ }));
-    expect(settingsUpdate).toHaveBeenCalledWith({ themeMode: "dark" });
-    // 非 system 模式直接写入 data-theme-mode（不依赖 systemAppearanceGet）
-    expect(document.documentElement.dataset.themeMode).toBe("dark");
+  it("底部不再有独立状态栏（状态已上移到头部胶囊）", async () => {
+    const { container } = render(<QuickPanelApp />);
+    await screen.findByText("SuperClip");
+    const footers = Array.from(container.querySelectorAll("div")).filter((el) =>
+      el.className.includes("h-[35px]"),
+    );
+    expect(footers.length).toBe(0);
   });
 
   it("opens main window", async () => {

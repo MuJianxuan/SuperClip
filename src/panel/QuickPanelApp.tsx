@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pause, Play, ExternalLink, Settings2, LogOut, Monitor, Sun, Moon } from "lucide-react";
+import { Pause, Play, ExternalLink, Settings2, LogOut, ClipboardList } from "lucide-react";
 import {
   appQuit,
   monitorStatusGet,
@@ -14,9 +14,10 @@ import {
 } from "../lib/superclip";
 
 /* ================================================================
-   Quick Control Panel (D2) — Tray 右键唤起的 300px 高频控制面板（与 popup 统一尺寸）
+   Quick Control Panel (D8) — Tray 右键唤起的 248×400 高频控制面板
 
    固定功能：暂停/恢复监听、默认粘贴模式、打开 Main/Settings、退出。
+   外观主题改由 Main → 设置 → 通用 承载（本面板不再放主题切换，避免底部溢出与职责重叠）。
    交互铁律：hover/选中一律由 React state 驱动，禁止直接改 DOM style。
    ================================================================ */
 
@@ -31,15 +32,6 @@ const PASTE_MODE_DESC: Record<PasteMode, string> = {
   direct_paste: "选中条目后自动粘贴到前台应用",
   copy_only: "仅复制到剪贴板，需手动粘贴",
 };
-
-type ThemeMode = SettingsResponse["themeMode"];
-
-/** 主题快捷切换选项：与 settings-shell 的 ThemeSegButton 同语言（图标 + 文字） */
-const THEME_OPTIONS: { value: ThemeMode; label: string; icon: React.ReactNode }[] = [
-  { value: "system", label: "跟随系统", icon: <Monitor size={13} /> },
-  { value: "light", label: "浅色", icon: <Sun size={13} /> },
-  { value: "dark", label: "深色", icon: <Moon size={13} /> },
-];
 
 /** 三模式主题同步：浅/深/跟随系统。panel 窗口不能用 matchMedia 推断 system 模式——
  * WKWebView 的 prefers-color-scheme 在窗口被 Rust 侧 setAppearance 锁定后停止跟随
@@ -65,7 +57,6 @@ function applyThemeMode(mode: string) {
 export function QuickPanelApp() {
   const [isMonitoring, setIsMonitoring] = useState(true);
   const [pasteMode, setPasteMode] = useState<PasteMode>("direct_paste");
-  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
 
   // 初始状态：监听状态 + 默认粘贴模式
   useEffect(() => {
@@ -75,7 +66,6 @@ export function QuickPanelApp() {
         if (disposed) return;
         setIsMonitoring(monitor.isMonitoring);
         setPasteMode(settings.defaultAction);
-        setThemeMode(settings.themeMode ?? "system");
       })
       .catch(() => {})
       .finally(() => {
@@ -131,7 +121,6 @@ export function QuickPanelApp() {
   useEffect(() => {
     settingsGet().then((s) => {
       applyThemeMode(s?.themeMode ?? "system");
-      setThemeMode(s?.themeMode ?? "system");
       setPasteMode(s?.defaultAction ?? "direct_paste");
     }).catch(() => applyThemeMode("system"));
 
@@ -148,7 +137,6 @@ export function QuickPanelApp() {
               if (disposed) return;
               if (event.payload.theme_mode) {
                 applyThemeMode(event.payload.theme_mode);
-                setThemeMode(event.payload.theme_mode as ThemeMode);
               }
               if (event.payload.default_action) setPasteMode(event.payload.default_action);
             },
@@ -194,13 +182,6 @@ export function QuickPanelApp() {
     void settingsUpdate({ defaultAction: mode }).catch(() => {});
   }, []);
 
-  const handleThemeModeChange = useCallback((mode: ThemeMode) => {
-    // 本地立即生效（不等 settings-updated 广播回环），后端持久化后广播给其他窗口
-    setThemeMode(mode);
-    applyThemeMode(mode);
-    void settingsUpdate({ themeMode: mode }).catch(() => {});
-  }, []);
-
   const handleOpenMain = useCallback(() => {
     void showMain().catch(() => {});
     // 与 handleOpenSettings 的 app:show-settings 对称：主窗口可能停留在设置分区，
@@ -226,7 +207,7 @@ export function QuickPanelApp() {
       className="quick-panel-shell frost-window"
       style={{
         /* 铺满整个窗口（对齐 popup 的 h-screen w-screen 模式）：
-           内容高度与窗口 280x420 一致，任何亚像素差异都由本层覆盖，
+           内容高度与窗口 248x400 一致，任何亚像素差异都由本层覆盖，
            不露出未填充区域 */
         width: "100vw",
         height: "100vh",
@@ -242,149 +223,133 @@ export function QuickPanelApp() {
         animation: "panelPopIn 0.16s ease-out",
       }}
     >
-      <div style={{ padding: "2px 10px 8px", flex: 1 }}>
-        {/* Group: 监听控制 */}
-        <GroupLabel text="监听" />
+      {/* 头部：品牌 + 状态胶囊（监听中 = 实心点；暂停 = 描边胶囊） */}
+      <div className="flex shrink-0 items-center gap-2 px-3 pb-2.5 pt-3">
+        <span
+          className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-[6px]"
+          style={{ background: "var(--accent)", color: "var(--accent-contrast)" }}
+        >
+          <ClipboardList size={11} />
+        </span>
+        <span className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>
+          SuperClip
+        </span>
+        <span
+          data-testid="panel-status-pill"
+          data-paused={!isMonitoring || undefined}
+          className="ml-auto inline-flex h-[19px] items-center gap-[5px] rounded-[10px] px-2 text-[10.5px]"
+          style={{
+            background: isMonitoring ? "var(--bg-elevated, var(--surface-2))" : "transparent",
+            border: isMonitoring ? "1px solid transparent" : "1px solid var(--border-strong)",
+            color: "var(--text-secondary)",
+          }}
+        >
+          <span
+            style={{
+              width: isMonitoring ? 5 : 6,
+              height: isMonitoring ? 5 : 6,
+              borderRadius: "50%",
+              background: isMonitoring ? "var(--success)" : "transparent",
+              border: isMonitoring ? "none" : "1.5px solid var(--text-tertiary)",
+            }}
+          />
+          {isMonitoring ? "监听中" : "已暂停"}
+        </span>
+      </div>
+
+      <div className="h-px shrink-0" style={{ background: "var(--divider)" }} />
+
+      {/* 操作区（内容精确排布到 400 高，底部不再裁切） */}
+      <div className="flex min-h-0 flex-1 flex-col px-2.5 pb-2 pt-1">
         <MenuButton
           icon={
             <IconBox
               bg={
                 isMonitoring
-                  ? "rgba(52, 211, 153, 0.1)"
-                  : "rgba(251, 146, 60, 0.1)"
+                  ? "color-mix(in srgb, var(--success) 10%, transparent)"
+                  : "color-mix(in srgb, var(--accent) 12%, transparent)"
               }
-              color={isMonitoring ? "#34d399" : "#fb923c"}
+              color={isMonitoring ? "var(--success)" : "var(--accent-text)"}
             >
               {isMonitoring ? <Pause size={13} /> : <Play size={13} />}
             </IconBox>
           }
           label={isMonitoring ? "暂停监听" : "恢复监听"}
-          desc={isMonitoring ? "停止记录新内容" : "重新开始记录剪贴板"}
+          desc={isMonitoring ? "停止记录新内容" : "继续记录复制内容"}
+          highlight={!isMonitoring}
           onClick={handleToggleMonitoring}
         />
 
-        {/* Group: 粘贴行为 */}
-        <Divider />
-        <GroupLabel text="粘贴模式" />
-        <div style={{ padding: "4px 8px 0" }}>
-          <div style={{ display: "flex", gap: 4 }}>
-            {(["direct_paste", "copy_only"] as PasteMode[]).map((mode) => {
-              const isActive = pasteMode === mode;
-              return (
-                <SegButton
-                  key={mode}
-                  isActive={isActive}
-                  onClick={() => handlePasteModeChange(mode)}
-                >
-                  {PASTE_MODE_LABELS[mode]}
-                </SegButton>
-              );
-            })}
-          </div>
-          <p
-            style={{
-              fontSize: 10,
-              color: "var(--panel-faint-text)",
-              margin: "3px 0 0",
-              lineHeight: 1.4,
-              paddingLeft: 2,
-            }}
-          >
-            {PASTE_MODE_DESC[pasteMode]}
-          </p>
-        </div>
+        <div className="h-px" style={{ background: "var(--divider)" }} />
 
-        {/* Group: 外观（主题快捷切换；settings-updated 广播后 Main/popup/preview 实时同步） */}
-        <Divider />
-        <GroupLabel text="外观" />
-        <div style={{ padding: "2px 8px 0" }}>
-          <div style={{ display: "flex", gap: 4 }}>
-            {THEME_OPTIONS.map((option) => {
-              const isActive = themeMode === option.value;
-              return (
-                <SegButton
-                  key={option.value}
-                  isActive={isActive}
-                  icon={option.icon}
-                  onClick={() => handleThemeModeChange(option.value)}
-                >
-                  {option.label}
-                </SegButton>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Group: 导航 */}
-        <Divider />
-        <GroupLabel text="打开" />
         <MenuButton
           icon={<IconBox>{<ExternalLink size={13} />}</IconBox>}
-          label="主管理台"
+          label="打开主管理台"
+          desc="浏览、搜索与批量整理"
           shortcut="⌘M"
           onClick={handleOpenMain}
         />
         <MenuButton
           icon={<IconBox>{<Settings2 size={13} />}</IconBox>}
           label="设置"
+          desc="快捷键、排除规则与外观"
           shortcut="⌘,"
           onClick={handleOpenSettings}
         />
 
-        {/* 退出（无分组标题：底部独立项，Divider 隔离——macOS 菜单惯例，为面板内容高度腾出余量） */}
-        <Divider />
-        <MenuButton
-          icon={
-            <IconBox bg="rgba(239, 68, 68, 0.08)" color="rgba(239, 68, 68, 0.55)">
-              <LogOut size={13} />
-            </IconBox>
-          }
-          label="退出 SuperClip"
-          shortcut="⌘Q"
-          danger
-          onClick={handleQuit}
-        />
-      </div>
+        <div className="h-px" style={{ background: "var(--divider)" }} />
 
-      {/* 底部状态栏（popup 底部栏同尺寸同风格：h-35 + footer-border 分隔线） */}
-      <div
-        style={{
-          height: 35,
-          flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 12px 2px",
-          borderTop: "1px solid var(--footer-border)",
-        }}
-      >
-        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <span
+        {/* 默认动作分段（一行说明跟随） */}
+        <div className="px-2 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-[0.08em]" style={{ color: "var(--panel-group-label)" }}>
+          默认动作
+        </div>
+        <div className="flex gap-1 px-2">
+          {(["direct_paste", "copy_only"] as PasteMode[]).map((mode) => (
+            <SegButton
+              key={mode}
+              isActive={pasteMode === mode}
+              onClick={() => handlePasteModeChange(mode)}
+            >
+              {PASTE_MODE_LABELS[mode]}
+            </SegButton>
+          ))}
+        </div>
+        <p
+          className="px-2 pb-1 pt-1.5 text-[10px] leading-[1.4]"
+          style={{ color: "var(--panel-faint-text)" }}
+        >
+          {PASTE_MODE_DESC[pasteMode]}
+        </p>
+
+        {/* 暂停态补充说明（只在暂停时出现，对齐设计稿的暂停态文案） */}
+        {!isMonitoring ? (
+          <p
+            data-testid="panel-paused-note"
+            className="mx-2 mt-1 rounded-[8px] px-2.5 py-2 text-[10px] leading-[1.5]"
             style={{
-              width: 5,
-              height: 5,
-              borderRadius: "50%",
-              background: isMonitoring ? "#34d399" : "#fb923c",
-              boxShadow: isMonitoring
-                ? "0 0 6px rgba(52,211,153,0.5)"
-                : "0 0 6px rgba(251,146,60,0.5)",
-            }}
-          />
-          <span
-            style={{
-              fontSize: 10,
-              fontWeight: 500,
-              color: isMonitoring
-                ? "var(--panel-status-on-text)"
-                : "var(--panel-status-off-text)",
+              background: "var(--bg-elevated, var(--panel-icon-bg))",
+              color: "var(--panel-faint-text)",
             }}
           >
-            {isMonitoring ? "监听中" : "已暂停"}
-          </span>
-        </span>
-        <span style={{ fontSize: 10, color: "var(--panel-faint-text)" }}>
-          ⎋ 关闭
-        </span>
+            暂停期间复制的内容不会被记录，已有历史不受影响。
+          </p>
+        ) : null}
+
+        {/* 退出（红色语义色，独立底部） */}
+        <div className="mt-auto">
+          <div className="h-px" style={{ background: "var(--divider)" }} />
+          <MenuButton
+            icon={
+              <IconBox bg="color-mix(in srgb, var(--danger) 8%, transparent)" color="color-mix(in srgb, var(--danger) 55%, transparent)">
+                <LogOut size={13} />
+              </IconBox>
+            }
+            label="退出 SuperClip"
+            shortcut="⌘Q"
+            danger
+            onClick={handleQuit}
+          />
+        </div>
       </div>
     </div>
   );
@@ -420,42 +385,13 @@ function IconBox({
   );
 }
 
-function GroupLabel({ text }: { text: string }) {
-  return (
-    <div style={{ padding: "4px 10px 1px" }}>
-      <span
-        style={{
-          fontSize: 10,
-          fontWeight: 600,
-          color: "var(--panel-group-label)",
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-        }}
-      >
-        {text}
-      </span>
-    </div>
-  );
-}
-
-function Divider() {
-  return (
-    <div
-      style={{
-        height: 1,
-        background: "var(--panel-divider)",
-        margin: "3px 0",
-      }}
-    />
-  );
-}
-
 function MenuButton({
   icon,
   label,
   desc,
   shortcut,
   danger,
+  highlight,
   onClick,
 }: {
   icon: React.ReactNode;
@@ -463,6 +399,8 @@ function MenuButton({
   desc?: string;
   shortcut?: string;
   danger?: boolean;
+  /** 需要引导注意的项（如暂停态的「恢复监听」）用浅底高亮 */
+  highlight?: boolean;
   onClick?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
@@ -482,11 +420,13 @@ function MenuButton({
         borderRadius: 9,
         background: danger
           ? hovered
-            ? "rgba(239, 68, 68, 0.07)"
+            ? "color-mix(in srgb, var(--danger) 7%, transparent)"
             : "transparent"
           : hovered
             ? "var(--panel-row-hover)"
-            : "transparent",
+            : highlight
+              ? "var(--bg-elevated, var(--panel-icon-bg))"
+              : "transparent",
         cursor: "pointer",
         textAlign: "left",
         transition: "all 0.1s ease",
@@ -500,11 +440,13 @@ function MenuButton({
             fontWeight: 500,
             color: danger
               ? hovered
-                ? "rgba(239, 68, 68, 0.85)"
-                : "rgba(239, 68, 68, 0.65)"
-              : hovered
-                ? "var(--panel-label-hover)"
-                : "var(--panel-label)",
+                ? "color-mix(in srgb, var(--danger) 85%, transparent)"
+                : "color-mix(in srgb, var(--danger) 65%, transparent)"
+              : highlight
+                ? "var(--accent-text)"
+                : hovered
+                  ? "var(--panel-label-hover)"
+                  : "var(--panel-label)",
             display: "block",
           }}
         >
@@ -565,10 +507,10 @@ function SegButton({
         padding: "6px 10px",
         borderRadius: 8,
         border: `1px solid ${
-          isActive ? "rgba(56, 189, 248, 0.22)" : "var(--panel-seg-border)"
+          isActive ? "color-mix(in srgb, var(--accent) 22%, transparent)" : "var(--panel-seg-border)"
         }`,
         background: isActive
-          ? "rgba(56, 189, 248, 0.08)"
+          ? "var(--accent-soft)"
           : hovered
             ? "var(--panel-seg-bg-hover)"
             : "var(--panel-seg-bg)",
@@ -587,7 +529,7 @@ function SegButton({
           lineHeight: 1,
           fontWeight: isActive ? 600 : 400,
           color: isActive
-            ? "rgba(56, 189, 248, 0.9)"
+            ? "var(--accent-text)"
             : hovered
               ? "var(--panel-seg-text-hover)"
               : "var(--panel-seg-text)",

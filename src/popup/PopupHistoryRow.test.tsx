@@ -26,6 +26,9 @@ function renderRow(overrides: Partial<typeof mockItem> = {}, props: Record<strin
       onClick={() => {}}
       onMouseEnter={() => {}}
       onMouseLeave={() => {}}
+      onPin={() => {}}
+      onDelete={() => {}}
+      onContextMenu={() => {}}
       {...props}
     />,
   );
@@ -41,6 +44,28 @@ describe("PopupHistoryRow", () => {
   it("renders time label", () => {
     renderRow();
     expect(screen.getByText("3s前")).toBeInTheDocument();
+  });
+
+  it("swaps the time label for pin/delete actions on hover", () => {
+    const { container } = renderRow();
+    expect(screen.queryByTestId("popup-row-actions")).not.toBeInTheDocument();
+    fireEvent.mouseEnter(container.querySelector("button")!);
+    expect(screen.getByTestId("popup-row-actions")).toBeInTheDocument();
+    expect(screen.getByLabelText("置顶")).toBeInTheDocument();
+    expect(screen.getByLabelText("删除")).toBeInTheDocument();
+  });
+
+  it("fires onPin / onDelete without selecting the row", () => {
+    const onPin = vi.fn();
+    const onDelete = vi.fn();
+    const onClick = vi.fn();
+    const { container } = renderRow({}, { onPin, onDelete, onClick });
+    fireEvent.mouseEnter(container.querySelector("button")!);
+    fireEvent.click(screen.getByLabelText("置顶"));
+    expect(onPin).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByLabelText("删除"));
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
   });
 
   it("shows amber star when pinned", () => {

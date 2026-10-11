@@ -2,6 +2,7 @@ import { memo, useMemo, useState } from "react";
 import { CheckSquare, Copy, Inbox, Pin, Square, Star, Trash2 } from "lucide-react";
 import type { ClipboardItem } from "../../components/history-row";
 import { KIND_META } from "./kind-meta";
+import { groupOf, TIME_GROUP_LABELS, TIME_GROUP_ORDER } from "../../lib/time-group";
 
 interface MainListViewProps {
   items: ClipboardItem[];
@@ -21,24 +22,11 @@ interface MainListViewProps {
   onRowLeave: () => void;
 }
 
-type GroupId = "today" | "yesterday" | "earlier";
+/* 分组口径统一在 lib/time-group.ts（Popup 与 Main 共用），置顶项单独成组 */
+const GROUP_ORDER = TIME_GROUP_ORDER;
+const GROUP_LABELS = TIME_GROUP_LABELS;
 
-const GROUP_ORDER: GroupId[] = ["today", "yesterday", "earlier"];
-const GROUP_LABELS: Record<GroupId, string> = { today: "今天", yesterday: "昨天", earlier: "更早" };
-
-/**
- * 由后端生成的相对时间标签（刚刚 / X 分钟前 / X 小时前 / X 天前）推断日期分组。
- * 数据层不返回原始时间戳，此为确认设计「今天/昨天/更早」的近似实现。
- */
-export function groupOf(timeLabel: string): GroupId {
-  if (timeLabel.includes("分钟") || timeLabel.includes("小时") || timeLabel === "刚刚") {
-    return "today";
-  }
-  if (/^1 ?天前$/.test(timeLabel.trim())) {
-    return "yesterday";
-  }
-  return "earlier";
-}
+export { groupOf };
 
 export const MainListView = memo(function MainListView({
   items,
@@ -58,7 +46,7 @@ export const MainListView = memo(function MainListView({
   const grouped = useMemo(() => {
     return GROUP_ORDER.map((group) => ({
       group,
-      items: items.filter((item) => groupOf(item.timeLabel) === group),
+      items: items.filter((item) => groupOf(item.timeLabel, item.isPinned) === group),
     })).filter((entry) => entry.items.length > 0);
   }, [items]);
 
@@ -157,7 +145,7 @@ function Row({
         className="absolute left-0 top-1/2 w-[3px] -translate-y-1/2 rounded-r-full transition-all"
         style={{
           height: selected ? 20 : 0,
-          background: meta.color,
+          background: "var(--accent)",
           opacity: selected ? 0.85 : 0,
         }}
         aria-hidden="true"
@@ -174,7 +162,7 @@ function Row({
         className="flex h-4 w-[18px] shrink-0 items-center justify-center"
       >
         {checked ? (
-          <CheckSquare className="h-[13px] w-[13px]" style={{ color: "rgba(56,189,248,0.7)" }} />
+          <CheckSquare className="h-[13px] w-[13px]" style={{ color: "var(--accent-text)" }} />
         ) : (
           <Square
             className="h-[13px] w-[13px]"
@@ -187,8 +175,8 @@ function Row({
       <div
         className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors"
         style={{
-          background: selected ? `${meta.color}14` : "var(--icon-box-bg, var(--surface-2))",
-          color: selected ? meta.color : "var(--icon-box-text, var(--text-tertiary))",
+          background: selected ? "var(--accent-soft)" : "var(--icon-box-bg, var(--surface-2))",
+          color: selected ? "var(--accent-text)" : "var(--icon-box-text, var(--text-tertiary))",
         }}
       >
         <Icon className="h-3 w-3" />
@@ -209,7 +197,7 @@ function Row({
           {item.isPinned && (
             <Star
               className="h-[9px] w-[9px] shrink-0"
-              style={{ fill: "rgba(251,191,36,0.8)", color: "rgba(251,191,36,0.8)" }}
+              style={{ fill: "var(--pinned)", color: "var(--pinned)" }}
               aria-label="已置顶"
             />
           )}

@@ -96,10 +96,10 @@ describe("MainGridView", () => {
     });
   });
 
-  it("uses minmax(160px,1fr) grid template", () => {
+  it("uses a fixed 3-column grid template (D13)", () => {
     const { container } = render(<MainGridView {...defaultProps} />);
     const grid = container.querySelector('[data-testid="main-grid-view"]');
-    expect((grid as HTMLElement).style.gridTemplateColumns).toContain("minmax(160px, 1fr)");
+    expect((grid as HTMLElement).style.gridTemplateColumns).toBe("repeat(3, 1fr)");
   });
 
   it("calls onRowHover with item, rect and cursor coords on card mouse enter", () => {

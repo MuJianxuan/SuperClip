@@ -8,17 +8,16 @@ describe("MainTopBar", () => {
     query: "",
     onViewModeChange: vi.fn(),
     onQueryChange: vi.fn(),
-    onSettingsClick: vi.fn(),
   };
 
-  it("does not render app title text (search bar extends left)", () => {
+  it("renders the section title in the content header", () => {
     render(<MainTopBar {...defaultProps} />);
-    expect(screen.queryByText("剪贴板")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "全部记录" })).toBeInTheDocument();
   });
 
   it("renders search input", () => {
     render(<MainTopBar {...defaultProps} />);
-    expect(screen.getByPlaceholderText("搜索剪贴板...")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("搜索…")).toBeInTheDocument();
   });
 
   it("shows query value in search input", () => {
@@ -42,8 +41,8 @@ describe("MainTopBar", () => {
     expect(screen.getByTitle("网格视图")).toBeInTheDocument();
   });
 
-  it("renders settings button", () => {
+  it("设置入口已移到左侧栏，标题栏不再渲染设置按钮", () => {
     render(<MainTopBar {...defaultProps} />);
-    expect(screen.getByTitle("设置")).toBeInTheDocument();
+    expect(screen.queryByTitle("设置")).not.toBeInTheDocument();
   });
 });

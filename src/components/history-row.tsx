@@ -19,6 +19,10 @@ export interface ClipboardItem {
   meta: string;
   timeLabel: string;
   isPinned: boolean;
+  /** 该条被复制/粘贴的次数（后端 clipboard_items.use_count） */
+  useCount?: number;
+  /** 负载字节数（后端 clipboard_items.payload_size_bytes）；预览元信息用 */
+  payloadSizeBytes?: number;
   matchType?: "exact" | "prefix" | "contains" | "recent" | null;
   matchedFields?: string[];
   highlightRanges?: HighlightRange[];

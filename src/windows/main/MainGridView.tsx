@@ -20,7 +20,7 @@ interface MainGridViewProps {
   onRowLeave: () => void;
 }
 
-/** E2 网格：卡片 minmax(160px,1fr) 自适应列，顶部类型色渐变条，20px 图标。 */
+/** D13 网格：固定 3 列（900 宽内容区下卡片约 250px，原 4 列过挤），顶部强调色渐变条。 */
 export const MainGridView = memo(function MainGridView({
   items,
   selectedId,
@@ -37,7 +37,7 @@ export const MainGridView = memo(function MainGridView({
 }: MainGridViewProps) {
   if (items.length === 0) {
     return (
-      <div data-testid="main-grid-view" className="flex-1 overflow-y-auto px-4 py-5">
+      <div data-testid="main-grid-view" className="flex-1 overflow-y-auto px-5 py-5">
         <EmptyState hasQuery={hasQuery} onClearSearch={onClearSearch} />
       </div>
     );
@@ -46,8 +46,8 @@ export const MainGridView = memo(function MainGridView({
   return (
     <div
       data-testid="main-grid-view"
-      className="flex-1 overflow-y-auto px-2.5 pb-2"
-      style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 8, alignContent: "start", paddingTop: 6 }}
+      className="flex-1 overflow-y-auto px-5 pb-4"
+      style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 11, alignContent: "start", paddingTop: 6 }}
     >
       {items.map((item) => (
         <GridCard
@@ -112,14 +112,14 @@ function GridCard({
       className="relative flex min-h-[118px] cursor-pointer flex-col overflow-hidden rounded-xl border p-[11px] transition-all animate-[rowSlideIn_0.2s_ease-out]"
       style={{
         background: selected ? "var(--row-selected)" : hovered ? "var(--grid-card-hover, var(--row-hover))" : "var(--grid-card-bg)",
-        borderColor: selected ? "rgba(56,189,248,0.15)" : hovered ? `${meta.color}22` : "var(--border)",
+        borderColor: selected ? "var(--accent)" : hovered ? "var(--border-strong)" : "var(--border)",
       }}
     >
       {/* top type gradient bar */}
       <div
         className="absolute left-0 right-0 top-0 h-[2px] transition-opacity"
         style={{
-          background: `linear-gradient(90deg, ${meta.color}, transparent)`,
+          background: "linear-gradient(90deg, var(--accent), transparent)",
           opacity: hovered || selected ? 0.55 : 0.18,
         }}
         aria-hidden="true"
@@ -130,15 +130,15 @@ function GridCard({
         <div
           className="flex h-[26px] w-[26px] items-center justify-center rounded-lg transition-colors"
           style={{
-            background: selected ? `${meta.color}14` : "var(--icon-box-bg, var(--surface-2))",
-            color: selected ? meta.color : "var(--icon-box-text, var(--text-tertiary))",
+            background: selected ? "var(--accent-soft)" : "var(--icon-box-bg, var(--surface-2))",
+            color: selected ? "var(--accent-text)" : "var(--icon-box-text, var(--text-tertiary))",
           }}
         >
           <Icon className="h-3 w-3" />
         </div>
         <div className="flex items-center gap-1.5">
           {item.isPinned && (
-            <Star className="h-2.5 w-2.5" style={{ fill: "rgba(251,191,36,0.8)", color: "rgba(251,191,36,0.8)" }} aria-label="已置顶" />
+            <Star className="h-2.5 w-2.5" style={{ fill: "var(--pinned)", color: "var(--pinned)" }} aria-label="已置顶" />
           )}
           <button
             type="button"
@@ -150,7 +150,7 @@ function GridCard({
             className="flex items-center justify-center"
           >
             {checked ? (
-              <CheckSquare className="h-3 w-3" style={{ color: "rgba(56,189,248,0.7)" }} />
+              <CheckSquare className="h-3 w-3" style={{ color: "var(--accent-text)" }} />
             ) : (
               <Square
                 className="h-3 w-3"

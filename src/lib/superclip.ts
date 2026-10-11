@@ -12,8 +12,11 @@ interface CommandMap {
   clipboardDelete: "clipboard_delete";
   clipboardRestore: "clipboard_restore";
   clipboardClear: "clipboard_clear";
+  clipboardTrashList: "clipboard_trash_list";
+  clipboardTrashPurge: "clipboard_trash_purge";
   settingsGet: "settings_get";
   settingsUpdate: "settings_update";
+  settingsReset: "settings_reset";
   rulesList: "rules_list";
   rulesUpsert: "rules_upsert";
   rulesDelete: "rules_delete";
@@ -56,8 +59,11 @@ const COMMANDS: CommandMap = {
   clipboardDelete: "clipboard_delete",
   clipboardRestore: "clipboard_restore",
   clipboardClear: "clipboard_clear",
+  clipboardTrashList: "clipboard_trash_list",
+  clipboardTrashPurge: "clipboard_trash_purge",
   settingsGet: "settings_get",
   settingsUpdate: "settings_update",
+  settingsReset: "settings_reset",
   rulesList: "rules_list",
   rulesUpsert: "rules_upsert",
   rulesDelete: "rules_delete",
@@ -207,6 +213,32 @@ export interface ClipboardRestoreResult {
 
 export interface ClipboardClearResult {
   clearedCount: number;
+  version: number;
+}
+
+export interface TrashEntry {
+  trashId: string;
+  itemId: string;
+  undoToken: string;
+  kind: ClipboardKind;
+  title: string;
+  preview: string;
+  sourceApp: string;
+  deletedAt: number;
+  deletedLabel: string;
+  expiresAt: number;
+  remainingDays: number;
+}
+
+export interface TrashListResponse {
+  entries: TrashEntry[];
+  total: number;
+  retentionDays: number;
+  version: number;
+}
+
+export interface TrashPurgeResult {
+  purgedCount: number;
   version: number;
 }
 
@@ -950,6 +982,24 @@ export async function settingsUpdate(patch: SettingsUpdatePayload) {
   });
 }
 
+/** 重置所有设置回默认值（不动历史数据与排除规则）。 */
+export async function settingsReset() {
+  return invokeOrFallback<SettingsResponse>("settingsReset", {}, () => {
+    assertNotRecoveryMode("settings:reset");
+
+    fallbackSettings = {
+      ...fallbackSettings,
+      defaultAction: "direct_paste",
+      themeMode: "system",
+      historyLimit: 1000,
+      listFontSize: 13,
+      showOnStartup: false,
+    };
+
+    return { ...fallbackSettings };
+  });
+}
+
 export async function rulesList() {
   return invokeOrFallback<RulesListResponse>("rulesList", {}, () => ({
     rules: [...fallbackRules],
@@ -1099,10 +1149,12 @@ export async function windowPlacementRefresh() {
     const height = window.innerHeight;
     const previousMode = fallbackRuntimeState.lastWindowMode;
     const previousReason = fallbackRuntimeState.fallbackReason;
+    // 阈值对齐重设计后的窗口尺寸（Main 900×620，最小 820×520）：
+    // 与 Rust 侧 WINDOW_* 常量同源，避免浏览器降级路径语义漂移
     const lastWindowMode: WindowMode =
-      width >= 960 && height >= 660
+      width >= 900 && height >= 620
         ? "large_window"
-        : width >= 740 && height >= 540
+        : width >= 820 && height >= 520
           ? "small_window"
           : "fallback_window";
     const fallbackReason =
@@ -1343,16 +1395,22 @@ export async function clipboardCopy(id: string) {
   return invokeOrFallback<ClipboardActionResult>("clipboardCopy", { id }, () => buildFallbackAction(getItem(id), "copy"));
 }
 
-export async function clipboardPaste(id: string) {
+export async function clipboardPaste(id: string, asPlainText = false) {
   if (!isTauriRuntime() && fallbackRuntimeState.isRecoveryMode) {
     assertNotRecoveryMode("clipboard:paste");
   }
 
-  return invokeOrFallback<ClipboardActionResult>("clipboardPaste", { id }, () => {
-    const result = buildFallbackAction(getItem(id), "paste");
-    recordFallbackPasteOutcome(result);
-    return result;
-  });
+  return invokeOrFallback<ClipboardActionResult>(
+    "clipboardPaste",
+    asPlainText ? { id, asPlainText } : { id },
+    () => {
+      // 演示环境无系统剪贴板/Accessibility，纯文本请求降级为复制（与后端「无文本回退」语义一致，
+      // 浏览器路径不会真向目标应用按键）
+      const result = buildFallbackAction(getItem(id), asPlainText ? "copy" : "paste");
+      recordFallbackPasteOutcome(result);
+      return result;
+    },
+  );
 }
 
 export async function clipboardPin(id: string) {
@@ -1398,7 +1456,7 @@ export async function clipboardDelete(id: string) {
     return {
       itemId: id,
       undoToken,
-      expiresAt: "30s",
+      expiresAt: "30d",
       version: 1,
     };
   });
@@ -1443,6 +1501,64 @@ export async function clipboardClear() {
       version: 1,
     };
   });
+}
+
+/** 回收站列表：仅 trash 表条目（已从主列表移除，仍可恢复）。 */
+export async function clipboardTrashList() {
+  return invokeOrFallback<TrashListResponse>("clipboardTrashList", {}, () => {
+    const entries: TrashEntry[] = [...fallbackTrash.entries()].map(([undoToken, item], index) => ({
+      trashId: `trash-${index}-${item.id}`,
+      itemId: item.id,
+      undoToken,
+      kind: item.kind,
+      title: item.title,
+      preview: item.preview,
+      sourceApp: item.sourceApp,
+      deletedAt: Date.now() / 1000,
+      deletedLabel: item.timeLabel,
+      expiresAt: Date.now() / 1000 + 30 * 86_400,
+      remainingDays: 30,
+    }));
+
+    return {
+      entries,
+      total: entries.length,
+      retentionDays: 30,
+      version: 1,
+    };
+  });
+}
+
+/** 彻底删除：传 trashIds = 删除选中；传 undefined = 清空回收站（不影响主列表）；传空数组 = 不删任何行。 */
+export async function clipboardTrashPurge(trashIds?: string[]) {
+  return invokeOrFallback<TrashPurgeResult>(
+    "clipboardTrashPurge",
+    // 空数组也必须传下去（后端视为无操作），不能省略参数——
+    // 省略参数会被后端当成「清空回收站」，选中项已被外部移除时会误删全部
+    trashIds ? { trashIds } : {},
+    () => {
+      assertNotRecoveryMode("clipboard:trash-purge");
+
+      if (trashIds) {
+        // 按 trashId 精确删除：fallback 的 trashId = `trash-${index}-${item.id}`，
+        // 先按同口径重建再匹配（不能用 endsWith——id 互为后缀时会误删）
+        let purged = 0;
+        const targetIds = new Set(trashIds);
+        for (const [undoToken, item] of [...fallbackTrash.entries()]) {
+          const index = [...fallbackTrash.keys()].indexOf(undoToken);
+          if (targetIds.has(`trash-${index}-${item.id}`)) {
+            fallbackTrash.delete(undoToken);
+            purged += 1;
+          }
+        }
+        return { purgedCount: purged, version: 1 };
+      }
+
+      const purgedCount = fallbackTrash.size;
+      fallbackTrash.clear();
+      return { purgedCount, version: 1 };
+    },
+  );
 }
 
 export function getKindActionLabel(kind: ClipboardKind, defaultAction: SettingsResponse["defaultAction"]) {

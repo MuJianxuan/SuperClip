@@ -60,6 +60,8 @@ function makeProps(overrides: Partial<SettingsShellProps> = {}): SettingsShellPr
     })),
     onShortcutUpdate: vi.fn(),
     onShortcutRestoreDefault: vi.fn(),
+    onClearHistory: vi.fn(),
+    onResetSettings: vi.fn(),
     ...overrides,
   };
 }
@@ -69,13 +71,68 @@ describe("SettingsShell (F2 分区化)", () => {
     vi.clearAllMocks();
   });
 
-  it("渲染 F2 四分区导航：通用/快捷键/排除规则/高级", () => {
+  it("渲染五分区导航：通用/快捷键/排除规则/高级/关于", () => {
     render(<SettingsShell {...makeProps()} />);
     // 「通用」在导航与 header 副标题各出现一次
     expect(screen.getAllByText("通用").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("快捷键")).toBeInTheDocument();
     expect(screen.getByText("排除规则")).toBeInTheDocument();
     expect(screen.getByText("高级")).toBeInTheDocument();
+    expect(screen.getByText("关于")).toBeInTheDocument();
+  });
+
+  it("高级分区同时提供诊断与两项危险操作（清空历史 / 重置设置）", () => {
+    const onClearHistory = vi.fn();
+    render(<SettingsShell {...makeProps({ onClearHistory })} />);
+    fireEvent.click(screen.getByText("高级"));
+    expect(screen.getByText("清空历史")).toBeInTheDocument();
+    expect(screen.getByText("重置设置")).toBeInTheDocument();
+    // 点击只触发调用方的确认流程，不在本组件内直接执行
+    fireEvent.click(screen.getByText("清空历史"));
+    expect(onClearHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it("initialSection 可直接落到指定分区（侧栏「排除规则」入口）", () => {
+    render(<SettingsShell {...makeProps({ initialSection: "privacy" })} />);
+    // 不点侧栏，直接渲染出排除规则分区内容
+    expect(screen.getByRole("heading", { name: "排除规则" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /添加规则/ })).toBeInTheDocument();
+  });
+
+  it("危险操作触发调用方的确认流程（只读模式禁用）", () => {
+    const onClearHistory = vi.fn();
+    const onResetSettings = vi.fn();
+    const { unmount } = render(<SettingsShell {...makeProps({ onClearHistory, onResetSettings })} />);
+    fireEvent.click(screen.getByText("高级"));
+    fireEvent.click(screen.getByText("清空历史"));
+    expect(onClearHistory).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByText("重置设置"));
+    expect(onResetSettings).toHaveBeenCalledTimes(1);
+    unmount();
+
+    render(<SettingsShell {...makeProps({ onClearHistory, onResetSettings, readOnlyMode: true })} />);
+    fireEvent.click(screen.getByText("高级"));
+    expect(screen.getByText("清空历史").closest("button")).toBeDisabled();
+    expect(screen.getByText("重置设置").closest("button")).toBeDisabled();
+    // 导出诊断是只读操作，恢复模式下必须可用（「只开放浏览、搜索、复制和诊断」契约，R2-6）
+    expect(screen.getByText("导出诊断数据").closest("button")).toBeEnabled();
+  });
+
+  it("关于分区展示版本、Schema 与帮助入口", () => {
+    render(<SettingsShell {...makeProps()} />);
+    fireEvent.click(screen.getByText("关于"));
+    expect(screen.getByText("版本信息")).toBeInTheDocument();
+    expect(screen.getByText("数据库 Schema")).toBeInTheDocument();
+    expect(screen.getByText("查看快捷键")).toBeInTheDocument();
+    expect(screen.getByText("查看排除规则")).toBeInTheDocument();
+  });
+
+  it("关于分区「查看快捷键」跳到快捷键分区", () => {
+    render(<SettingsShell {...makeProps()} />);
+    fireEvent.click(screen.getByText("关于"));
+    fireEvent.click(screen.getByText("查看快捷键"));
+    // 跳到快捷键分区：出现录入按钮语义
+    expect(screen.getByText("更改")).toBeInTheDocument();
   });
 
   it("默认展示通用分区：主题分段 + 历史滑块 + 粘贴行为 + 启动行为", () => {
@@ -192,18 +249,18 @@ describe("SettingsShell (F2 分区化)", () => {
     expect(onUpdate).toHaveBeenCalledWith({ launchAtLogin: true });
   });
 
-  it("高级分区的危险按钮为红底样式（#ef4444 系，hover 加深）", () => {
+  it("高级分区的危险按钮为红底样式（--danger 系，hover 加深）", () => {
     render(<SettingsShell {...makeProps()} />);
     fireEvent.click(screen.getByText("高级"));
     const dangerBtn = screen.getByText("导出诊断数据").closest("button");
     expect(dangerBtn).toBeInTheDocument();
     expect(dangerBtn).toHaveAttribute("data-variant", "danger");
-    // 非 hover 态：红底 0.04 + 红边 0.12
-    expect(dangerBtn!.style.background).toBe("rgba(239, 68, 68, 0.04)");
-    expect(dangerBtn!.style.border).toContain("rgba(239, 68, 68, 0.12)");
+    // 非 hover 态：danger 4% 底 + 12% 边
+    expect(dangerBtn!.style.background).toBe("color-mix(in srgb, var(--danger) 4%, transparent)");
+    expect(dangerBtn!.style.border).toContain("color-mix(in srgb, var(--danger) 12%, transparent)");
     // hover 加深（React state 驱动）
     fireEvent.mouseEnter(dangerBtn!);
-    expect(dangerBtn!.style.background).toBe("rgba(239, 68, 68, 0.08)");
-    expect(dangerBtn!.style.border).toContain("rgba(239, 68, 68, 0.3)");
+    expect(dangerBtn!.style.background).toBe("color-mix(in srgb, var(--danger) 8%, transparent)");
+    expect(dangerBtn!.style.border).toContain("color-mix(in srgb, var(--danger) 30%, transparent)");
   });
 });

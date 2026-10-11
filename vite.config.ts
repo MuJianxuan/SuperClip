@@ -17,6 +17,13 @@ const devPort = 1420 + portOffset;
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
 
+  // 构建期注入应用版本（设置 → 关于页展示，避免前端硬编码版本号）
+  define: {
+    __APP_VERSION__: JSON.stringify(
+      process.env.npm_package_version ?? "0.1.0",
+    ),
+  },
+
   build: {
     rollupOptions: {
       input: {

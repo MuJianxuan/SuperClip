@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useRef, useMemo, useState } from "react";
-import { Copy, LockKeyhole, MonitorCog, ShieldCheck, TriangleAlert } from "lucide-react";
+import { LockKeyhole, MonitorCog } from "lucide-react";
 import { MainTopBar } from "./MainTopBar";
+import { MainSidebar } from "./MainSidebar";
+import type { MainSectionId } from "./MainSidebar";
 import { MainTabNavigation } from "./MainTabNavigation";
 import type { TabId } from "./MainTabNavigation";
 import { MainListView } from "./MainListView";
 import { MainGridView } from "./MainGridView";
 import { MainBulkActionBar } from "./MainBulkActionBar";
+import { MainTrashView } from "./MainTrashView";
+import { Toast, type ToastState } from "../../components/toast";
 import { SettingsShell } from "../../components/settings-shell";
+import type { SettingsSectionKey } from "../../components/settings-shell";
 import { useClipboardData } from "../../hooks/useClipboardData";
 import { useHoverPreview } from "../../hooks/useHoverPreview";
 import type { ClipboardItem } from "../../components/history-row";
@@ -16,6 +21,11 @@ import {
   clipboardPin,
   clipboardUnpin,
   clipboardDelete,
+  clipboardRestore,
+  clipboardTrashList,
+  clipboardTrashPurge,
+  clipboardClear,
+  settingsReset,
   previewMouseState,
   previewShow,
   previewHide,
@@ -36,23 +46,15 @@ import {
   diagnosticsExport,
   runtimeStateGet,
   mainWindowReady,
+  monitorStatusGet,
   type SettingsResponse,
   type SettingsUpdatePayload,
   type ShortcutStateResponse,
   type ShortcutValidationResponse,
   type ExclusionRule,
   type RulesUpsertPayload,
+  type TrashEntry,
 } from "../../lib/superclip";
-
-// --- PLACEHOLDER_MAIN_APP_BODY ---
-
-interface FeedbackToast {
-  createdAtMs: number;
-  title: string;
-  message: string;
-  tone: "success" | "warning" | "copy";
-  timeoutMs: number;
-}
 
 const initialSettings: SettingsResponse = {
   schemaVersion: 1,
@@ -82,14 +84,36 @@ export function MainApp() {
     } catch { return "list"; }
   });
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<MainSectionId>("all");
+  const [isMonitoring, setIsMonitoring] = useState(true);
+  const [trashEntries, setTrashEntries] = useState<TrashEntry[]>([]);
+  const [trashRetentionDays, setTrashRetentionDays] = useState(30);
+  const [trashSelected, setTrashSelected] = useState<Set<string>>(new Set());
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    /** 破坏性操作用红色按钮，非破坏性（如全部恢复）用强调色 */
+    danger?: boolean;
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
+  // 「排除规则」渲染同一个 SettingsShell（落到 privacy 分区），因此也是设置视图
+  const isSettingsOpen = activeSection === "settings" || activeSection === "rules";
+  // 侧栏「排除规则」也是设置视图，但直接落到 privacy 分区
+  const [settingsSection, setSettingsSection] = useState<SettingsSectionKey>("general");
+  const handleSidebarNavigate = useCallback((section: MainSectionId) => {
+    setSettingsSection(section === "rules" ? "privacy" : "general");
+    setActiveSection(section);
+    // 回到「全部记录」时同步重置类型过滤：否则标题已是全部记录，列表仍按旧 chip 过滤
+    if (section === "all") setActiveTab("all");
+  }, []);
   const [settings, setSettings] = useState<SettingsResponse>(initialSettings);
   const [shortcut, setShortcut] = useState<ShortcutStateResponse>(initialShortcut);
   const [rules, setRules] = useState<ExclusionRule[]>([]);
   const [permissionTrusted, setPermissionTrusted] = useState(true);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [isMigrationBlocking, setIsMigrationBlocking] = useState(false);
-  const [feedback, setFeedback] = useState<FeedbackToast | null>(null);
+  const [feedback, setFeedback] = useState<ToastState | null>(null);
 
   const readOnlyRef = useRef({ isRecoveryMode, isMigrationBlocking });
   readOnlyRef.current = { isRecoveryMode, isMigrationBlocking };
@@ -115,22 +139,23 @@ export function MainApp() {
 
   const { query, setQuery, items, itemsRef, selectedId, setSelectedId, enqueueRefresh } = useClipboardData();
 
-  // E2：chips 计数基于当前数据集的分布；前端按 tab 过滤（后端不再传 kindFilter）
+  // E2：chips 计数基于当前数据集的分布；前端按 tab 过滤（后端不再传 kindFilter）。
+  // pinned 已由侧栏承担（D4），chips 不再有置顶项
   const counts = useMemo(() => {
     return {
       all: items.length,
       text: items.filter((i) => i.kind === "text").length,
       image: items.filter((i) => i.kind === "image").length,
       file: items.filter((i) => i.kind === "file").length,
-      pinned: items.filter((i) => i.isPinned).length,
     };
   }, [items]);
 
   const visibleItems = useMemo(() => {
+    // 侧栏「已置顶」优先于类型 chips：两者不同时生效，侧栏为准
+    if (activeSection === "pinned") return items.filter((i) => i.isPinned);
     if (activeTab === "all") return items;
-    if (activeTab === "pinned") return items.filter((i) => i.isPinned);
     return items.filter((i) => i.kind === activeTab);
-  }, [items, activeTab]);
+  }, [items, activeTab, activeSection]);
 
   const pinnedCount = useMemo(() => items.filter((i) => i.isPinned).length, [items]);
 
@@ -148,22 +173,24 @@ export function MainApp() {
     return () => window.clearTimeout(t);
   }, [signalMainReady]);
 
-  // Bootstrap: load settings, rules, shortcut, permission, runtime state
+  // Bootstrap: load settings, rules, shortcut, permission, runtime state, monitor status
   useEffect(() => {
     let active = true;
     async function bootstrap() {
       try {
-        const [s, r, sc, p] = await Promise.all([
+        const [s, r, sc, p, monitor] = await Promise.all([
           settingsGet(),
           rulesList(),
           shortcutGet(),
           permissionCheckAccessibility(),
+          monitorStatusGet().catch(() => null),
         ]);
         if (!active) return;
         setSettings(s);
         setRules(r.rules);
         setShortcut(sc);
         setPermissionTrusted(p.accessibilityTrusted);
+        if (monitor) setIsMonitoring(monitor.isMonitoring);
 
         try {
           const rs = await runtimeStateGet();
@@ -221,9 +248,20 @@ export function MainApp() {
     void import("@tauri-apps/api/event")
       .then(({ listen }) =>
         Promise.all([
-          listen("app:show-settings", () => { if (!disposed) setIsSettingsOpen(true); }),
+          listen("app:show-settings", () => {
+            if (disposed) return;
+            // 统一走侧栏入口，避免 settingsSection 残留上一次的 privacy
+            setSettingsSection("general");
+            setActiveSection("settings");
+          }),
+          // 监听开关状态广播（QuickPanel 切换后 Main 侧栏状态卡同步）
+          listen<{ is_monitoring?: boolean }>("monitor-status-changed", (event) => {
+            if (!disposed && typeof event.payload.is_monitoring === "boolean") {
+              setIsMonitoring(event.payload.is_monitoring);
+            }
+          }),
           // QuickPanel「主管理台」：主窗口可能停留在设置分区，收到后切回主页视图
-          listen("app:show-home", () => { if (!disposed) setIsSettingsOpen(false); }),
+          listen("app:show-home", () => { if (!disposed) handleSidebarNavigate("all"); }),
           // 主题/设置外部变更（如 QuickPanel）时保持 Main 本地状态与 data-theme-mode 同步
           listen<{ theme_mode?: string; default_action?: SettingsResponse["defaultAction"]; list_font_size?: number }>("settings-updated", (event) => {
             if (disposed) return;
@@ -273,9 +311,9 @@ export function MainApp() {
 
           // 悬浮窗 x 跟随鼠标右侧一段距离（gap 48，用户要求加大缓冲），y 与行顶部对齐；
           // 屏幕右缘越界时 Rust preview_show 按 cursor 锚点切到鼠标左侧对称 gap 48/clamp
-          const isImage = item.kind === "image";
+          // Preview 统一 320×360（图片/文本同高，避免尺寸跳变）
           const previewW = 320;
-          const previewH = isImage ? 280 : 360;
+          const previewH = 360;
           const cursor = hoverCursorRef.current;
           const previewX = logicalX + cursor.x + 48;
           const previewY = logicalY + rect.top;
@@ -338,28 +376,22 @@ export function MainApp() {
     return () => { disposed = true; window.clearInterval(t); };
   }, [hoverPreview.isPreviewVisible, hoverPreview.handlePreviewEnter, hoverPreview.handlePreviewLeave]);
 
-  // Feedback auto-dismiss
-  useEffect(() => {
-    if (!feedback) return;
-    const t = window.setTimeout(() => setFeedback(null), feedback.timeoutMs);
-    return () => window.clearTimeout(t);
-  }, [feedback]);
-
   // Keyboard shortcuts
   const keyStateRef = useRef<{
     isSettingsOpen: boolean;
+    activeSection: MainSectionId;
     items: typeof visibleItems;
     selectedId: string;
     handlePin: (id: string) => void;
     handleDelete: (id: string) => void;
-  }>({ isSettingsOpen, items: visibleItems, selectedId, handlePin: () => {}, handleDelete: () => {} });
+  }>({ isSettingsOpen, activeSection, items: visibleItems, selectedId, handlePin: () => {}, handleDelete: () => {} });
   useEffect(() => {
-    keyStateRef.current = { isSettingsOpen, items: visibleItems, selectedId, handlePin, handleDelete };
+    keyStateRef.current = { isSettingsOpen, activeSection, items: visibleItems, selectedId, handlePin, handleDelete };
   });
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      const { isSettingsOpen: settingsOpen, items: currentItems, selectedId: currentSelectedId, handlePin: pin, handleDelete: del } = keyStateRef.current;
+      const { isSettingsOpen: settingsOpen, activeSection: section, items: currentItems, selectedId: currentSelectedId, handlePin: pin, handleDelete: del } = keyStateRef.current;
       if (settingsOpen) return;
 
       const isInput = event.target instanceof HTMLInputElement ||
@@ -367,12 +399,28 @@ export function MainApp() {
       // 输入态下全部放行，让浏览器默认行为（如 ⌘A 全选搜索文本）正常工作，避免误触全局快捷键
       if (isInput) return;
 
+      // ⌘1–⌘4 切类型 / ⌘5 切已置顶：仅列表视图生效（回收站/设置里被静默忽略，
+      // 避免仅改 activeTab 而不切视图，导致回到列表时过滤器已披静默改掉）
       if (event.metaKey && event.key >= "1" && event.key <= "5") {
+        if (section !== "all" && section !== "pinned") return;
         event.preventDefault();
-        const tabMap: TabId[] = ["all", "text", "image", "file", "pinned"];
-        setActiveTab(tabMap[parseInt(event.key) - 1]);
+        const index = parseInt(event.key) - 1;
+        if (index === 4) {
+          setActiveSection("pinned");
+          setActiveTab("all");
+          return;
+        }
+        // ⌘1–⌘4 与类型 chip 一致：从已置顶视图退回全部记录（chips 在 pinned 视图不渲染，
+        // 键盘路径仍需保证两入口一致）
+        if (section === "pinned") setActiveSection("all");
+        const tabMap: TabId[] = ["all", "text", "image", "file"];
+        setActiveTab(tabMap[index]);
         return;
       }
+
+      // 其余列表快捷键仅在列表视图生效：此处 currentItems 仍是主历史列表，
+      // 放行会让回收站/设置里的 Delete 误删主表条目
+      if (section !== "all" && section !== "pinned") return;
       if (event.metaKey && event.key === "l") {
         event.preventDefault();
         setViewMode((m) => (m === "list" ? "grid" : "list"));
@@ -419,11 +467,11 @@ export function MainApp() {
 
   const blockIfReadOnly = useCallback((label: string): boolean => {
     if (readOnlyRef.current.isMigrationBlocking) {
-      setFeedback({ createdAtMs: Date.now(), title: `${label}已禁用`, message: "迁移完成前暂不开放写操作。", tone: "warning", timeoutMs: 4000 });
+      setFeedback({ id: Date.now(), tone: "warning", message: `${label}已禁用：迁移完成前暂不开放写操作。` });
       return true;
     }
     if (readOnlyRef.current.isRecoveryMode) {
-      setFeedback({ createdAtMs: Date.now(), title: `${label}已禁用`, message: "恢复模式下不可修改数据。", tone: "warning", timeoutMs: 4000 });
+      setFeedback({ id: Date.now(), tone: "warning", message: `${label}已禁用：恢复模式下不可修改数据。` });
       return true;
     }
     return false;
@@ -450,7 +498,21 @@ export function MainApp() {
 
   const handleDelete = useCallback(async (id: string) => {
     if (blockIfReadOnly("删除")) return;
-    try { await clipboardDelete(id); enqueueRefresh(); } catch {}
+    try {
+      const result = await clipboardDelete(id);
+      enqueueRefresh();
+      // D12：单条删除同样走可撤销 Toast（与 Popup、批量删除一致）
+      setFeedback({
+        id: Date.now(),
+        tone: "undo",
+        message: "已删除 1 条",
+        onUndo: () => {
+          void clipboardRestore(result.undoToken)
+            .then(() => enqueueRefresh())
+            .catch(() => setFeedback({ id: Date.now(), tone: "warning", message: "撤销失败" }));
+        },
+      });
+    } catch {}
   }, [enqueueRefresh, blockIfReadOnly]);
 
   const handleBulkCopy = useCallback(async () => {
@@ -465,9 +527,113 @@ export function MainApp() {
 
   const handleBulkDelete = useCallback(async () => {
     if (blockIfReadOnly("批量删除")) return;
-    for (const id of selectedIds) { try { await clipboardDelete(id); } catch {} }
-    enqueueRefresh(); setSelectedIds(new Set());
+    const count = selectedIds.size;
+    const tokens: string[] = [];
+    for (const id of selectedIds) {
+      try {
+        const result = await clipboardDelete(id);
+        tokens.push(result.undoToken);
+      } catch {}
+    }
+    enqueueRefresh();
+    setSelectedIds(new Set());
+    if (tokens.length) {
+      setFeedback({
+        id: Date.now(),
+        tone: "undo",
+        message: `已删除 ${tokens.length} 条`,
+        onUndo: () => {
+          void Promise.all(tokens.map((token) => clipboardRestore(token).catch(() => null)))
+            .then(() => enqueueRefresh())
+            .catch(() => {});
+        },
+      });
+    } else if (count > 0) {
+      setFeedback({ id: Date.now(), tone: "warning", message: "删除失败，请重试。" });
+    }
   }, [selectedIds, enqueueRefresh, blockIfReadOnly]);
+
+  // ---- 回收站（D10）----
+  const loadTrash = useCallback(async () => {
+    try {
+      const response = await clipboardTrashList();
+      // 防御：invoke 返回结构不可信（降级/异常响应），非数组一律按空回收站处理
+      setTrashEntries(Array.isArray(response?.entries) ? response.entries : []);
+      setTrashRetentionDays(response?.retentionDays ?? 30);
+    } catch {
+      setTrashEntries([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    // 首次挂载即拉一次：侧栏「回收站」计数不能等用户点进回收站才有值
+    void loadTrash();
+  }, [loadTrash]);
+
+  useEffect(() => {
+    if (activeSection !== "trash") return;
+    void loadTrash();
+  }, [activeSection, loadTrash]);
+
+  // 删除/恢复/清空都会广播 history-updated：订阅必须常驻（不加 activeSection gate），
+  // 否则列表/已置顶/popup 里的删除不会刷新侧栏「回收站 N」计数，直到进回收站才被修正
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) =>
+        listen("history-updated", () => {
+          if (!disposed) void loadTrash();
+        }),
+      )
+      .then((fn) => {
+        if (disposed) void fn();
+        else unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [loadTrash]);
+
+  const handleToggleTrashSelect = useCallback((trashId: string) => {
+    setTrashSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(trashId)) next.delete(trashId);
+      else next.add(trashId);
+      return next;
+    });
+  }, []);
+
+  const restoreTokens = useCallback(async (tokens: string[]) => {
+    if (blockIfReadOnly("恢复")) return;
+    let restored = 0;
+    for (const token of tokens) {
+      try {
+        await clipboardRestore(token);
+        restored += 1;
+      } catch {}
+    }
+    setTrashSelected(new Set());
+    await loadTrash();
+    enqueueRefresh();
+    if (restored > 0) {
+      setFeedback({ id: Date.now(), tone: "success", message: `已恢复 ${restored} 条` });
+    } else if (tokens.length > 0) {
+      setFeedback({ id: Date.now(), tone: "warning", message: "恢复失败，记录可能已过期。" });
+    }
+  }, [blockIfReadOnly, loadTrash, enqueueRefresh]);
+
+  const purgeTrash = useCallback(async (trashIds?: string[]) => {
+    if (blockIfReadOnly("彻底删除")) return;
+    try {
+      await clipboardTrashPurge(trashIds);
+    } catch {}
+    setTrashSelected(new Set());
+    await loadTrash();
+  }, [blockIfReadOnly, loadTrash]);
 
   // Settings handlers
   async function handleSettingsUpdate(patch: SettingsUpdatePayload) {
@@ -520,9 +686,9 @@ export function MainApp() {
   async function handleDiagnosticsClick() {
     try {
       await diagnosticsExport();
-      setFeedback({ createdAtMs: Date.now(), title: "诊断已导出", message: "诊断包已写入本地。", tone: "success", timeoutMs: 3000 });
+      setFeedback({ id: Date.now(), tone: "success", message: "诊断包已写入本地。" });
     } catch {
-      setFeedback({ createdAtMs: Date.now(), title: "导出失败", message: "请重试。", tone: "warning", timeoutMs: 4000 });
+      setFeedback({ id: Date.now(), tone: "warning", message: "诊断导出失败，请重试。" });
     }
   }
 
@@ -530,9 +696,46 @@ export function MainApp() {
     try { await permissionOpenAccessibility(); } catch {}
   }
 
+  // 危险操作（高级页）：均由设置页按钮触发，确认弹窗在统一 confirmAction 中承载
+  async function handleClearHistoryClick() {
+    if (blockIfReadOnly("清空历史")) return;
+    setConfirmAction({
+      title: "清空全部历史？",
+      message: "所有剪贴板记录（含置顶与回收站）将被永久删除，无法找回。",
+      confirmLabel: "清空历史",
+      onConfirm: async () => {
+        try {
+          const result = await clipboardClear();
+          enqueueRefresh();
+          setFeedback({ id: Date.now(), tone: "success", message: `已清空 ${result.clearedCount} 条记录` });
+        } catch {
+          setFeedback({ id: Date.now(), tone: "warning", message: "清空失败，请重试。" });
+        }
+      },
+    });
+  }
+
+  async function handleResetSettingsClick() {
+    if (blockIfReadOnly("重置设置")) return;
+    setConfirmAction({
+      title: "重置所有设置？",
+      message: "外观、默认动作、保留上限等将恢复默认；历史记录与排除规则不受影响。",
+      confirmLabel: "重置设置",
+      onConfirm: async () => {
+        try {
+          const next = await settingsReset();
+          setSettings(next);
+          setFeedback({ id: Date.now(), tone: "success", message: "设置已重置为默认" });
+        } catch {
+          setFeedback({ id: Date.now(), tone: "warning", message: "重置失败，请重试。" });
+        }
+      },
+    });
+  }
+
   return (
     <main
-      className="frost-window relative flex h-screen w-screen flex-col overflow-hidden rounded-none border border-[var(--window-inset-border)] bg-[var(--bg)] text-[var(--text-primary)] shadow-[var(--window-drop-shadow)]"
+      className="frost-window relative flex h-screen w-screen overflow-hidden rounded-none border border-[var(--window-inset-border)] bg-[var(--bg)] text-[var(--text-primary)] shadow-[var(--window-drop-shadow)]"
       onMouseLeave={(e) => {
         // 鼠标真正离开 Main 窗口（relatedTarget 不在窗口内）才开始悬浮窗隐藏计时；
         // 窗口内行↔行移动不误触发，给「行→悬浮窗」路径充足时间
@@ -542,28 +745,37 @@ export function MainApp() {
         }
       }}
     >
-      {/* F2：settings 打开时 MainTopBar 隐藏，由 SettingsShell 的 header 作为唯一工具条（identity + 返回列表） */}
-      {!isSettingsOpen && (
-        <MainTopBar
-          viewMode={viewMode}
-          query={query}
-          onViewModeChange={setViewMode}
-          onQueryChange={setQuery}
-          onSettingsClick={() => setIsSettingsOpen(true)}
-        />
-      )}
+      {/* 左侧导航栏（D3）：历史 + 管理 + 底部监听状态卡 */}
+      <MainSidebar
+        active={activeSection}
+        counts={{
+          all: items.length,
+          pinned: pinnedCount,
+          trash: trashEntries.length,
+          rules: rules.length,
+        }}
+        isMonitoring={isMonitoring}
+        defaultActionLabel={
+          settings.defaultAction === "copy_only" ? "仅复制" : "直接粘贴"
+        }
+        onNavigate={handleSidebarNavigate}
+      />
 
-      {/* 主体分区：剪贴板列表 或 设置分区（Settings 为 Main 内分区视图） */}
-      {isSettingsOpen ? (
-        <div className="flex min-h-0 flex-1 flex-col">
+      {/* 右侧内容区 */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {isSettingsOpen ? (
+          // key = settingsSection：SettingsShell 的分区用 useState(initialSection) 初始化，
+          // 仅在挂载时读取；不加 key 的话「设置 ↔ 排除规则」互切会复用实例，分区不会跟着侧栏走
           <SettingsShell
+            key={settingsSection}
             settings={settings}
             shortcut={shortcut}
             rules={rules}
             pinnedCount={pinnedCount}
             permissionTrusted={permissionTrusted}
             readOnlyMode={isRecoveryMode || isMigrationBlocking}
-            onClose={() => setIsSettingsOpen(false)}
+            initialSection={settingsSection}
+            onClose={() => handleSidebarNavigate("all")}
             onUpdate={handleSettingsUpdate}
             onDiagnosticsClick={handleDiagnosticsClick}
             onPermissionGuideClick={handlePermissionGuideClick}
@@ -575,94 +787,155 @@ export function MainApp() {
             onShortcutValidate={handleShortcutValidate}
             onShortcutUpdate={handleShortcutUpdate}
             onShortcutRestoreDefault={handleShortcutRestoreDefault}
+            onClearHistory={handleClearHistoryClick}
+            onResetSettings={handleResetSettingsClick}
           />
-        </div>
-      ) : (
-        <>
-          {/* E2 过滤 chips 行（独立于工具条） */}
-          <MainTabNavigation activeTab={activeTab} counts={counts} onTabChange={setActiveTab} />
-
-      {/* Status Banners（E2 保留槽位：工具条/列表之间的浮动圆角横幅卡） */}
-      {(!permissionTrusted || isRecoveryMode) && (
-        <div className="mx-4 mb-2 space-y-2">
-          {!permissionTrusted && (
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2">
-              <p className="text-xs font-medium text-[var(--warning-text)]">仅复制模式 — 辅助功能权限未授权</p>
-              <button
-                type="button"
-                onClick={() => void handlePermissionGuideClick()}
-                className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-2)]"
-              >
-                <LockKeyhole className="h-3.5 w-3.5" />
-                授权
-              </button>
-            </div>
-          )}
-          {isRecoveryMode && (
-            <div className="flex items-center justify-between gap-3 rounded-lg border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2">
-              <div>
-                <p className="text-xs font-medium text-[var(--warning-text)]">恢复模式</p>
-                <p className="mt-0.5 text-xs text-[var(--warning-text)]">只开放浏览、搜索、复制和诊断。</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => void handleDiagnosticsClick()}
-                className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-2)]"
-              >
-                <MonitorCog className="h-3.5 w-3.5" />
-                导出诊断
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        {viewMode === "list" ? (
-          <MainListView
-            items={visibleItems}
-            selectedId={selectedId}
-            selectedIds={selectedIds}
-            hasQuery={!!query.trim()}
-            onClearSearch={() => setQuery("")}
-            onSelect={handleSelect}
-            onToggleSelect={handleToggleSelect}
-            onAction={handleAction}
-            onCopy={handleCopy}
-            onPin={handlePin}
-            onDelete={handleDelete}
-            onRowHover={handleRowHover}
-            onRowLeave={handleRowLeave}
+        ) : activeSection === "trash" ? (
+          <MainTrashView
+            entries={trashEntries}
+            retentionDays={trashRetentionDays}
+            selectedIds={trashSelected}
+            readOnly={isRecoveryMode || isMigrationBlocking}
+            onToggleSelect={handleToggleTrashSelect}
+            onSelectAll={() => setTrashSelected(new Set(trashEntries.map((e) => e.trashId)))}
+            onDeselectAll={() => setTrashSelected(new Set())}
+            onRestore={(token) => void restoreTokens([token])}
+            onRestoreSelected={() =>
+              void restoreTokens(
+                trashEntries
+                  .filter((entry) => trashSelected.has(entry.trashId))
+                  .map((entry) => entry.undoToken),
+              )
+            }
+            onRestoreAll={() =>
+              setConfirmAction({
+                title: "恢复全部记录？",
+                message: `回收站中的 ${trashEntries.length} 条记录将回到原位置与置顶状态。`,
+                confirmLabel: "全部恢复",
+                danger: false,
+                onConfirm: () => restoreTokens(trashEntries.map((entry) => entry.undoToken)),
+              })
+            }
+            onPurgeSelected={() =>
+              setConfirmAction({
+                title: "彻底删除所选？",
+                message: `已选 ${trashSelected.size} 条将被永久删除，无法找回。`,
+                confirmLabel: "彻底删除",
+                onConfirm: () =>
+                  purgeTrash(trashEntries.filter((e) => trashSelected.has(e.trashId)).map((e) => e.trashId)),
+              })
+            }
+            onPurgeAll={() =>
+              setConfirmAction({
+                title: "清空回收站？",
+                message: `${trashEntries.length} 条记录将被永久删除，无法找回。`,
+                confirmLabel: "清空回收站",
+                onConfirm: () => purgeTrash(),
+              })
+            }
           />
         ) : (
-          <MainGridView
-            items={visibleItems}
-            selectedId={selectedId}
-            selectedIds={selectedIds}
-            hasQuery={!!query.trim()}
-            onClearSearch={() => setQuery("")}
-            onSelect={handleSelect}
-            onToggleSelect={handleToggleSelect}
-            onAction={handleAction}
-            onPin={handlePin}
-            onDelete={handleDelete}
-            onRowHover={handleRowHover}
-            onRowLeave={handleRowLeave}
-          />
-        )}
+          <>
+            {/* 内容区标题栏 + 搜索 + 视图切换 */}
+            <MainTopBar
+              viewMode={viewMode}
+              query={query}
+              title={activeSection === "pinned" ? "已置顶" : undefined}
+              onViewModeChange={setViewMode}
+              onQueryChange={setQuery}
+            />
 
-          <MainBulkActionBar
-            selectedCount={selectedIds.size}
-            totalCount={visibleItems.length}
-            onSelectAll={() => setSelectedIds(new Set(visibleItems.map((i) => i.id)))}
-            onDeselectAll={() => setSelectedIds(new Set())}
-            onBulkCopy={handleBulkCopy}
-            onBulkPin={handleBulkPin}
-            onBulkDelete={handleBulkDelete}
-          />
-        </div>
-        </>
-      )}
+            {/* 筛选 chips（全部 / 文本 / 图片 / 文件）。已置顶视图不渲染：chips 计数基于全量 items，
+                放在这里会与列表实际内容（仅置顶项）不符（R3-3）；类型过滤在全部记录视图内完成 */}
+            {activeSection === "all" ? (
+              <MainTabNavigation
+                activeTab={activeTab}
+                counts={counts}
+                onTabChange={setActiveTab}
+              />
+            ) : null}
+            {/* 状态横幅（权限 / 恢复模式） */}
+            {(!permissionTrusted || isRecoveryMode) && (
+              <div className="mx-5 mb-2 space-y-2">
+                {!permissionTrusted && (
+                  <div className="flex items-center justify-between gap-3 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2">
+                    <p className="text-xs font-medium text-[var(--warning-text)]">仅复制模式 — 辅助功能权限未授权</p>
+                    <button
+                      type="button"
+                      onClick={() => void handlePermissionGuideClick()}
+                      className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-2)]"
+                    >
+                      <LockKeyhole className="h-3.5 w-3.5" />
+                      授权
+                    </button>
+                  </div>
+                )}
+                {isRecoveryMode && (
+                  <div className="flex items-center justify-between gap-3 rounded-[10px] border border-[var(--warning-border)] bg-[var(--warning-bg)] px-3 py-2">
+                    <div>
+                      <p className="text-xs font-medium text-[var(--warning-text)]">恢复模式</p>
+                      <p className="mt-0.5 text-xs text-[var(--warning-text)]">只开放浏览、搜索、复制和诊断。</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleDiagnosticsClick()}
+                      className="flex items-center gap-1.5 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-2)]"
+                    >
+                      <MonitorCog className="h-3.5 w-3.5" />
+                      导出诊断
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="relative flex min-h-0 flex-1 flex-col">
+              {viewMode === "list" ? (
+                <MainListView
+                  items={visibleItems}
+                  selectedId={selectedId}
+                  selectedIds={selectedIds}
+                  hasQuery={!!query.trim()}
+                  onClearSearch={() => setQuery("")}
+                  onSelect={handleSelect}
+                  onToggleSelect={handleToggleSelect}
+                  onAction={handleAction}
+                  onCopy={handleCopy}
+                  onPin={handlePin}
+                  onDelete={handleDelete}
+                  onRowHover={handleRowHover}
+                  onRowLeave={handleRowLeave}
+                />
+              ) : (
+                <MainGridView
+                  items={visibleItems}
+                  selectedId={selectedId}
+                  selectedIds={selectedIds}
+                  hasQuery={!!query.trim()}
+                  onClearSearch={() => setQuery("")}
+                  onSelect={handleSelect}
+                  onToggleSelect={handleToggleSelect}
+                  onAction={handleAction}
+                  onPin={handlePin}
+                  onDelete={handleDelete}
+                  onRowHover={handleRowHover}
+                  onRowLeave={handleRowLeave}
+                />
+              )}
+
+              <MainBulkActionBar
+                selectedCount={selectedIds.size}
+                totalCount={visibleItems.length}
+                onSelectAll={() => setSelectedIds(new Set(visibleItems.map((i) => i.id)))}
+                onDeselectAll={() => setSelectedIds(new Set())}
+                onBulkCopy={handleBulkCopy}
+                onBulkPin={handleBulkPin}
+                onBulkDelete={handleBulkDelete}
+              />
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Migration Blocking Overlay */}
       {isMigrationBlocking && (
@@ -677,26 +950,50 @@ export function MainApp() {
         </div>
       )}
 
-      {/* Feedback Toast */}
-      {feedback && (
-        <div className="fixed bottom-5 left-1/2 z-50 w-[min(92vw,480px)] -translate-x-1/2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 shadow-[var(--shadow-soft)] backdrop-blur-xl">
-          <div className="flex items-start gap-3">
-            <div className="mt-0.5 rounded-full bg-[var(--surface-2)] p-2 text-[var(--accent)]">
-              {feedback.tone === "warning" ? (
-                <TriangleAlert className="h-4 w-4" />
-              ) : feedback.tone === "copy" ? (
-                <Copy className="h-4 w-4" />
-              ) : (
-                <ShieldCheck className="h-4 w-4" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-[var(--text-primary)]">{feedback.title}</p>
-              <p className="mt-1 text-sm text-[var(--text-secondary)]">{feedback.message}</p>
+      {/* 二次确认（回收站清空 / 彻底删除 / 全部恢复） */}
+      {confirmAction && (
+        <div
+          data-testid="main-confirm-dialog"
+          role="dialog"
+          aria-modal="true"
+          className="absolute inset-0 z-30 flex items-center justify-center bg-[rgba(17,22,30,0.42)] px-6 backdrop-blur-sm"
+        >
+          <div className="w-full max-w-[380px] rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-5 py-5 shadow-[0_24px_80px_rgba(17,22,30,0.22)]">
+            <h2 className="text-[15px] font-semibold text-[var(--text-primary)]">{confirmAction.title}</h2>
+            <p className="mt-2 text-[12.5px] leading-relaxed text-[var(--text-secondary)]">
+              {confirmAction.message}
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmAction(null)}
+                className="rounded-[9px] border border-[var(--border)] px-3 py-[6px] text-[12px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--row-hover)]"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const action = confirmAction;
+                  setConfirmAction(null);
+                  void action.onConfirm();
+                }}
+                className="rounded-[9px] px-3 py-[6px] text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+                style={{ background: confirmAction.danger === false ? "var(--accent)" : "var(--danger)" }}
+              >
+                {confirmAction.confirmLabel}
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* 统一 Toast（成功 / 降级 / 可撤销），浮在底部中央 */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-5 z-40 flex justify-center px-4">
+        <div className="w-[min(92vw,480px)]">
+          <Toast toast={feedback} onDismiss={() => setFeedback(null)} />
+        </div>
+      </div>
     </main>
   );
 }

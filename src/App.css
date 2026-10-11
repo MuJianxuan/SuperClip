@@ -2,54 +2,63 @@
 
 :root {
   /* ========== Light theme (soft consumer, paired with dark) ========== */
-  --bg: rgba(247, 248, 250, 0.9);
-  --bg-accent: rgba(56, 189, 248, 0.08);
+  --bg: rgba(250, 250, 252, 0.86);
+  /* 实底背景：Toast/浮层用（毛玻瑀 --bg 半透明会让文字对比度不可控） */
+  --bg-window-solid: #fafafc;
+  --bg-elevated: rgba(15, 20, 30, 0.035);
+  --bg-accent: rgba(0, 102, 214, 0.06);
   --surface: rgba(255, 255, 255, 0.78);
   --surface-raised: rgba(255, 255, 255, 0.9);
   --surface-2: rgba(241, 243, 246, 0.9);
-  --border: rgba(15, 23, 42, 0.08);
-  --border-strong: rgba(15, 23, 42, 0.14);
-  --text-primary: #16191d;
-  --text-secondary: #5b6470;
-  --text-tertiary: #7a8088;
-  --accent: #38bdf8;
-  --accent-contrast: #0b1420;
-  --accent-soft: rgba(56, 189, 248, 0.12);
+  --border: rgba(15, 20, 30, 0.09);
+  --border-strong: rgba(15, 20, 30, 0.16);
+  --text-primary: #14171c;
+  --text-secondary: #5a6270;
+  --text-tertiary: #868d99;
+  --accent: #0066d6;
+  --accent-text: #0066d6;
+  --accent-contrast: #ffffff;
+  --accent-soft: rgba(0, 102, 214, 0.1);
   --shadow-soft: 0 6px 14px rgba(18, 23, 30, 0.08);
+  --shadow-raised: 0 6px 20px rgba(15, 20, 30, 0.1);
+  --success: #14804a;
   --success-bg: rgba(224, 238, 228, 0.9);
   --success-text: #29563a;
+  --warn: #c76a00;
   --warning-bg: rgba(245, 237, 220, 0.95);
   --warning-text: #735a31;
   --warning-border: rgba(169, 132, 59, 0.18);
-  --danger-bg: rgba(239, 68, 68, 0.1);
-  --danger-text: #e0483e;
-  --danger-border: rgba(239, 68, 68, 0.2);
+  --danger-bg: rgba(217, 45, 32, 0.1);
+  --danger-text: #d92d20;
+  --danger-border: rgba(217, 45, 32, 0.2);
   --popup-bg: rgba(255, 255, 255, 0.85);
   --popup-border: rgba(0, 0, 0, 0.06);
   --popup-shadow: 0 24px 80px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(255, 255, 255, 0.5);
-  --selection-accent: #38bdf8;
-  --tab-active-bg: rgba(56, 189, 248, 0.12);
+  --selection-accent: #0066d6;
   --tab-hover-bg: rgba(15, 23, 42, 0.04);
   --row-hover: rgba(15, 23, 42, 0.03);
-  --row-selected: rgba(56, 189, 248, 0.08);
+  --row-selected: rgba(0, 102, 214, 0.1);
   --grid-card-bg: rgba(255, 255, 255, 0.92);
   /* F2 Settings 卡片浅底 / 分隔线 / 侧栏右边线 / 分段按钮细边（浅色配对值） */
   --card-bg: rgba(15, 23, 42, 0.02);
-  --divider: rgba(15, 23, 42, 0.04);
+  --divider: rgba(15, 20, 30, 0.06);
   --sidebar-border: rgba(15, 23, 42, 0.04);
   --seg-border: rgba(15, 23, 42, 0.04);
 
   /* ========== Confirmed language tokens (shared across themes) ========== */
-  --accent-blue: #38bdf8;
-  --pinned: #fbbf24;
-  --danger: #ef4444;
-  --type-text: #38bdf8;
-  --type-image: #fb7185;
-  --type-file: #60a5fa;
-  --type-html: #a78bfa;
-  --radius-sm: 12px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
+  --accent-blue: #0066d6;
+  --pinned: #c76a00;
+  --danger: #d92d20;
+  /* 类型色已收敛：4 个彩色类型色 → 中性灰（图标靠形状区分，配色只剩强调/置顶/危险三种语义） */
+  --icon-idle: #6b7280;
+  --icon-bg: rgba(15, 20, 30, 0.055);
+  --type-text: var(--icon-idle);
+  --type-image: var(--icon-idle);
+  --type-file: var(--icon-idle);
+  --type-html: var(--icon-idle);
+  --radius-sm: 7px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
   --blur-window: 40px;
   --saturate-window: 1.6;
   --window-inset-border: rgba(255, 255, 255, 0.04);
@@ -58,64 +67,69 @@
 
 :root[data-theme-mode="dark"] {
   /* ========== Dark theme (confirmed frosted glass) ========== */
-  --bg: rgba(16, 21, 28, 0.82);
-  --bg-accent: rgba(56, 189, 248, 0.06);
+  --bg: rgba(20, 22, 26, 0.82);
+  --bg-window-solid: #14161a;
+  --bg-elevated: rgba(255, 255, 255, 0.055);
+  --bg-accent: rgba(10, 132, 255, 0.06);
   --surface: rgba(255, 255, 255, 0.05);
-  --surface-raised: rgba(16, 21, 28, 0.92);
+  --surface-raised: rgba(20, 22, 26, 0.92);
   --surface-2: rgba(255, 255, 255, 0.04);
-  --border: rgba(255, 255, 255, 0.06);
-  --border-strong: rgba(255, 255, 255, 0.12);
-  --text-primary: rgba(255, 255, 255, 0.85);
-  --text-secondary: rgba(255, 255, 255, 0.6);
-  --text-tertiary: rgba(255, 255, 255, 0.35);
-  --accent: #38bdf8;
-  --accent-contrast: #0b1420;
-  --accent-soft: rgba(56, 189, 248, 0.14);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.13);
+  --text-primary: #f2f3f5;
+  --text-secondary: #a0a6b0;
+  --text-tertiary: #6e747e;
+  --accent: #0a84ff;
+  --accent-text: #4da3ff;
+  --accent-contrast: #ffffff;
+  --accent-soft: rgba(10, 132, 255, 0.13);
   --shadow-soft: 0 6px 14px rgba(0, 0, 0, 0.22);
+  --shadow-raised: 0 6px 20px rgba(0, 0, 0, 0.35);
+  --success: #32d74b;
   --success-bg: rgba(27, 56, 41, 0.72);
   --success-text: #b9e5ca;
-  --warning-bg: rgba(251, 191, 36, 0.06);
-  --warning-text: rgba(251, 191, 36, 0.75);
-  --warning-border: rgba(251, 191, 36, 0.15);
-  --danger-bg: rgba(239, 68, 68, 0.08);
-  --danger-text: rgba(239, 68, 68, 0.8);
-  --danger-border: rgba(239, 68, 68, 0.18);
-  --popup-bg: rgba(17, 22, 29, 0.82);
-  --popup-border: rgba(255, 255, 255, 0.06);
-  --popup-shadow: 0 24px 80px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
-  --selection-accent: rgba(56, 189, 248, 0.9);
-  --tab-active-bg: rgba(255, 255, 255, 0.08);
+  --warn: #ff9f0a;
+  --warning-bg: rgba(255, 159, 10, 0.06);
+  --warning-text: rgba(255, 159, 10, 0.75);
+  --warning-border: rgba(255, 159, 10, 0.15);
+  --danger-bg: rgba(255, 69, 58, 0.08);
+  --danger-text: rgba(255, 69, 58, 0.8);
+  --danger-border: rgba(255, 69, 58, 0.18);
+  --popup-bg: rgba(20, 22, 26, 0.82);
+  --popup-border: rgba(255, 255, 255, 0.08);
+  --popup-shadow: 0 24px 80px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.07);
+  --selection-accent: rgba(10, 132, 255, 0.9);
   --tab-hover-bg: rgba(255, 255, 255, 0.04);
   --row-hover: rgba(255, 255, 255, 0.025);
-  --row-selected: rgba(56, 189, 248, 0.07);
+  --row-selected: rgba(10, 132, 255, 0.14);
   --grid-card-bg: rgba(255, 255, 255, 0.018);
   /* F2 Settings 卡片浅底 / 分隔线 / 侧栏右边线 / 分段按钮细边（深色值对齐 F2 原型） */
   --card-bg: rgba(255, 255, 255, 0.02);
-  --divider: rgba(255, 255, 255, 0.03);
+  --divider: rgba(255, 255, 255, 0.055);
   --sidebar-border: rgba(255, 255, 255, 0.04);
   --seg-border: rgba(255, 255, 255, 0.04);
 
   /* Confirmed language tokens (dark variants only where contrast differs) */
-  --accent-blue: #38bdf8;
-  --pinned: #fbbf24;
-  --danger: #ef4444;
-  --type-text: #38bdf8;
-  --type-image: #fb7185;
-  --type-file: #60a5fa;
-  --type-html: #a78bfa;
-  --radius-sm: 12px;
-  --radius-md: 14px;
-  --radius-lg: 18px;
+  --accent-blue: #0a84ff;
+  --pinned: #ff9f0a;
+  --danger: #ff453a;
+  --icon-idle: #8b919b;
+  --icon-bg: rgba(255, 255, 255, 0.07);
+  --type-text: var(--icon-idle);
+  --type-image: var(--icon-idle);
+  --type-file: var(--icon-idle);
+  --type-html: var(--icon-idle);
+  --radius-sm: 7px;
+  --radius-md: 9px;
+  --radius-lg: 12px;
   --blur-window: 40px;
   --saturate-window: 1.6;
   --window-inset-border: rgba(255, 255, 255, 0.04);
   --window-drop-shadow: 0 32px 100px rgba(0, 0, 0, 0.45);
 
   /* E2 dark-scoped controls (对齐原型：细描边/弱化文字) */
-  --search-border: rgba(255, 255, 255, 0.04);
   --toggle-bg: rgba(255, 255, 255, 0.03);
   --seg-text: rgba(255, 255, 255, 0.2);
-  --seg-active-text: rgba(255, 255, 255, 0.65);
   --chip-bg: rgba(255, 255, 255, 0.02);
   --chip-text: rgba(255, 255, 255, 0.35);
   --chip-badge-bg: rgba(255, 255, 255, 0.04);
@@ -130,11 +144,10 @@
   --row-preview: rgba(255, 255, 255, 0.22);
   --row-meta: rgba(255, 255, 255, 0.22);
   --row-time: rgba(255, 255, 255, 0.1);
-  --search-icon: rgba(255, 255, 255, 0.25);
   --row-action-text: rgba(255, 255, 255, 0.4);
   --row-action-hover-bg: rgba(255, 255, 255, 0.08);
   --row-action-hover-text: rgba(255, 255, 255, 0.7);
-  --danger-idle: rgba(239, 68, 68, 0.55);
+  --danger-idle: color-mix(in srgb, var(--danger) 55%, transparent);
   --checkbox-idle: rgba(255, 255, 255, 0.08);
   --checkbox-hover: rgba(255, 255, 255, 0.2);
   --icon-box-bg: rgba(255, 255, 255, 0.04);
@@ -142,71 +155,76 @@
   --grid-card-hover: rgba(255, 255, 255, 0.035);
   --bulk-btn-text: rgba(255, 255, 255, 0.5);
   --bulk-btn-hover: rgba(255, 255, 255, 0.06);
-  --danger-btn-bg: rgba(239, 68, 68, 0.07);
-  --danger-hover-bg: rgba(239, 68, 68, 0.12);
-  --danger-hover-text: rgba(239, 68, 68, 0.9);
+  --danger-btn-bg: color-mix(in srgb, var(--danger) 7%, transparent);
+  --danger-hover-bg: color-mix(in srgb, var(--danger) 12%, transparent);
+  --danger-hover-text: color-mix(in srgb, var(--danger) 90%, transparent);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme-mode="light"]) {
-    --bg: rgba(16, 21, 28, 0.82);
-    --bg-accent: rgba(56, 189, 248, 0.06);
+    --bg: rgba(20, 22, 26, 0.82);
+    --bg-window-solid: #14161a;
+    --bg-elevated: rgba(255, 255, 255, 0.055);
+    --bg-accent: rgba(10, 132, 255, 0.06);
     --surface: rgba(255, 255, 255, 0.05);
-    --surface-raised: rgba(16, 21, 28, 0.92);
+    --surface-raised: rgba(20, 22, 26, 0.92);
     --surface-2: rgba(255, 255, 255, 0.04);
-    --border: rgba(255, 255, 255, 0.06);
-    --border-strong: rgba(255, 255, 255, 0.12);
-    --text-primary: rgba(255, 255, 255, 0.85);
-    --text-secondary: rgba(255, 255, 255, 0.6);
-    --text-tertiary: rgba(255, 255, 255, 0.35);
-    --accent: #38bdf8;
-    --accent-contrast: #0b1420;
-    --accent-soft: rgba(56, 189, 248, 0.14);
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.13);
+    --text-primary: #f2f3f5;
+    --text-secondary: #a0a6b0;
+    --text-tertiary: #6e747e;
+    --accent: #0a84ff;
+    --accent-text: #4da3ff;
+    --accent-contrast: #ffffff;
+    --accent-soft: rgba(10, 132, 255, 0.13);
     --shadow-soft: 0 6px 14px rgba(0, 0, 0, 0.22);
+    --shadow-raised: 0 6px 20px rgba(0, 0, 0, 0.35);
+    --success: #32d74b;
     --success-bg: rgba(27, 56, 41, 0.72);
     --success-text: #b9e5ca;
-    --warning-bg: rgba(251, 191, 36, 0.06);
-    --warning-text: rgba(251, 191, 36, 0.75);
-    --warning-border: rgba(251, 191, 36, 0.15);
-    --danger-bg: rgba(239, 68, 68, 0.08);
-    --danger-text: rgba(239, 68, 68, 0.8);
-    --danger-border: rgba(239, 68, 68, 0.18);
-    --popup-bg: rgba(17, 22, 29, 0.82);
-    --popup-border: rgba(255, 255, 255, 0.06);
-    --popup-shadow: 0 24px 80px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.04);
-    --selection-accent: rgba(56, 189, 248, 0.9);
-    --tab-active-bg: rgba(255, 255, 255, 0.08);
+    --warn: #ff9f0a;
+    --warning-bg: rgba(255, 159, 10, 0.06);
+    --warning-text: rgba(255, 159, 10, 0.75);
+    --warning-border: rgba(255, 159, 10, 0.15);
+    --danger-bg: rgba(255, 69, 58, 0.08);
+    --danger-text: rgba(255, 69, 58, 0.8);
+    --danger-border: rgba(255, 69, 58, 0.18);
+    --popup-bg: rgba(20, 22, 26, 0.82);
+    --popup-border: rgba(255, 255, 255, 0.08);
+    --popup-shadow: 0 24px 80px rgba(0, 0, 0, 0.45), 0 0 0 0.5px rgba(255, 255, 255, 0.07);
+    --selection-accent: rgba(10, 132, 255, 0.9);
     --tab-hover-bg: rgba(255, 255, 255, 0.04);
     --row-hover: rgba(255, 255, 255, 0.025);
-    --row-selected: rgba(56, 189, 248, 0.07);
+    --row-selected: rgba(10, 132, 255, 0.14);
     --grid-card-bg: rgba(255, 255, 255, 0.018);
     /* F2 Settings 卡片浅底 / 分隔线 / 侧栏右边线 / 分段按钮细边（深色值对齐 F2 原型） */
     --card-bg: rgba(255, 255, 255, 0.02);
-    --divider: rgba(255, 255, 255, 0.03);
+    --divider: rgba(255, 255, 255, 0.055);
     --sidebar-border: rgba(255, 255, 255, 0.04);
     --seg-border: rgba(255, 255, 255, 0.04);
 
     /* Confirmed language tokens (dark variants only where contrast differs) */
-    --accent-blue: #38bdf8;
-    --pinned: #fbbf24;
-    --danger: #ef4444;
-    --type-text: #38bdf8;
-    --type-image: #fb7185;
-    --type-file: #60a5fa;
-    --type-html: #a78bfa;
-    --radius-sm: 12px;
-    --radius-md: 14px;
-    --radius-lg: 18px;
+    --accent-blue: #0a84ff;
+    --pinned: #ff9f0a;
+    --danger: #ff453a;
+    --icon-idle: #8b919b;
+    --icon-bg: rgba(255, 255, 255, 0.07);
+    --type-text: var(--icon-idle);
+    --type-image: var(--icon-idle);
+    --type-file: var(--icon-idle);
+    --type-html: var(--icon-idle);
+    --radius-sm: 7px;
+    --radius-md: 9px;
+    --radius-lg: 12px;
     --blur-window: 40px;
     --saturate-window: 1.6;
     --window-inset-border: rgba(255, 255, 255, 0.04);
     --window-drop-shadow: 0 32px 100px rgba(0, 0, 0, 0.45);
 
     /* E2 dark-scoped controls (对齐原型：细描边/弱化文字) */
-    --search-border: rgba(255, 255, 255, 0.04);
     --toggle-bg: rgba(255, 255, 255, 0.03);
     --seg-text: rgba(255, 255, 255, 0.2);
-    --seg-active-text: rgba(255, 255, 255, 0.65);
     --chip-bg: rgba(255, 255, 255, 0.02);
     --chip-text: rgba(255, 255, 255, 0.35);
     --chip-badge-bg: rgba(255, 255, 255, 0.04);
@@ -221,11 +239,10 @@
     --row-preview: rgba(255, 255, 255, 0.22);
     --row-meta: rgba(255, 255, 255, 0.22);
     --row-time: rgba(255, 255, 255, 0.1);
-    --search-icon: rgba(255, 255, 255, 0.25);
     --row-action-text: rgba(255, 255, 255, 0.4);
     --row-action-hover-bg: rgba(255, 255, 255, 0.08);
     --row-action-hover-text: rgba(255, 255, 255, 0.7);
-    --danger-idle: rgba(239, 68, 68, 0.55);
+    --danger-idle: color-mix(in srgb, var(--danger) 55%, transparent);
     --checkbox-idle: rgba(255, 255, 255, 0.08);
     --checkbox-hover: rgba(255, 255, 255, 0.2);
     --icon-box-bg: rgba(255, 255, 255, 0.04);
@@ -233,9 +250,9 @@
     --grid-card-hover: rgba(255, 255, 255, 0.035);
     --bulk-btn-text: rgba(255, 255, 255, 0.5);
     --bulk-btn-hover: rgba(255, 255, 255, 0.06);
-    --danger-btn-bg: rgba(239, 68, 68, 0.07);
-    --danger-hover-bg: rgba(239, 68, 68, 0.12);
-    --danger-hover-text: rgba(239, 68, 68, 0.9);
+    --danger-btn-bg: color-mix(in srgb, var(--danger) 7%, transparent);
+    --danger-hover-bg: color-mix(in srgb, var(--danger) 12%, transparent);
+    --danger-hover-text: color-mix(in srgb, var(--danger) 90%, transparent);
   }
 }
 
@@ -311,7 +328,7 @@ input::placeholder {
 }
 
 ::selection {
-  background: rgba(56, 189, 248, 0.25);
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
 .is-window-resizing *,
@@ -360,10 +377,6 @@ input::placeholder {
   --badge-bg: rgba(15, 23, 42, 0.04);
   --badge-border: rgba(15, 23, 42, 0.06);
   --badge-text: var(--text-tertiary);
-  --footer-border: var(--border);
-  --icon-unselected-bg: var(--border);
-  --icon-unselected-text: var(--text-tertiary);
-  --footer-chip-bg: rgba(15, 23, 42, 0.02);
 }
 
 :root[data-theme-mode="dark"] .popup-shell {
@@ -371,10 +384,6 @@ input::placeholder {
   --badge-bg: rgba(255, 255, 255, 0.04);
   --badge-border: rgba(255, 255, 255, 0.04);
   --badge-text: rgba(255, 255, 255, 0.12);
-  --footer-border: rgba(255, 255, 255, 0.03);
-  --icon-unselected-bg: rgba(255, 255, 255, 0.04);
-  --icon-unselected-text: rgba(255, 255, 255, 0.28);
-  --footer-chip-bg: rgba(255, 255, 255, 0.02);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -383,10 +392,6 @@ input::placeholder {
     --badge-bg: rgba(255, 255, 255, 0.04);
     --badge-border: rgba(255, 255, 255, 0.04);
     --badge-text: rgba(255, 255, 255, 0.12);
-    --footer-border: rgba(255, 255, 255, 0.03);
-    --icon-unselected-bg: rgba(255, 255, 255, 0.04);
-    --icon-unselected-text: rgba(255, 255, 255, 0.28);
-    --footer-chip-bg: rgba(255, 255, 255, 0.02);
   }
 }
 
@@ -396,24 +401,22 @@ input::placeholder {
   --preview-divider: rgba(15, 23, 42, 0.06);
   --preview-divider-faint: rgba(15, 23, 42, 0.045);
   --preview-header-time: rgba(15, 23, 42, 0.4);
-  --preview-faint-icon: rgba(15, 23, 42, 0.32);
   --preview-faint-text: rgba(15, 23, 42, 0.45);
   --preview-ghost-text: rgba(15, 23, 42, 0.3);
   --preview-image-icon: rgba(15, 23, 42, 0.35);
   --preview-code-bg: rgba(15, 23, 42, 0.055);
-  --preview-code-text: color-mix(in srgb, var(--type-text) 65%, var(--text-primary));
+  --preview-code-text: var(--text-secondary);
 }
 
 :root[data-theme-mode="dark"] .preview-shell {
   --preview-divider: rgba(255, 255, 255, 0.04);
   --preview-divider-faint: rgba(255, 255, 255, 0.03);
   --preview-header-time: rgba(255, 255, 255, 0.15);
-  --preview-faint-icon: rgba(255, 255, 255, 0.12);
   --preview-faint-text: rgba(255, 255, 255, 0.18);
   --preview-ghost-text: rgba(255, 255, 255, 0.1);
   --preview-image-icon: rgba(255, 255, 255, 0.15);
   --preview-code-bg: rgba(10, 14, 20, 0.6);
-  --preview-code-text: color-mix(in srgb, var(--type-text) 75%, transparent);
+  --preview-code-text: var(--text-secondary);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -421,12 +424,11 @@ input::placeholder {
     --preview-divider: rgba(255, 255, 255, 0.04);
     --preview-divider-faint: rgba(255, 255, 255, 0.03);
     --preview-header-time: rgba(255, 255, 255, 0.15);
-    --preview-faint-icon: rgba(255, 255, 255, 0.12);
     --preview-faint-text: rgba(255, 255, 255, 0.18);
     --preview-ghost-text: rgba(255, 255, 255, 0.1);
     --preview-image-icon: rgba(255, 255, 255, 0.15);
     --preview-code-bg: rgba(10, 14, 20, 0.6);
-    --preview-code-text: color-mix(in srgb, var(--type-text) 75%, transparent);
+    --preview-code-text: var(--text-secondary);
   }
 }
 
@@ -439,7 +441,6 @@ input::placeholder {
   --panel-group-label: rgba(15, 23, 42, 0.4);
   --panel-desc: rgba(15, 23, 42, 0.5);
   --panel-faint-text: rgba(15, 23, 42, 0.45);
-  --panel-divider: rgba(15, 23, 42, 0.05);
   --panel-row-hover: rgba(15, 23, 42, 0.045);
   --panel-label: rgba(15, 23, 42, 0.7);
   --panel-label-hover: rgba(15, 23, 42, 0.88);
@@ -452,8 +453,6 @@ input::placeholder {
   --panel-seg-bg-hover: rgba(15, 23, 42, 0.05);
   --panel-seg-text: rgba(15, 23, 42, 0.5);
   --panel-seg-text-hover: rgba(15, 23, 42, 0.75);
-  --panel-status-on-text: color-mix(in srgb, #34d399 55%, #0f172a);
-  --panel-status-off-text: color-mix(in srgb, #fb923c 60%, #7c2d12);
 }
 
 :root[data-theme-mode="dark"] .quick-panel-shell {
@@ -463,7 +462,6 @@ input::placeholder {
   --panel-group-label: rgba(255, 255, 255, 0.15);
   --panel-desc: rgba(255, 255, 255, 0.22);
   --panel-faint-text: rgba(255, 255, 255, 0.18);
-  --panel-divider: rgba(255, 255, 255, 0.035);
   --panel-row-hover: rgba(255, 255, 255, 0.035);
   --panel-label: rgba(255, 255, 255, 0.65);
   --panel-label-hover: rgba(255, 255, 255, 0.85);
@@ -476,8 +474,6 @@ input::placeholder {
   --panel-seg-bg-hover: rgba(255, 255, 255, 0.04);
   --panel-seg-text: rgba(255, 255, 255, 0.35);
   --panel-seg-text-hover: rgba(255, 255, 255, 0.6);
-  --panel-status-on-text: rgba(52, 211, 153, 0.75);
-  --panel-status-off-text: rgba(251, 146, 60, 0.75);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -488,7 +484,6 @@ input::placeholder {
     --panel-group-label: rgba(255, 255, 255, 0.15);
     --panel-desc: rgba(255, 255, 255, 0.22);
     --panel-faint-text: rgba(255, 255, 255, 0.18);
-    --panel-divider: rgba(255, 255, 255, 0.035);
     --panel-row-hover: rgba(255, 255, 255, 0.035);
     --panel-label: rgba(255, 255, 255, 0.65);
     --panel-label-hover: rgba(255, 255, 255, 0.85);
@@ -501,8 +496,6 @@ input::placeholder {
     --panel-seg-bg-hover: rgba(255, 255, 255, 0.04);
     --panel-seg-text: rgba(255, 255, 255, 0.35);
     --panel-seg-text-hover: rgba(255, 255, 255, 0.6);
-    --panel-status-on-text: rgba(52, 211, 153, 0.75);
-    --panel-status-off-text: rgba(251, 146, 60, 0.75);
   }
 }
 
@@ -589,7 +582,7 @@ input::placeholder {
   height: 4px;
   border-radius: 2px;
   background:
-    linear-gradient(90deg, rgba(56, 189, 248, 0.6), rgba(56, 189, 248, 0.6)) 0 / var(--slider-fill, 0%) 100% no-repeat,
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 60%, transparent), color-mix(in srgb, var(--accent) 60%, transparent)) 0 / var(--slider-fill, 0%) 100% no-repeat,
     var(--slider-track-color, var(--surface-2));
   outline: none;
   cursor: pointer;
@@ -615,7 +608,7 @@ input::placeholder {
 }
 .slider-range:active::-webkit-slider-thumb {
   transform: scale(1.15);
-  box-shadow: 0 0 0 6px var(--slider-active-thumb-color, rgba(56, 189, 248, 0.5));
+  box-shadow: 0 0 0 6px var(--slider-active-thumb-color, var(--accent-soft));
 }
 
 /* Smooth transitions for interactive elements */

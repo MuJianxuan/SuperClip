@@ -2,15 +2,18 @@ import * as React from "react";
 import {
   ArrowLeft,
   Database,
+  Info,
   Keyboard,
   Monitor,
   Moon,
   PencilLine,
   Plus,
+  RotateCcw,
   Shield,
   Sliders,
   Sun,
   Trash2,
+  Wrench,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
@@ -26,7 +29,12 @@ import type {
   ShortcutValidationResponse,
 } from "../lib/superclip";
 
-type SettingsSectionKey = "general" | "shortcuts" | "privacy" | "about";
+type SettingsSectionKey = "general" | "shortcuts" | "privacy" | "advanced" | "about";
+export type { SettingsSectionKey };
+
+/** 构建期注入的应用版本（vite define，defines 缺失时回退 "dev"） */
+const APP_VERSION =
+  typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
 
 export interface SettingsShellProps {
   settings: SettingsResponse;
@@ -35,6 +43,8 @@ export interface SettingsShellProps {
   pinnedCount: number;
   permissionTrusted: boolean;
   readOnlyMode: boolean;
+  /** 打开时选中的分区（侧栏「排除规则」直接跳到 privacy） */
+  initialSection?: SettingsSectionKey;
   onClose: () => void;
   onUpdate: (patch: SettingsUpdatePayload) => Promise<void>;
   onDiagnosticsClick: () => void | Promise<void>;
@@ -47,6 +57,10 @@ export interface SettingsShellProps {
   onShortcutValidate: (binding: string) => Promise<ShortcutValidationResponse>;
   onShortcutUpdate: (binding: string) => Promise<void>;
   onShortcutRestoreDefault: () => Promise<void>;
+  /** 清空全部历史（危险操作，调用方二次确认后执行） */
+  onClearHistory: () => void | Promise<void>;
+  /** 重置所有设置（危险操作，调用方二次确认后执行） */
+  onResetSettings: () => void | Promise<void>;
 }
 
 const sections: Array<{
@@ -57,7 +71,8 @@ const sections: Array<{
   { key: "general", label: "通用", icon: Sliders },
   { key: "shortcuts", label: "快捷键", icon: Keyboard },
   { key: "privacy", label: "排除规则", icon: Shield },
-  { key: "about", label: "高级", icon: Monitor },
+  { key: "advanced", label: "高级", icon: Wrench },
+  { key: "about", label: "关于", icon: Info },
 ];
 
 const ruleKindLabels: Record<ExclusionRuleKind, string> = {
@@ -75,7 +90,7 @@ const contentKindOptions = [
 ];
 
 /* 主题分段按钮 —— F2 原型语言（与 Quick Panel 分段一致），hover 由 React state 驱动。
-   选中 = 蓝底 rgba(56,189,248,0.08) + 蓝边 0.22 + 蓝字；未选中 = 浅底。
+   选中 = 蓝底 var(--accent-soft) + 蓝边 0.22 + 蓝字；未选中 = 浅底。
    注意：不套按钮容器底框（与 F2 一致）。 */
 function ThemeSegButton({
   active,
@@ -104,18 +119,18 @@ function ThemeSegButton({
       style={{
         border: `1px solid ${
           active
-            ? "rgba(56, 189, 248, 0.22)"
+            ? "color-mix(in srgb, var(--accent) 22%, transparent)"
             : hovered
               ? "var(--border-strong)"
               : "var(--seg-border)"
         }`,
         background: active
-          ? "rgba(56, 189, 248, 0.08)"
+          ? "var(--accent-soft)"
           : hovered
             ? "var(--row-hover)"
             : "var(--card-bg)",
         color: active
-          ? "rgba(56, 189, 248, 0.9)"
+          ? "var(--accent-text)"
           : hovered
             ? "var(--text-primary)"
             : "var(--text-secondary)",
@@ -155,18 +170,18 @@ function SegControlButton({
       style={{
         border: `1px solid ${
           active
-            ? "rgba(56, 189, 248, 0.22)"
+            ? "color-mix(in srgb, var(--accent) 22%, transparent)"
             : hovered
               ? "var(--border-strong)"
               : "var(--seg-border)"
         }`,
         background: active
-          ? "rgba(56, 189, 248, 0.08)"
+          ? "var(--accent-soft)"
           : hovered
             ? "var(--row-hover)"
             : "var(--card-bg)",
         color: active
-          ? "rgba(56, 189, 248, 0.9)"
+          ? "var(--accent-text)"
           : hovered
             ? "var(--text-primary)"
             : "var(--text-secondary)",
@@ -182,7 +197,7 @@ function SegControlButton({
    注意随 data-theme-mode 联动：用户切深色后即使系统浅色也用深色轨道。 */
 function readSliderTrackColors() {
   if (typeof document === "undefined") {
-    return { bg: "rgba(255,255,255,0.08)", hover: "rgba(255,255,255,0.22)", active: "rgba(56,189,248,0.6)" };
+    return { bg: "rgba(255,255,255,0.08)", hover: "rgba(255,255,255,0.22)", active: "var(--accent)" };
   }
   const mode = document.documentElement.dataset.themeMode;
   const dark =
@@ -191,8 +206,8 @@ function readSliderTrackColors() {
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-color-scheme: dark)").matches);
   return dark
-    ? { bg: "rgba(255,255,255,0.08)", hover: "rgba(255,255,255,0.22)", active: "rgba(56,189,248,0.6)" }
-    : { bg: "rgba(15,23,42,0.14)", hover: "rgba(15,23,42,0.26)", active: "rgba(56,189,248,0.55)" };
+    ? { bg: "rgba(255,255,255,0.08)", hover: "rgba(255,255,255,0.22)", active: "var(--accent)" }
+    : { bg: "rgba(15,23,42,0.14)", hover: "rgba(15,23,42,0.26)", active: "var(--accent)" };
 }
 
 /* F2 分区大标题：通用 / 快捷键 / 排除规则 / 高级 */
@@ -290,9 +305,9 @@ function ChangeButton({
         disabled && "cursor-not-allowed opacity-60",
       )}
       style={{
-        background: hovered ? "rgba(56,189,248,0.08)" : "transparent",
+        background: hovered ? "var(--accent-soft)" : "transparent",
         border: "none",
-        color: hovered ? "rgba(56,189,248,0.8)" : "rgba(56,189,248,0.45)",
+        color: hovered ? "var(--accent-text)" : "color-mix(in srgb, var(--accent-text) 70%, transparent)",
       }}
     >
       {children}
@@ -333,9 +348,9 @@ function BackButton({
       onMouseLeave={() => setHovered(false)}
       className="flex items-center gap-1.5 rounded-[9px] px-3 py-1.5 text-[12px] font-medium transition-all duration-150"
       style={{
-        border: `1px solid ${hovered ? "rgba(56,189,248,0.2)" : "var(--border)"}`,
-        background: hovered ? "rgba(56,189,248,0.06)" : "var(--card-bg)",
-        color: hovered ? "rgba(56,189,248,0.8)" : "var(--text-secondary)",
+        border: `1px solid ${hovered ? "color-mix(in srgb, var(--accent) 20%, transparent)" : "var(--border)"}`,
+        background: hovered ? "color-mix(in srgb, var(--accent) 6%, transparent)" : "var(--card-bg)",
+        color: hovered ? "var(--accent-text)" : "var(--text-secondary)",
       }}
     >
       {children}
@@ -368,9 +383,9 @@ function PrimaryBtn({
         disabled && "cursor-not-allowed opacity-60",
       )}
       style={{
-        border: `1px solid ${hovered ? "rgba(56, 189, 248, 0.35)" : "rgba(56, 189, 248, 0.15)"}`,
-        background: hovered ? "rgba(56, 189, 248, 0.12)" : "rgba(56, 189, 248, 0.06)",
-        color: hovered ? "rgba(56, 189, 248, 0.9)" : "rgba(56, 189, 248, 0.7)",
+        border: `1px solid ${hovered ? "color-mix(in srgb, var(--accent) 35%, transparent)" : "color-mix(in srgb, var(--accent) 15%, transparent)"}`,
+        background: hovered ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "color-mix(in srgb, var(--accent) 6%, transparent)",
+        color: hovered ? "var(--accent-text)" : "var(--accent-text)",
       }}
     >
       {children}
@@ -378,7 +393,7 @@ function PrimaryBtn({
   );
 }
 
-/* F2 危险按钮：红底红边（#ef4444 系），hover 加深（React state 驱动） */
+/* F2 危险按钮：红底红边（--danger 系），hover 加深（React state 驱动） */
 function DangerBtn({
   onClick,
   disabled,
@@ -402,9 +417,9 @@ function DangerBtn({
         disabled && "cursor-not-allowed opacity-60",
       )}
       style={{
-        border: `1px solid ${hovered ? "rgba(239, 68, 68, 0.3)" : "rgba(239, 68, 68, 0.12)"}`,
-        background: hovered ? "rgba(239, 68, 68, 0.08)" : "rgba(239, 68, 68, 0.04)",
-        color: hovered ? "rgba(239, 68, 68, 0.85)" : "rgba(239, 68, 68, 0.6)",
+        border: `1px solid ${hovered ? "color-mix(in srgb, var(--danger) 30%, transparent)" : "color-mix(in srgb, var(--danger) 12%, transparent)"}`,
+        background: hovered ? "color-mix(in srgb, var(--danger) 8%, transparent)" : "color-mix(in srgb, var(--danger) 4%, transparent)",
+        color: hovered ? "color-mix(in srgb, var(--danger) 85%, transparent)" : "color-mix(in srgb, var(--danger) 60%, transparent)",
       }}
     >
       {children}
@@ -412,7 +427,7 @@ function DangerBtn({
   );
 }
 
-/* F2 侧栏分区项：选中 = 浅蓝底 rgba(56,189,248,0.07) + 左侧 3px 蓝条 + 蓝字；hover = 白 0.03 底。
+/* F2 侧栏分区项：选中 = 浅蓝底 var(--accent-soft) + 左侧 3px 蓝条 + 蓝字；hover = 白 0.03 底。
    hover 一律 React state 驱动，禁止 currentTarget.style。 */
 function SidebarNavItem({
   icon,
@@ -436,12 +451,12 @@ function SidebarNavItem({
       style={{
         border: "none",
         background: isActive
-          ? "rgba(56, 189, 248, 0.07)"
+          ? "var(--accent-soft)"
           : hovered
             ? "var(--row-hover)"
             : "transparent",
         color: isActive
-          ? "rgba(56, 189, 248, 0.85)"
+          ? "var(--accent-text)"
           : hovered
             ? "var(--text-primary)"
             : "var(--text-tertiary)",
@@ -454,7 +469,7 @@ function SidebarNavItem({
         data-active-bar="true"
         style={{
           height: isActive ? 16 : 0,
-          background: "#38bdf8",
+          background: "var(--accent)",
           opacity: isActive ? 0.85 : 0,
         }}
       />
@@ -515,9 +530,9 @@ function RuleRow({
           onMouseLeave={() => setEditHovered(false)}
           className="rounded-[6px] p-1.5 transition-all duration-150"
           style={{
-            background: editHovered ? "rgba(56,189,248,0.08)" : "transparent",
+            background: editHovered ? "var(--accent-soft)" : "transparent",
             border: "none",
-            color: editHovered ? "rgba(56,189,248,0.8)" : "var(--text-tertiary)",
+            color: editHovered ? "var(--accent-text)" : "var(--text-tertiary)",
           }}
         >
           <PencilLine className="h-[13px] w-[13px]" />
@@ -531,9 +546,9 @@ function RuleRow({
           onMouseLeave={() => setDeleteHovered(false)}
           className="rounded-[6px] p-1.5 transition-all duration-150"
           style={{
-            background: deleteHovered ? "rgba(239, 68, 68, 0.07)" : "transparent",
+            background: deleteHovered ? "color-mix(in srgb, var(--danger) 7%, transparent)" : "transparent",
             border: "none",
-            color: deleteHovered ? "rgba(239, 68, 68, 0.6)" : "var(--text-tertiary)",
+            color: deleteHovered ? "color-mix(in srgb, var(--danger) 60%, transparent)" : "var(--text-tertiary)",
           }}
         >
           <Trash2 className="h-[13px] w-[13px]" />
@@ -592,6 +607,7 @@ export function SettingsShell({
   pinnedCount,
   permissionTrusted,
   readOnlyMode,
+  initialSection,
   onClose,
   onUpdate,
   onDiagnosticsClick,
@@ -604,8 +620,10 @@ export function SettingsShell({
   onShortcutValidate,
   onShortcutUpdate,
   onShortcutRestoreDefault,
+  onClearHistory,
+  onResetSettings,
 }: SettingsShellProps) {
-  const [activeSection, setActiveSection] = React.useState<SettingsSectionKey>("general");
+  const [activeSection, setActiveSection] = React.useState<SettingsSectionKey>(initialSection ?? "general");
   const [isShortcutRecording, setIsShortcutRecording] = React.useState(false);
   const [shortcutPreview, setShortcutPreview] = React.useState<string | null>(null);
   const [shortcutError, setShortcutError] = React.useState<string | null>(null);
@@ -958,7 +976,7 @@ export function SettingsShell({
                           } as React.CSSProperties
                         }
                       />
-                      <span className="min-w-[44px] text-right text-[13px] font-semibold tabular-nums" style={{ color: "rgba(56,189,248,0.85)" }}>
+                      <span className="min-w-[44px] text-right text-[13px] font-semibold tabular-nums" style={{ color: "var(--accent-text)" }}>
                         {settings.listFontSize}
                       </span>
                       <span className="min-w-[32px] text-[10.5px] text-[var(--text-tertiary)]">px</span>
@@ -999,7 +1017,7 @@ export function SettingsShell({
                           } as React.CSSProperties
                         }
                       />
-                      <span className="min-w-[44px] text-right text-[13px] font-semibold tabular-nums" style={{ color: "rgba(56,189,248,0.85)" }}>
+                      <span className="min-w-[44px] text-right text-[13px] font-semibold tabular-nums" style={{ color: "var(--accent-text)" }}>
                         {settings.historyLimit}
                       </span>
                       <span className="min-w-[32px] text-[10.5px] text-[var(--text-tertiary)]">条</span>
@@ -1357,7 +1375,7 @@ export function SettingsShell({
                 </div>
               ) : null}
 
-              {activeSection === "about" ? (
+              {activeSection === "advanced" ? (
                 <div>
                   <PaneTitle>高级</PaneTitle>
 
@@ -1367,27 +1385,76 @@ export function SettingsShell({
                       style={{ background: "var(--card-bg)", border: "1px solid var(--divider)" }}
                     >
                       <div>~/Library/Application Support/com.superclip/</div>
-                      <div className="text-[var(--text-tertiary)]">├── superclip.db (SQLite v3)</div>
+                      <div className="text-[var(--text-tertiary)]">├── superclip.db (SQLite v4)</div>
                       <div className="text-[var(--text-tertiary)]">├── config.json (Schema v1)</div>
                       <div className="text-[var(--text-tertiary)]">└── logs/</div>
                     </div>
                   </SectionCard>
 
                   <SectionCard title="诊断" description="用于排查问题的工具" style={{ marginTop: 14 }}>
+                    {/* 导出诊断是只读操作，恢复模式下必须可用（「只开放浏览、搜索、复制和诊断」契约）；
+                        真正不可逆的清空/重置才受 readOnlyMode 约束 */}
                     <DangerBtn onClick={() => void onDiagnosticsClick()}>
                       <Database className="h-[13px] w-[13px]" />
                       导出诊断数据
                     </DangerBtn>
                   </SectionCard>
 
-                  {/* 关于（真实版本 / 权限状态，合理扩展卡） */}
-                  <SectionCard title="关于" description="版本与权限状态" style={{ marginTop: 14 }}>
+                  <SectionCard
+                    title="危险操作"
+                    description="不可撤销，请确认后再执行"
+                    style={{ marginTop: 14 }}
+                  >
                     <Row
-                      label="当前版本"
-                      hint="SuperClip 本地客户端"
-                      action={<ShortcutBadge>superclip@0.1.0</ShortcutBadge>}
+                      label="清空全部历史"
+                      hint="删除所有剪贴板记录（含置顶与回收站）"
+                      action={
+                        <DangerBtn
+                          disabled={readOnlyMode}
+                          onClick={() => void onClearHistory()}
+                        >
+                          <Trash2 className="h-[13px] w-[13px]" />
+                          清空历史
+                        </DangerBtn>
+                      }
                     />
                     <RowDivider />
+                    <Row
+                      label="重置所有设置"
+                      hint="恢复默认外观、默认动作与保留上限（不删除历史记录；不含全局快捷键与登录项）"
+                      action={
+                        <DangerBtn
+                          disabled={readOnlyMode}
+                          onClick={() => void onResetSettings()}
+                        >
+                          <RotateCcw className="h-[13px] w-[13px]" />
+                          重置设置
+                        </DangerBtn>
+                      }
+                    />
+                  </SectionCard>
+                </div>
+              ) : null}
+
+              {activeSection === "about" ? (
+                <div>
+                  <PaneTitle>关于</PaneTitle>
+
+                  <SectionCard title="版本信息" description="SuperClip 本地客户端">
+                    <Row
+                      label="当前版本"
+                      hint="macOS 原生剪贴板管理工具"
+                      action={<ShortcutBadge>superclip@{APP_VERSION}</ShortcutBadge>}
+                    />
+                    <RowDivider />
+                    <Row
+                      label="数据库 Schema"
+                      hint="SQLite · FTS5 全文索引"
+                      action={<ShortcutBadge>v4</ShortcutBadge>}
+                    />
+                  </SectionCard>
+
+                  <SectionCard title="权限与帮助" description="授权状态与使用说明" style={{ marginTop: 14 }}>
                     <Row
                       label="Accessibility"
                       hint={permissionTrusted ? "直接粘贴可用" : "未授权时仅复制"}
@@ -1407,6 +1474,32 @@ export function SettingsShell({
                             打开系统设置
                           </ChangeButton>
                         </div>
+                      }
+                    />
+                    <RowDivider />
+                    <Row
+                      label="快捷键说明"
+                      hint="录制、校验与恢复默认绑定"
+                      action={<ChangeButton onClick={() => setActiveSection("shortcuts")}>查看快捷键</ChangeButton>}
+                    />
+                    <RowDivider />
+                    <Row
+                      label="排除规则说明"
+                      hint="按 bundle_id / 内容类型 / 关键词过滤"
+                      action={<ChangeButton onClick={() => setActiveSection("privacy")}>查看排除规则</ChangeButton>}
+                    />
+                    <RowDivider />
+                    <Row
+                      label="问题反馈"
+                      hint="描述复现步骤与诊断文件路径"
+                      action={
+                        <a
+                          href="mailto:feedback@superclip.app?subject=SuperClip%20%E9%97%AE%E9%A2%98%E5%8F%8D%E9%A6%88"
+                          className="inline-flex items-center rounded-[7px] border px-2.5 py-1 text-[11.5px] font-medium transition-colors"
+                          style={{ borderColor: "var(--border)", color: "var(--accent-text)" }}
+                        >
+                          发送邮件
+                        </a>
                       }
                     />
                   </SectionCard>

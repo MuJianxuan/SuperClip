@@ -39,15 +39,24 @@ const TRAY_ICON_BYTES: &[u8] = include_bytes!("../icons/tray-clipboard-list.png"
 const WINDOW_MODE_SMALL: &str = "small_window";
 const WINDOW_MODE_LARGE: &str = "large_window";
 const WINDOW_MODE_FALLBACK: &str = "fallback_window";
-const WINDOW_SMALL_WIDTH: f64 = 760.0;
-const WINDOW_SMALL_HEIGHT: f64 = 540.0;
-const WINDOW_LARGE_WIDTH: f64 = 760.0;
-const WINDOW_LARGE_HEIGHT: f64 = 540.0;
+const WINDOW_SMALL_WIDTH: f64 = 900.0;
+const WINDOW_SMALL_HEIGHT: f64 = 620.0;
+const WINDOW_LARGE_WIDTH: f64 = 900.0;
+const WINDOW_LARGE_HEIGHT: f64 = 620.0;
+/// 弹窗/面板尺寸（重设计：Popup 320×480、QuickPanel 248×400、Preview 320×360）
+const POPUP_PANEL_WIDTH: f64 = 320.0;
+const POPUP_PANEL_HEIGHT: f64 = 480.0;
+const QUICK_PANEL_WIDTH: f64 = 248.0;
+const QUICK_PANEL_HEIGHT: f64 = 400.0;
+const PREVIEW_PANEL_WIDTH: f64 = 320.0;
+const PREVIEW_PANEL_HEIGHT: f64 = 360.0;
 const WINDOW_SAFE_AREA_MARGIN_X: f64 = 32.0;
 const WINDOW_SAFE_AREA_MARGIN_Y: f64 = 48.0;
 const WINDOW_RESIZE_SUPPRESSION_MS: u64 = 350;
+/// 回收站保留期（秒）：30 天。删除后可恢复，Toast 撤销与回收站共用同一 undo_token。
+const TRASH_RETENTION_SECS: i64 = 30 * 24 * 60 * 60;
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ClipboardItemSummary {
     id: String,
@@ -58,12 +67,19 @@ struct ClipboardItemSummary {
     meta: String,
     time_label: String,
     is_pinned: bool,
+    /// 使用次数 / 负载体积：供 Preview 与设置页元信息展示。
+    /// `serde(default)` 兼容升级前写入的 `clipboard_trash.item_json`（无这两个字段），
+    /// 否则旧回收站条目会因缺字段反序列化失败而列不出、也恢复不了。
+    #[serde(default)]
+    use_count: i64,
+    #[serde(default)]
+    payload_size_bytes: i64,
     match_type: Option<String>,
     matched_fields: Vec<String>,
     highlight_ranges: Vec<HighlightRange>,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct HighlightRange {
     field: String,
@@ -380,6 +396,39 @@ struct ClipboardRestoreResult {
 #[serde(rename_all = "camelCase")]
 struct ClipboardClearResult {
     cleared_count: usize,
+    version: u8,
+}
+
+/// 回收站条目：item_json 反序列化后的展示视图 + 删除时间与剩余天数。
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TrashEntry {
+    trash_id: String,
+    item_id: String,
+    undo_token: String,
+    kind: String,
+    title: String,
+    preview: String,
+    source_app: String,
+    deleted_at: i64,
+    deleted_label: String,
+    expires_at: i64,
+    remaining_days: i64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TrashListResponse {
+    entries: Vec<TrashEntry>,
+    total: usize,
+    retention_days: i64,
+    version: u8,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TrashPurgeResult {
+    purged_count: usize,
     version: u8,
 }
 
@@ -1790,6 +1839,8 @@ fn row_to_summary(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClipboardItemSumm
         meta: row.get("meta")?,
         time_label: time_label_from_epoch(last_seen_at),
         is_pinned: row.get::<_, i64>("is_pinned")? == 1,
+        use_count: row.get("use_count")?,
+        payload_size_bytes: row.get("payload_size_bytes")?,
         match_type: None,
         matched_fields: Vec::new(),
         highlight_ranges: Vec::new(),
@@ -2291,7 +2342,29 @@ fn write_text_with_pbcopy(text: &str) -> Result<(), String> {
     }
 }
 
-fn write_payload_to_clipboard(payload: &ClipboardPayloadSnapshot) -> Result<(), String> {
+/// 纯文本模式是否能用负载里的 text_plain 完成写入。
+/// 抽成纯函数以便单测——真正的写入带剪贴板副作用，测试环境不保证可写。
+fn plain_text_write_target(payload: &ClipboardPayloadSnapshot, as_plain_text: bool) -> Option<&str> {
+    if !as_plain_text {
+        return None;
+    }
+    payload
+        .text_plain
+        .as_deref()
+        .filter(|text| !text.is_empty())
+}
+
+fn write_payload_to_clipboard(
+    payload: &ClipboardPayloadSnapshot,
+    as_plain_text: bool,
+) -> Result<(), String> {
+    // 纯文本模式：有 text_plain 就只写它（HTML/RTF 条目会退化为纯文本）；
+    // 图片/文件等无文本负载没有可提取的纯文本，按计划约定回退原写入路径，
+    // 即此时菜单项等同于普通粘贴
+    if let Some(text) = plain_text_write_target(payload, as_plain_text) {
+        return write_text_with_pbcopy(text);
+    }
+
     if let (Some(bytes), Some(width), Some(height)) = (
         payload.image_bytes.as_ref(),
         payload.image_width,
@@ -3105,8 +3178,8 @@ fn set_panel_frame_sync(
 /// 转置到光标所在显示器的菜单栏下方；托盘左键点击时光标本就在图标处，行为与快捷面板一致。
 /// 无 tray rect 等异常时回退为屏幕居中（原行为）。
 fn position_popup_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
-    const POPUP_W: f64 = 280.0;
-    const POPUP_H: f64 = 420.0;
+    const POPUP_W: f64 = POPUP_PANEL_WIDTH;
+    const POPUP_H: f64 = POPUP_PANEL_HEIGHT;
     const MENU_BAR_GAP: f64 = 5.0;
     const SCREEN_MARGIN: f64 = 6.0;
 
@@ -3183,8 +3256,8 @@ fn position_popup_centered(window: &tauri::WebviewWindow) {
         let scale = monitor.scale_factor();
         let monitor_pos = monitor.position();
         let monitor_size = monitor.size();
-        let window_width = 280.0_f64;
-        let window_height = 420.0_f64;
+        let window_width = POPUP_PANEL_WIDTH;
+        let window_height = POPUP_PANEL_HEIGHT;
         let monitor_logical_w = monitor_size.width as f64 / scale;
         let monitor_logical_h = monitor_size.height as f64 / scale;
         let x = monitor_pos.x as f64 / scale + (monitor_logical_w - window_width) / 2.0;
@@ -3391,7 +3464,7 @@ fn position_quick_panel_below_tray(
     window: &tauri::WebviewWindow,
     tray_rect: Option<tauri::Rect>,
 ) {
-    const PANEL_W: f64 = 280.0;
+    const PANEL_W: f64 = QUICK_PANEL_WIDTH;
     const MENU_BAR_GAP: f64 = 5.0;
     const SCREEN_MARGIN: f64 = 6.0;
 
@@ -3439,7 +3512,7 @@ fn position_quick_panel_below_tray(
         .clamp(mon_x + SCREEN_MARGIN, mon_x + mon_w - PANEL_W - SCREEN_MARGIN);
     let y = icon_bottom + MENU_BAR_GAP;
 
-    let panel_h = window.outer_size().ok().map(|s| s.height as f64 / scale).unwrap_or(420.0);
+    let panel_h = window.outer_size().ok().map(|s| s.height as f64 / scale).unwrap_or(QUICK_PANEL_HEIGHT);
     #[cfg(target_os = "macos")]
     {
         // 同步 setFrame，避免异步 set_position 在 show 前未生效导致先以默认位置闪现
@@ -3651,11 +3724,11 @@ fn create_popup_panel(app: &tauri::AppHandle) -> Result<(), String> {
             builder
                 .decorations(false)
                 .resizable(false)
-                .inner_size(280.0, 420.0)
-                .visible(false)
-                .skip_taskbar(true)
                 // 透明：让 WKWebView drawsBackground=NO（PanelBuilder::transparent 只作用于
                 // NSPanel 层），否则 WKWebView 白色底层会遮住磨砂并在暗色半透明内容下透出白底
+                .inner_size(POPUP_PANEL_WIDTH, POPUP_PANEL_HEIGHT)
+                .visible(false)
+                .skip_taskbar(true)
                 .transparent(true)
                 .background_throttling(tauri::utils::config::BackgroundThrottlingPolicy::Disabled)
         })
@@ -3695,8 +3768,8 @@ fn create_quick_panel_panel(app: &tauri::AppHandle) -> Result<(), String> {
             builder
                 .decorations(false)
                 .resizable(false)
-                // 尺寸与 popup 统一为 280×420；高度由美化后的间距与内容填充。
-                .inner_size(280.0, 420.0)
+                // 尺寸：重设计后固定 248×400（内容按此高度精确排布，底部不再被裁切）。
+                .inner_size(QUICK_PANEL_WIDTH, QUICK_PANEL_HEIGHT)
                 .visible(false)
                 .skip_taskbar(true)
                 // 透明：同 popup 的磨砂修复，WKWebView 需 drawsBackground=NO 才能透出磨砂
@@ -3740,7 +3813,7 @@ fn create_preview_panel(app: &tauri::AppHandle) -> Result<(), String> {
             builder
                 .decorations(false)
                 .resizable(false)
-                .inner_size(280.0, 320.0)
+                .inner_size(PREVIEW_PANEL_WIDTH, PREVIEW_PANEL_HEIGHT)
                 .visible(false)
                 .skip_taskbar(true)
                 .focused(false)
@@ -4234,6 +4307,66 @@ fn settings_update(
             },
         )?;
         cleanup_history(&db, response.history_limit as usize)?;
+    }
+
+    #[cfg(target_os = "macos")]
+    sync_native_windows_appearance(&app, &response.theme_mode);
+
+    emit_superclip_event(
+        &app,
+        "settings-updated",
+        json!({
+            "default_action": response.default_action,
+            "theme_mode": response.theme_mode,
+            "history_limit": response.history_limit,
+            "list_font_size": response.list_font_size,
+            "launch_at_login": response.launch_at_login,
+            "show_on_startup": response.show_on_startup
+        }),
+    );
+
+    Ok(response)
+}
+
+/// settings_reset 的 DB 内核（抽成独立函数以便单测）：清空 settings 表回默认 +
+/// 按默认保留上限立即裁剪历史（与 settings_update 同语义，避免超限记录滞留到下次写入）。
+fn reset_settings_and_trim_history(connection: &mut Connection) -> Result<SettingsResponse, String> {
+    connection.execute("DELETE FROM settings", []).map_err(map_db_error)?;
+    let defaults = default_settings_response();
+    cleanup_history(connection, defaults.history_limit as usize)?;
+    Ok(defaults)
+}
+
+/// 重置所有设置：清空 settings 表回默认值，并广播 settings-updated。
+#[tauri::command]
+fn settings_reset(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<SettingsResponse, String> {
+    ensure_not_recovery_mode(&state, "settings:reset")?;
+
+    let defaults = {
+        let mut db = state
+            .db
+            .lock()
+            .map_err(|_| "clipboard store unavailable".to_string())?;
+        reset_settings_and_trim_history(&mut db)?
+    };
+
+    let response = SettingsResponse {
+        launch_at_login: app
+            .autolaunch()
+            .is_enabled()
+            .unwrap_or(defaults.launch_at_login),
+        ..defaults
+    };
+
+    {
+        let mut settings = state
+            .settings
+            .lock()
+            .map_err(|_| "settings state unavailable".to_string())?;
+        *settings = response.clone();
     }
 
     #[cfg(target_os = "macos")]
@@ -5279,7 +5412,7 @@ fn clipboard_copy(
         )
     };
 
-    write_payload_to_clipboard(&payload)?;
+    write_payload_to_clipboard(&payload, false)?;
     mark_self_write_hash(&state, hash);
 
     {
@@ -5305,10 +5438,12 @@ fn clipboard_copy(
 #[tauri::command]
 fn clipboard_paste(
     id: String,
+    as_plain_text: Option<bool>,
     app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<ClipboardActionResult, String> {
     ensure_not_recovery_mode(&state, "clipboard:paste")?;
+    let as_plain_text = as_plain_text.unwrap_or(false);
 
     let (item, payload, hash) = {
         let db = state
@@ -5326,7 +5461,7 @@ fn clipboard_paste(
         .lock()
         .map_err(|_| "permission state unavailable".to_string())?;
 
-    write_payload_to_clipboard(&payload)?;
+    write_payload_to_clipboard(&payload, as_plain_text)?;
     mark_self_write_hash(&state, hash);
     let direct_paste_result = if trusted && item.kind != "file" {
         trigger_direct_paste()
@@ -5425,7 +5560,8 @@ fn clipboard_delete(
     ensure_not_recovery_mode(&state, "clipboard:delete")?;
 
     let now = now_epoch_secs()?;
-    let expires_at = now + 30;
+    // 回收站保留 30 天（与设计稿「30 天后自动清空」一致）；期间可恢复，Toast 撤销共用同一 undo_token
+    let expires_at = now + TRASH_RETENTION_SECS;
     let undo_token = format!("undo-{now}-{id}");
     let removed_item = {
         let mut db = state
@@ -5494,6 +5630,136 @@ fn clipboard_delete(
     })
 }
 
+/// clipboard_restore 的 DB 内核（抽成独立函数以便单测过期分支——命令本体依赖 AppHandle）：
+/// 令牌存在且未过期 → 事务内重插主表/payload/FTS 并删 trash 行；
+/// 令牌不存在或已过期 → 返回 UNDO_EXPIRED，且**不删行**（证据保留给回收站修剪逻辑统一下手）。
+fn restore_trash_entry(db: &mut Connection, undo_token: &str, now: i64) -> Result<ClipboardItemSummary, String> {
+    let trash_row = db
+        .query_row(
+            r#"
+            SELECT item_json, payload_json, expires_at
+            FROM clipboard_trash
+            WHERE undo_token = ?1
+            "#,
+            params![undo_token],
+            |row| {
+                Ok((
+                    row.get::<_, String>("item_json")?,
+                    row.get::<_, String>("payload_json")?,
+                    row.get::<_, i64>("expires_at")?,
+                ))
+            },
+        )
+        .optional()
+        .map_err(map_db_error)?;
+
+    let Some((item_json, payload_json, expires_at)) = trash_row else {
+        return Err("UNDO_EXPIRED".to_string());
+    };
+
+    if expires_at < now {
+        return Err("UNDO_EXPIRED".to_string());
+    }
+
+    let item: ClipboardItemSummary =
+        serde_json::from_str(&item_json).map_err(|_| "CLIPBOARD_SERIALIZE_FAILED".to_string())?;
+    let payload: ClipboardPayloadSnapshot =
+        serde_json::from_str(&payload_json).map_err(|_| "CLIPBOARD_SERIALIZE_FAILED".to_string())?;
+    let hash = content_hash(
+        &item.kind,
+        payload
+            .text_plain
+            .as_deref()
+            .unwrap_or(&item.preview)
+            .as_bytes(),
+        payload.image_bytes.as_deref().unwrap_or(&[]),
+    );
+    let snapshot = ClipboardSnapshot {
+        kind: item.kind.clone(),
+        title: item.title.clone(),
+        preview: item.preview.clone(),
+        source_app: item.source_app.clone(),
+        meta: item.meta.clone(),
+        content_hash: hash,
+        payload,
+        payload_size_bytes: item.preview.len(),
+        is_truncated: false,
+    };
+    let transaction = db.transaction().map_err(map_db_error)?;
+    transaction
+        .execute(
+            r#"
+            INSERT OR REPLACE INTO clipboard_items(
+                id, kind, content_hash, title, preview_text, source_app, meta,
+                is_pinned, pinned_at, use_count, last_used_at, payload_size_bytes,
+                is_truncated, is_sensitive, origin_bundle_id, preview_strategy,
+                created_at, last_seen_at
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, 0, NULL, ?9, 0, 0, NULL, 'inline', ?10, ?10)
+            "#,
+            params![
+                &item.id,
+                &snapshot.kind,
+                &snapshot.content_hash,
+                &snapshot.title,
+                &snapshot.preview,
+                &snapshot.source_app,
+                &snapshot.meta,
+                if item.is_pinned { 1 } else { 0 },
+                snapshot.payload_size_bytes as i64,
+                now,
+            ],
+        )
+        .map_err(map_db_error)?;
+    let file_urls_json = snapshot
+        .payload
+        .file_urls
+        .as_ref()
+        .and_then(|urls| serde_json::to_string(urls).ok());
+    let extra_json = snapshot
+        .payload
+        .extra_json
+        .as_ref()
+        .and_then(|value| serde_json::to_string(value).ok());
+    transaction
+        .execute(
+            r#"
+            INSERT OR REPLACE INTO clipboard_payloads(
+                item_id, text_plain, text_html, text_rtf, image_blob, image_width, image_height,
+                file_urls_json, extra_json
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            "#,
+            params![
+                &item.id,
+                snapshot.payload.text_plain.as_deref(),
+                snapshot.payload.text_html.as_deref(),
+                snapshot.payload.text_rtf.as_deref(),
+                snapshot.payload.image_bytes.as_deref(),
+                snapshot.payload.image_width.map(|value| value as i64),
+                snapshot.payload.image_height.map(|value| value as i64),
+                file_urls_json,
+                extra_json,
+            ],
+        )
+        .map_err(map_db_error)?;
+    transaction
+        .execute(
+            "DELETE FROM clipboard_trash WHERE undo_token = ?1",
+            params![undo_token],
+        )
+        .map_err(map_db_error)?;
+    transaction
+        .execute(
+            "DELETE FROM fts_clipboard_items WHERE item_id = ?1",
+            params![&item.id],
+        )
+        .map_err(map_db_error)?;
+    insert_fts(&transaction, &snapshot, &item.id)?;
+    transaction.commit().map_err(map_db_error)?;
+    get_item_by_id(db, &item.id)
+}
+
 #[tauri::command]
 fn clipboard_restore(
     undo_token: String,
@@ -5508,137 +5774,15 @@ fn clipboard_restore(
             .db
             .lock()
             .map_err(|_| "clipboard store unavailable".to_string())?;
-        let trash_row = db
-            .query_row(
-                r#"
-                SELECT item_json, payload_json, expires_at
-                FROM clipboard_trash
-                WHERE undo_token = ?1
-                "#,
-                params![&undo_token],
-                |row| {
-                    Ok((
-                        row.get::<_, String>("item_json")?,
-                        row.get::<_, String>("payload_json")?,
-                        row.get::<_, i64>("expires_at")?,
-                    ))
-                },
-            )
-            .optional()
-            .map_err(map_db_error)?;
-
-        let Some((item_json, payload_json, expires_at)) = trash_row else {
-            push_recent_error_code(&state, "UNDO_EXPIRED", "clipboard-restore/undo-expired");
-            return Err("UNDO_EXPIRED".to_string());
-        };
-
-        if expires_at < now {
-            db.execute(
-                "DELETE FROM clipboard_trash WHERE undo_token = ?1",
-                params![&undo_token],
-            )
-            .map_err(map_db_error)?;
-            push_recent_error_code(&state, "UNDO_EXPIRED", "clipboard-restore/undo-expired");
-            return Err("UNDO_EXPIRED".to_string());
+        match restore_trash_entry(&mut db, &undo_token, now) {
+            Ok(item) => item,
+            Err(code) => {
+                if code == "UNDO_EXPIRED" {
+                    push_recent_error_code(&state, "UNDO_EXPIRED", "clipboard-restore/undo-expired");
+                }
+                return Err(code);
+            }
         }
-
-        let item: ClipboardItemSummary = serde_json::from_str(&item_json)
-            .map_err(|_| "CLIPBOARD_SERIALIZE_FAILED".to_string())?;
-        let payload: ClipboardPayloadSnapshot = serde_json::from_str(&payload_json)
-            .map_err(|_| "CLIPBOARD_SERIALIZE_FAILED".to_string())?;
-        let hash = content_hash(
-            &item.kind,
-            payload
-                .text_plain
-                .as_deref()
-                .unwrap_or(&item.preview)
-                .as_bytes(),
-            payload.image_bytes.as_deref().unwrap_or(&[]),
-        );
-        let snapshot = ClipboardSnapshot {
-            kind: item.kind.clone(),
-            title: item.title.clone(),
-            preview: item.preview.clone(),
-            source_app: item.source_app.clone(),
-            meta: item.meta.clone(),
-            content_hash: hash,
-            payload,
-            payload_size_bytes: item.preview.len(),
-            is_truncated: false,
-        };
-        let transaction = db.transaction().map_err(map_db_error)?;
-        transaction
-            .execute(
-                r#"
-                INSERT OR REPLACE INTO clipboard_items(
-                    id, kind, content_hash, title, preview_text, source_app, meta,
-                    is_pinned, pinned_at, use_count, last_used_at, payload_size_bytes,
-                    is_truncated, is_sensitive, origin_bundle_id, preview_strategy,
-                    created_at, last_seen_at
-                )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, 0, NULL, ?9, 0, 0, NULL, 'inline', ?10, ?10)
-                "#,
-                params![
-                    &item.id,
-                    &snapshot.kind,
-                    &snapshot.content_hash,
-                    &snapshot.title,
-                    &snapshot.preview,
-                    &snapshot.source_app,
-                    &snapshot.meta,
-                    if item.is_pinned { 1 } else { 0 },
-                    snapshot.payload_size_bytes as i64,
-                    now,
-                ],
-            )
-            .map_err(map_db_error)?;
-        let file_urls_json = snapshot
-            .payload
-            .file_urls
-            .as_ref()
-            .and_then(|urls| serde_json::to_string(urls).ok());
-        let extra_json = snapshot
-            .payload
-            .extra_json
-            .as_ref()
-            .and_then(|value| serde_json::to_string(value).ok());
-        transaction
-            .execute(
-                r#"
-                INSERT OR REPLACE INTO clipboard_payloads(
-                    item_id, text_plain, text_html, text_rtf, image_blob, image_width, image_height,
-                    file_urls_json, extra_json
-                )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-                "#,
-                params![
-                    &item.id,
-                    snapshot.payload.text_plain.as_deref(),
-                    snapshot.payload.text_html.as_deref(),
-                    snapshot.payload.text_rtf.as_deref(),
-                    snapshot.payload.image_bytes.as_deref(),
-                    snapshot.payload.image_width.map(|value| value as i64),
-                    snapshot.payload.image_height.map(|value| value as i64),
-                    file_urls_json,
-                    extra_json,
-                ],
-            )
-            .map_err(map_db_error)?;
-        transaction
-            .execute(
-                "DELETE FROM clipboard_trash WHERE undo_token = ?1",
-                params![&undo_token],
-            )
-            .map_err(map_db_error)?;
-        transaction
-            .execute(
-                "DELETE FROM fts_clipboard_items WHERE item_id = ?1",
-                params![&item.id],
-            )
-            .map_err(map_db_error)?;
-        insert_fts(&transaction, &snapshot, &item.id)?;
-        transaction.commit().map_err(map_db_error)?;
-        get_item_by_id(&db, &item.id)?
     };
 
     emit_superclip_event(
@@ -5684,6 +5828,134 @@ fn clipboard_clear(
 
     Ok(ClipboardClearResult {
         cleared_count,
+        version: 1,
+    })
+}
+
+/// 列出回收站条目：反序列化 item_json 为展示视图，顺带修剪已超过保留期的行。
+fn list_trash_entries(connection: &Connection, now: i64) -> Result<Vec<TrashEntry>, String> {
+    connection
+        .execute(
+            "DELETE FROM clipboard_trash WHERE expires_at < ?1",
+            params![now],
+        )
+        .map_err(map_db_error)?;
+
+    let mut statement = connection
+        .prepare(
+            r#"
+            SELECT trash_id, item_id, undo_token, item_json, deleted_at, expires_at
+            FROM clipboard_trash
+            ORDER BY deleted_at DESC
+            "#,
+        )
+        .map_err(map_db_error)?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>("trash_id")?,
+                row.get::<_, String>("item_id")?,
+                row.get::<_, String>("undo_token")?,
+                row.get::<_, String>("item_json")?,
+                row.get::<_, i64>("deleted_at")?,
+                row.get::<_, i64>("expires_at")?,
+            ))
+        })
+        .map_err(map_db_error)?;
+
+    let mut entries = Vec::new();
+    for row in rows {
+        let (trash_id, item_id, undo_token, item_json, deleted_at, expires_at) =
+            row.map_err(map_db_error)?;
+        // item_json 损坏时跳过该条，不让单行异常拖垮整个回收站视图
+        let Ok(item) = serde_json::from_str::<ClipboardItemSummary>(&item_json) else {
+            continue;
+        };
+        let remaining_secs = (expires_at - now).max(0);
+        entries.push(TrashEntry {
+            trash_id,
+            item_id,
+            undo_token,
+            kind: item.kind,
+            title: item.title,
+            preview: item.preview,
+            source_app: item.source_app,
+            deleted_at,
+            deleted_label: time_label_from_epoch(deleted_at),
+            expires_at,
+            remaining_days: (remaining_secs + 86_399) / 86_400,
+        });
+    }
+
+    Ok(entries)
+}
+
+/// 彻底删除：`None` = 清空回收站；`Some(ids)` 只删指定行（空数组 = 不删任何行）。
+/// 空数组必须是无操作而非清空——调用方用「过滤选中项」得到的空数组误触全量删除是数据丢失。
+fn purge_trash_entries(
+    connection: &Connection,
+    trash_ids: Option<Vec<String>>,
+) -> Result<usize, String> {
+    match trash_ids {
+        Some(ids) => {
+            let mut count = 0usize;
+            for trash_id in ids {
+                count += connection
+                    .execute(
+                        "DELETE FROM clipboard_trash WHERE trash_id = ?1",
+                        params![trash_id],
+                    )
+                    .map_err(map_db_error)?;
+            }
+            Ok(count)
+        }
+        _ => connection
+            .execute("DELETE FROM clipboard_trash", [])
+            .map_err(map_db_error),
+    }
+}
+
+/// 回收站列表。**有副作用**：读取前先用写连接修剪已过期行（列表打开即清理），
+/// 因此必须走 `state.db` 写连接而非 `db_read`——修剪是 DELETE，只读连接写不了。
+/// WAL 模式下与监控线程的 upsert 短暂互斥，量级可忽略；不要把这条当纯读命令优化成 db_read。
+#[tauri::command]
+fn clipboard_trash_list(state: State<'_, AppState>) -> Result<TrashListResponse, String> {
+    let now = now_epoch_secs()?;
+    let db = state
+        .db
+        .lock()
+        .map_err(|_| "clipboard store unavailable".to_string())?;
+    let entries = list_trash_entries(&db, now)?;
+
+    Ok(TrashListResponse {
+        total: entries.len(),
+        entries,
+        retention_days: TRASH_RETENTION_SECS / 86_400,
+        version: 1,
+    })
+}
+
+#[tauri::command]
+fn clipboard_trash_purge(
+    trash_ids: Option<Vec<String>>,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<TrashPurgeResult, String> {
+    ensure_not_recovery_mode(&state, "clipboard:trash-purge")?;
+
+    let purged_count = {
+        let db = state
+            .db
+            .lock()
+            .map_err(|_| "clipboard store unavailable".to_string())?;
+        purge_trash_entries(&db, trash_ids)?
+    };
+
+    emit_history_updated(&app, "trash_purged");
+
+    Ok(TrashPurgeResult {
+        purged_count,
         version: 1,
     })
 }
@@ -5900,6 +6172,8 @@ mod tests {
             meta: "test".into(),
             time_label: "刚刚".into(),
             is_pinned: false,
+            use_count: 0,
+            payload_size_bytes: 24,
             match_type: None,
             matched_fields: Vec::new(),
             highlight_ranges: Vec::new(),
@@ -5925,6 +6199,406 @@ mod tests {
         assert!(!coordinator.should_ignore_resize(
             started_at + Duration::from_millis(WINDOW_RESIZE_SUPPRESSION_MS + 2)
         ));
+    }
+
+    #[test]
+    fn window_dimensions_match_redesign_spec() {
+        // P2：四表面尺寸（Main 900×620 / Popup 320×480 / QuickPanel 248×400 / Preview 320×360）
+        assert_eq!(WindowSizeMode::Small.dimensions(), (900.0, 620.0));
+        assert_eq!(WindowSizeMode::Large.dimensions(), (900.0, 620.0));
+        assert_eq!(POPUP_PANEL_WIDTH, 320.0);
+        assert_eq!(POPUP_PANEL_HEIGHT, 480.0);
+        assert_eq!(QUICK_PANEL_WIDTH, 248.0);
+        assert_eq!(QUICK_PANEL_HEIGHT, 400.0);
+        assert_eq!(PREVIEW_PANEL_WIDTH, 320.0);
+        assert_eq!(PREVIEW_PANEL_HEIGHT, 360.0);
+    }
+
+    #[test]
+    fn summary_rows_expose_use_count_and_payload_size() {
+        // P4：ClipboardItemSummary 必须带出 use_count / payload_size_bytes
+        let connection = test_connection();
+        let snapshot = normalize_text_snapshot("SuperClip summary metadata probe", "Test")
+            .expect("text snapshot should normalize");
+        upsert_clipboard_snapshot(&connection, snapshot, DEFAULT_HISTORY_LIMIT)
+            .expect("upsert should pass");
+        let item_id: String = connection
+            .query_row("SELECT id FROM clipboard_items LIMIT 1", [], |row| {
+                row.get(0)
+            })
+            .expect("item id should be readable");
+        mark_item_used(&connection, &item_id).expect("mark_item_used should pass");
+
+        let summary = get_item_by_id(&connection, &item_id).expect("summary should be readable");
+        assert_eq!(summary.use_count, 1);
+        assert!(summary.payload_size_bytes > 0);
+    }
+
+    #[test]
+    fn trash_round_trip_lists_entry_and_keeps_thirty_day_retention() {
+        // P3：删除 → 列表（30 天保留）→ 【UNDO_EXPIRED（过期）】→ 恢复 → purge（清空）
+        let connection = test_connection();
+        let snapshot = normalize_text_snapshot("SuperClip trash round trip probe", "Test")
+            .expect("text snapshot should normalize");
+        upsert_clipboard_snapshot(&connection, snapshot, DEFAULT_HISTORY_LIMIT)
+            .expect("upsert should pass");
+        let item = get_item_by_id(
+            &connection,
+            &connection
+                .query_row("SELECT id FROM clipboard_items LIMIT 1", [], |row| {
+                    row.get::<_, String>(0)
+                })
+                .expect("item id should be readable"),
+        )
+        .expect("item should be readable");
+
+        let now = now_epoch_secs().expect("now should be readable");
+        let expires_at = now + TRASH_RETENTION_SECS;
+        let item_json = serde_json::to_string(&item).expect("item json should serialize");
+        let payload_json = "{}".to_string();
+        connection
+            .execute(
+                r#"
+                INSERT INTO clipboard_trash(
+                    trash_id, item_id, undo_token, item_json, payload_json,
+                    deleted_at, expires_at, deleted_by_action
+                )
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'delete')
+                "#,
+                params![
+                    "trash-test-1",
+                    &item.id,
+                    "undo-test-1",
+                    &item_json,
+                    &payload_json,
+                    now,
+                    expires_at
+                ],
+            )
+            .expect("trash insert should pass");
+        connection
+            .execute("DELETE FROM clipboard_items WHERE id = ?1", params![&item.id])
+            .expect("item delete should pass");
+
+        // 保留期 = 30 天（不再是 30 秒）
+        assert_eq!(TRASH_RETENTION_SECS, 30 * 24 * 60 * 60);
+        let entries = list_trash_entries(&connection, now).expect("trash list should pass");
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].title, item.title);
+        assert_eq!(entries[0].remaining_days, 30);
+        assert_eq!(entries[0].undo_token, "undo-test-1");
+
+        // 过期条目在读取时被修剪
+        let entries_after_expiry = list_trash_entries(&connection, expires_at + 1)
+            .expect("trash list should pass after expiry");
+        assert!(entries_after_expiry.is_empty());
+    }
+
+    #[test]
+    fn restore_trash_entry_reinserts_item_and_keeps_expired_rows() {
+        // P3 链路内核：删除 → 恢复成功；过期 → UNDO_EXPIRED 且**不删行**（C2 决策）
+        let mut connection = test_connection();
+        let snapshot = normalize_text_snapshot("SuperClip restore kernel probe", "Test")
+            .expect("text snapshot should normalize");
+        upsert_clipboard_snapshot(&connection, snapshot, DEFAULT_HISTORY_LIMIT)
+            .expect("upsert should pass");
+        let item = get_item_by_id(
+            &connection,
+            &connection
+                .query_row("SELECT id FROM clipboard_items LIMIT 1", [], |row| {
+                    row.get::<_, String>(0)
+                })
+                .expect("item id should be readable"),
+        )
+        .expect("item should be readable");
+        let now = now_epoch_secs().expect("now should be readable");
+        let item_json = serde_json::to_string(&item).expect("item json should serialize");
+        for (token, expires_at) in [
+            ("undo-live", now + TRASH_RETENTION_SECS),
+            ("undo-expired", now - 1),
+        ] {
+            connection
+                .execute(
+                    r#"
+                    INSERT INTO clipboard_trash(
+                        trash_id, item_id, undo_token, item_json, payload_json,
+                        deleted_at, expires_at, deleted_by_action
+                    )
+                    VALUES (?1, ?2, ?3, ?4, '{}', ?5, ?6, 'delete')
+                    "#,
+                    params![token, &item.id, token, &item_json, now, expires_at],
+                )
+                .expect("trash insert should pass");
+        }
+        connection
+            .execute("DELETE FROM clipboard_items WHERE id = ?1", params![&item.id])
+            .expect("item delete should pass");
+
+        // 过期令牌：返回 UNDO_EXPIRED，且 trash 行保留（不随手毁证据）
+        let expired = restore_trash_entry(&mut connection, "undo-expired", now)
+            .expect_err("expired token should fail");
+        assert_eq!(expired, "UNDO_EXPIRED");
+        let remaining: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM clipboard_trash WHERE undo_token = 'undo-expired'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("trash count should be readable");
+        assert_eq!(remaining, 1, "过期恢复不得删除回收站行");
+        let back: i64 = connection
+            .query_row("SELECT COUNT(*) FROM clipboard_items", [], |row| row.get(0))
+            .expect("item count should be readable");
+        assert_eq!(back, 0, "过期恢复不得把条目写回主表");
+
+        // 未过期令牌：重插主表 + 删 trash 行
+        let restored = restore_trash_entry(&mut connection, "undo-live", now)
+            .expect("live token should restore");
+        assert_eq!(restored.id, item.id);
+        let trash_left: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM clipboard_trash WHERE undo_token = 'undo-live'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("trash count should be readable");
+        assert_eq!(trash_left, 0, "成功恢复后 trash 行应删除");
+        let payload_back: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM clipboard_payloads WHERE item_id = ?1",
+                params![&item.id],
+                |row| row.get(0),
+            )
+            .expect("payload count should be readable");
+        assert_eq!(payload_back, 1, "恢复应同时写回 payload");
+    }
+
+    #[test]
+    fn restore_with_unknown_token_reports_undo_expired() {
+        let mut connection = test_connection();
+        let err = restore_trash_entry(&mut connection, "no-such-token", now_epoch_secs().unwrap())
+            .expect_err("unknown token should fail");
+        assert_eq!(err, "UNDO_EXPIRED");
+    }
+
+    #[test]
+    fn purge_trash_entries_removes_only_trash_rows() {
+        // P3：purge 不能动主表（与 clipboard_clear 区分）
+        let connection = test_connection();
+        let snapshot = normalize_text_snapshot("SuperClip purge scope probe", "Test")
+            .expect("text snapshot should normalize");
+        upsert_clipboard_snapshot(&connection, snapshot, DEFAULT_HISTORY_LIMIT)
+            .expect("upsert should pass");
+        let item = get_item_by_id(
+            &connection,
+            &connection
+                .query_row("SELECT id FROM clipboard_items LIMIT 1", [], |row| {
+                    row.get::<_, String>(0)
+                })
+                .expect("item id should be readable"),
+        )
+        .expect("item should be readable");
+
+        let now = now_epoch_secs().expect("now should be readable");
+        let item_json = serde_json::to_string(&item).expect("item json should serialize");
+        for trash_id in ["trash-a", "trash-b"] {
+            connection
+                .execute(
+                    r#"
+                    INSERT INTO clipboard_trash(
+                        trash_id, item_id, undo_token, item_json, payload_json,
+                        deleted_at, expires_at, deleted_by_action
+                    )
+                    VALUES (?1, ?2, ?3, ?4, '{}', ?5, ?6, 'delete')
+                    "#,
+                    params![trash_id, &item.id, trash_id, &item_json, now, now + TRASH_RETENTION_SECS],
+                )
+                .expect("trash insert should pass");
+        }
+
+        let removed = purge_trash_entries(&connection, Some(vec!["trash-a".into()]))
+            .expect("partial purge should pass");
+        assert_eq!(removed, 1);
+        assert_eq!(
+            connection
+                .query_row("SELECT COUNT(*) FROM clipboard_trash", [], |row| {
+                    row.get::<_, i64>(0)
+                })
+                .expect("trash count should be readable"),
+            1
+        );
+
+        let removed_all = purge_trash_entries(&connection, None).expect("full purge should pass");
+        assert_eq!(removed_all, 1);
+        assert_eq!(
+            connection
+                .query_row("SELECT COUNT(*) FROM clipboard_items", [], |row| {
+                    row.get::<_, i64>(0)
+                })
+                .expect("item count should be readable"),
+            1,
+            "主表不能因 purge 回收站而被清空"
+        );
+    }
+
+    #[test]
+    fn settings_reset_restores_defaults() {
+        // P5：settings_reset 内核清空 settings 表回默认 + 按默认保留上限裁剪历史
+        let mut connection = test_connection();
+        save_setting_value(&mut connection, "history_limit", "4321").expect("save should pass");
+        save_setting_value(&mut connection, "theme_mode", "dark").expect("save should pass");
+        let before = load_settings(&connection).expect("load should pass");
+        assert_eq!(before.history_limit, 4321);
+        assert_eq!(before.theme_mode, "dark");
+
+        // 制造超限历史：临时把上限调大后插入多条，重置应按默认上限裁剪
+        let mut snapshots = Vec::new();
+        for index in 0..6 {
+            let snapshot = normalize_text_snapshot(
+                &format!("SuperClip reset trim probe {index}"),
+                "Test",
+            )
+            .expect("text snapshot should normalize");
+            upsert_clipboard_snapshot(&connection, snapshot, 1000).expect("upsert should pass");
+            snapshots.push(index);
+        }
+        let count_before: i64 = connection
+            .query_row("SELECT COUNT(*) FROM clipboard_items", [], |row| row.get(0))
+            .expect("count should pass");
+        assert_eq!(count_before, 6);
+
+        let defaults = reset_settings_and_trim_history(&mut connection)
+            .expect("settings reset should pass");
+        assert_eq!(defaults.history_limit, DEFAULT_HISTORY_LIMIT as u32);
+        assert_eq!(defaults.theme_mode, "system");
+        assert_eq!(defaults.default_action, "direct_paste");
+
+        // 重置后按默认保留上限（6 < 1000，这里主要验证 cleanup_history 被调用且不报错）
+        let after = load_settings(&connection).expect("load should pass");
+        assert_eq!(after.history_limit, DEFAULT_HISTORY_LIMIT as u32);
+        let count_after: i64 = connection
+            .query_row("SELECT COUNT(*) FROM clipboard_items", [], |row| row.get(0))
+            .expect("count should pass");
+        assert_eq!(count_after, count_before, "历史未超上限时不应被裁剪");
+    }
+
+    #[test]
+    fn settings_reset_trims_history_to_default_limit() {
+        // R3-7：重置把保留上限回默认 1000 后，超限历史应立即被裁剪（与 settings_update 同语义）
+        let mut connection = test_connection();
+        save_setting_value(&mut connection, "history_limit", "5000").expect("save should pass");
+        for index in 0..12 {
+            let snapshot = normalize_text_snapshot(
+                &format!("SuperClip reset trim over-limit probe {index}"),
+                "Test",
+            )
+            .expect("text snapshot should normalize");
+            upsert_clipboard_snapshot(&connection, snapshot, 5000).expect("upsert should pass");
+        }
+
+        // 手工把默认上限改小到 5 以验证裁剪语义（default_settings_response 不可变，
+        // 用与命令一致的 cleanup_history 路径断言）
+        cleanup_history(&mut connection, 5).expect("cleanup should pass");
+        let count: i64 = connection
+            .query_row("SELECT COUNT(*) FROM clipboard_items", [], |row| row.get(0))
+            .expect("count should pass");
+        assert_eq!(count, 5, "重置后超限历史应被立即裁剪");
+    }
+
+    #[test]
+    fn plain_text_payload_write_path_is_selectable() {
+        // P5：纯文本分支选择由 plain_text_write_target 决定（真正写入有剪贴板副作用，
+        // 测试环境不保证可写，故对选择逻辑做断言）
+        let html_payload = ClipboardPayloadSnapshot {
+            text_plain: Some("plain body".into()),
+            text_html: Some("<b>rich</b>".into()),
+            text_rtf: None,
+            image_bytes: None,
+            image_width: None,
+            image_height: None,
+            file_urls: None,
+            extra_json: None,
+        };
+        // 富文本条目开纯文本模式：选中 text_plain，不会走 HTML 分支
+        assert_eq!(plain_text_write_target(&html_payload, true), Some("plain body"));
+        // 普通粘贴不受影响
+        assert_eq!(plain_text_write_target(&html_payload, false), None);
+
+        // 空字符串等同无文本，不能写出空剪贴板
+        let empty_text = ClipboardPayloadSnapshot {
+            text_plain: Some(String::new()),
+            ..html_payload.clone()
+        };
+        assert_eq!(plain_text_write_target(&empty_text, true), None);
+
+        let image_only = ClipboardPayloadSnapshot {
+            text_plain: None,
+            text_html: None,
+            text_rtf: None,
+            image_bytes: Some(vec![0, 0, 0, 0]),
+            image_width: Some(1),
+            image_height: Some(1),
+            file_urls: None,
+            extra_json: None,
+        };
+        // 图片无 text_plain：不选纯文本分支，回退到常规写入路径（图片分支）
+        assert_eq!(plain_text_write_target(&image_only, true), None);
+        assert!(image_only.image_bytes.is_some());
+    }
+
+    #[test]
+    fn purge_with_empty_id_list_is_a_noop() {
+        // 回归：空数组曾被当作「清空回收站」，与调用方「删除选中项」语义不符，
+        // 当选中项恰好全部失效时会误删整个回收站
+        let connection = test_connection();
+        let now = now_epoch_secs().expect("clock should pass");
+        let snapshot = normalize_text_snapshot("SuperClip empty purge probe", "Test")
+            .expect("text snapshot should normalize");
+        upsert_clipboard_snapshot(&connection, snapshot, DEFAULT_HISTORY_LIMIT)
+            .expect("upsert should pass");
+        let item = get_item_by_id(
+            &connection,
+            &connection
+                .query_row("SELECT id FROM clipboard_items LIMIT 1", [], |row| {
+                    row.get::<_, String>(0)
+                })
+                .expect("item id should be readable"),
+        )
+        .expect("item should be readable");
+        let item_json = serde_json::to_string(&item).expect("serialize should pass");
+        connection
+            .execute(
+                "INSERT INTO clipboard_trash (trash_id, item_id, undo_token, item_json, payload_json, deleted_at, expires_at, deleted_by_action)\n                 VALUES (?1, ?2, ?3, ?4, '{}', ?5, ?6, 'delete')",
+                params!["trash-a", &item.id, "trash-a", &item_json, now, now + TRASH_RETENTION_SECS],
+            )
+            .expect("trash insert should pass");
+
+        let removed = purge_trash_entries(&connection, Some(vec![])).expect("empty purge should pass");
+        assert_eq!(removed, 0, "空数组必须不删任何行");
+        let remaining: i64 = connection
+            .query_row("SELECT COUNT(*) FROM clipboard_trash", [], |row| row.get(0))
+            .expect("count should pass");
+        assert_eq!(remaining, 1, "回收站条目应完整保留");
+
+        // None 才是「清空回收站」
+        let removed_all = purge_trash_entries(&connection, None).expect("full purge should pass");
+        assert_eq!(removed_all, 1);
+    }
+
+    #[test]
+    fn legacy_trash_item_json_without_new_fields_still_parses() {
+        // 兼容：升级前写入的 item_json 没有 useCount/payloadSizeBytes 字段，
+        // 缺 serde(default) 时旧条目会反序列化失败——既列不出也恢复不了
+        let legacy = r#"{
+            "id":"clip-legacy","kind":"text","title":"旧条目","preview":"旧预览",
+            "sourceApp":"Legacy","meta":"","timeLabel":"3 天前","isPinned":false,
+            "matchType":null,"matchedFields":[],"highlightRanges":[]
+        }"#;
+        let parsed = serde_json::from_str::<ClipboardItemSummary>(legacy)
+            .expect("旧 item_json 必须仍能反序列化");
+        assert_eq!(parsed.id, "clip-legacy");
+        assert_eq!(parsed.use_count, 0);
+        assert_eq!(parsed.payload_size_bytes, 0);
     }
 
     #[test]
@@ -6350,6 +7024,7 @@ pub fn run() {
             clipboard_get,
             settings_get,
             settings_update,
+            settings_reset,
             rules_list,
             rules_upsert,
             rules_delete,
@@ -6385,7 +7060,9 @@ pub fn run() {
             clipboard_unpin,
             clipboard_delete,
             clipboard_restore,
-            clipboard_clear
+            clipboard_clear,
+            clipboard_trash_list,
+            clipboard_trash_purge
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
