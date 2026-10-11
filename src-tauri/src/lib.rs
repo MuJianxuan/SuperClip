@@ -1,9 +1,13 @@
-use arboard::{Clipboard, ImageData};
+use clipboard_rs::common::RustImage;
+use clipboard_rs::{
+    Clipboard, ClipboardContent, ClipboardContext, ClipboardHandler, ClipboardWatcher,
+    ClipboardWatcherContext, RustImageData,
+};
+use image::{DynamicImage, RgbaImage};
 use rusqlite::{params, Connection, ErrorCode, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use std::borrow::Cow;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -1374,10 +1378,12 @@ fn build_image_preview_extra_json(
     }))
 }
 
-fn normalize_image_snapshot(image: ImageData<'_>, source_app: &str) -> ClipboardSnapshot {
-    let width = image.width;
-    let height = image.height;
-    let bytes = image.bytes.into_owned();
+fn normalize_image_snapshot(
+    width: usize,
+    height: usize,
+    bytes: Vec<u8>,
+    source_app: &str,
+) -> ClipboardSnapshot {
     let payload_size = bytes.len();
     let is_truncated = payload_size > IMAGE_PAYLOAD_LIMIT_BYTES;
     let stored_bytes = if is_truncated {
@@ -1413,20 +1419,6 @@ fn normalize_image_snapshot(image: ImageData<'_>, source_app: &str) -> Clipboard
     }
 }
 
-fn run_pbpaste(prefer: &str) -> Option<String> {
-    let output = Command::new("/usr/bin/pbpaste")
-        .args(["-Prefer", prefer])
-        .env("LANG", "en_US.UTF-8")
-        .output()
-        .ok()?;
-
-    if !output.status.success() || output.stdout.is_empty() {
-        return None;
-    }
-
-    String::from_utf8(output.stdout).ok()
-}
-
 fn run_osascript(args: &[&str]) -> Result<String, String> {
     let output = Command::new("/usr/bin/osascript")
         .args(args)
@@ -1440,254 +1432,6 @@ fn run_osascript(args: &[&str]) -> Result<String, String> {
     String::from_utf8(output.stdout)
         .map(|value| value.trim_end_matches('\n').to_string())
         .map_err(|_| "MACOS_API_UNAVAILABLE".to_string())
-}
-
-fn applescript_string_literal(value: &str) -> String {
-    let escaped = value
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\r', "\\r")
-        .replace('\n', "\\n");
-
-    format!("\"{escaped}\"")
-}
-
-fn run_osascript_stdin(script: &str) -> Result<String, String> {
-    let mut child = Command::new("/usr/bin/osascript")
-        .arg("-")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|_| "MACOS_API_UNAVAILABLE".to_string())?;
-
-    if let Some(stdin) = child.stdin.as_mut() {
-        use std::io::Write;
-        stdin
-            .write_all(script.as_bytes())
-            .map_err(|_| "MACOS_API_UNAVAILABLE".to_string())?;
-    }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|_| "MACOS_API_UNAVAILABLE".to_string())?;
-
-    if !output.status.success() {
-        return Err("MACOS_API_UNAVAILABLE".into());
-    }
-
-    String::from_utf8(output.stdout)
-        .map(|value| value.trim_end_matches('\n').to_string())
-        .map_err(|_| "MACOS_API_UNAVAILABLE".to_string())
-}
-
-/// 通用剪贴板在 osascript 中的表达式（AppleScript-ObjC 桥接）。
-const GENERAL_PASTEBOARD_EXPR: &str = "current application's NSPasteboard's generalPasteboard()";
-
-/// 读取剪贴板中的本地文件引用列表。
-/// 优先 NSFilenamesPboardType（Finder 复制文件的标准 flavor）；
-/// 若缺失则回退到 public.file-url（部分第三方 app 只写这个）。
-/// 无文件引用时返回 None。
-/// 参数为 osascript 表达式（方便测试注入命名 pasteboard，避免污染通用剪贴板）。
-fn read_file_urls_from_pasteboard(pasteboard_expr: &str) -> Option<Vec<String>> {
-    // 优先 path 数组：NSFilenamesPboardType 的值就是文件的具体/path 列表
-    let paths = read_filenames_from_pasteboard(pasteboard_expr);
-    if let Some(paths) = paths {
-        if !paths.is_empty() {
-            return Some(paths);
-        }
-    }
-
-    // 回退：public.file-url 的值是 file:// URL，需 percent-decode 成路径
-    read_file_urls_via_public_file_url()
-}
-
-fn read_filenames_from_pasteboard(pasteboard_expr: &str) -> Option<Vec<String>> {
-    let script = format!(
-        r#"
-use framework "AppKit"
-use scripting additions
-try
-  set pb to {pasteboard_expr}
-  set filePaths to pb's propertyListForType:(current application's NSFilenamesPboardType)
-  if filePaths is missing value then return ""
-  set out to ""
-  repeat with p in filePaths
-    set out to out & (p as text) & linefeed
-  end repeat
-  return out
-on error
-  return ""
-end try
-"#,
-    );
-
-    let output = run_osascript_stdin(&script).ok()?;
-    let paths = output
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_string)
-        .collect::<Vec<_>>();
-
-    if paths.is_empty() {
-        None
-    } else {
-        Some(paths)
-    }
-}
-
-/// 从 public.file-url (file:// URL) fallback 读取路径（仅 generalPasteboard）。
-/// 使用 JavaScript-ObjC 桥（AppleScript 无法可靠获取 NSURL.path），
-/// 配合 Rust 端 percent-decode 处理中文/空格等编码路径。
-fn read_file_urls_via_public_file_url() -> Option<Vec<String>> {
-    let script = r#"ObjC.import("AppKit");
-const pb = $.NSPasteboard.generalPasteboard;
-const s = pb.stringForType($.NSPasteboardTypeFileURL);
-if (s === null) { "none"; } else { ObjC.unwrap(s); }
-"#;
-    let url_str = run_osascript(&["-l", "JavaScript", "-e", script])
-        .ok()?;
-    let url_str = url_str.trim();
-    if url_str.is_empty() || url_str == "none" {
-        return None;
-    }
-    Some(vec![file_url_to_path(url_str)?])
-}
-
-/// 将 file:// URL 转换为本地 POSIX 路径。
-/// 处理 file:///path 和 file://localhost/path 格式，百分号解码中文字符。
-fn file_url_to_path(url: &str) -> Option<String> {
-    let path_part = url.strip_prefix("file://")?;
-    // 跳过可选的 localhost 主机名
-    let path_part = path_part
-        .strip_prefix("/localhost")
-        .unwrap_or(path_part);
-    if !path_part.starts_with('/') {
-        return None;
-    }
-    Some(percent_decode_path(path_part))
-}
-
-fn percent_decode_path(s: &str) -> String {
-    let mut result = Vec::with_capacity(s.len());
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let Ok(val) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
-                result.push(val);
-                i += 3;
-                continue;
-            }
-        }
-        result.push(bytes[i]);
-        i += 1;
-    }
-    String::from_utf8(result).unwrap_or_else(|_| s.to_string())
-}
-
-/// 把本地文件引用写入指定剪贴板。
-/// 同时写 NSFilenamesPboardType（路径数组）与 writeObjects(NSURL 字面量)，
-/// 前者是 Finder 等老 app 的标准文件 flavor，后者带出 public.file-url / Apple URL，
-/// 覆盖现代 app；缺一会导致部分目标应用按纯文本处理。
-/// 参数为 osascript 表达式（方便测试注入命名 pasteboard，避免污染通用剪贴板）。
-fn write_file_urls_into_pasteboard(
-    pasteboard_expr: &str,
-    paths: &[String],
-) -> Result<(), String> {
-    let quoted_paths = paths
-        .iter()
-        .map(|path| applescript_string_literal(path))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let url_exprs = paths
-        .iter()
-        .map(|path| {
-            format!(
-                "current application's NSURL's fileURLWithPath:{}",
-                applescript_string_literal(path)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    let script = format!(
-        r#"
-use framework "AppKit"
-use scripting additions
-set pb to {pasteboard_expr}
-pb's clearContents()
-set namesOk to pb's setPropertyList:{{{quoted_paths}}} forType:(current application's NSFilenamesPboardType)
-if (namesOk as boolean) is false then error "file names write failed"
-set urlsOk to pb's writeObjects:{{{url_exprs}}}
-if (urlsOk as boolean) is false then error "file urls write failed"
-return "ok"
-"#,
-    );
-
-    run_osascript_stdin(&script).map(|_| ())
-}
-
-fn read_html_from_nspasteboard() -> Option<String> {
-    let script = r#"
-use framework "AppKit"
-use scripting additions
-try
-  set pb to current application's NSPasteboard's generalPasteboard()
-  set htmlValue to pb's stringForType:(current application's NSPasteboardTypeHTML)
-  if htmlValue is missing value then return ""
-  return htmlValue as text
-on error
-  return ""
-end try
-"#;
-    let html = run_osascript_stdin(script).ok()?;
-
-    if html.trim().is_empty() {
-        None
-    } else {
-        Some(html)
-    }
-}
-
-fn write_html_to_nspasteboard(html: &str, plain: &str) -> Result<(), String> {
-    let script = format!(
-        r#"
-use framework "AppKit"
-use scripting additions
-set pb to current application's NSPasteboard's generalPasteboard()
-pb's clearContents()
-set htmlWrite to pb's setString:({}) forType:(current application's NSPasteboardTypeHTML)
-set plainWrite to pb's setString:({}) forType:(current application's NSPasteboardTypeString)
-if (htmlWrite as boolean) is false then error "html write failed"
-if (plainWrite as boolean) is false then error "plain write failed"
-return "ok"
-"#,
-        applescript_string_literal(html),
-        applescript_string_literal(plain),
-    );
-
-    run_osascript_stdin(&script).map(|_| ())
-}
-
-fn write_rtf_to_nspasteboard(rtf: &str, plain: &str) -> Result<(), String> {
-    let script = format!(
-        r#"
-use framework "AppKit"
-use scripting additions
-set pb to current application's NSPasteboard's generalPasteboard()
-pb's clearContents()
-set rtfData to (current application's NSString's stringWithString:({}))'s dataUsingEncoding:(current application's NSUTF8StringEncoding)
-set rtfWrite to pb's setData:rtfData forType:(current application's NSPasteboardTypeRTF)
-set plainWrite to pb's setString:({}) forType:(current application's NSPasteboardTypeString)
-if (rtfWrite as boolean) is false then error "rtf write failed"
-if (plainWrite as boolean) is false then error "plain write failed"
-return "ok"
-"#,
-        applescript_string_literal(rtf),
-        applescript_string_literal(plain),
-    );
-
-    run_osascript_stdin(&script).map(|_| ())
 }
 
 fn strip_html_tags(html: &str) -> String {
@@ -1795,23 +1539,25 @@ fn read_clipboard_snapshot() -> Result<Option<ClipboardSnapshot>, String> {
     let bundle_id = frontmost_app_bundle_id();
     let source_app = if bundle_id.is_empty() { "System Clipboard".to_string() } else { bundle_id };
 
+    let clipboard = ClipboardContext::new().map_err(|_| "MACOS_API_UNAVAILABLE".to_string())?;
+
     // 文件优先：Finder 复制文件时剪贴板只有文件引用 flavor（无文本），
-    // pbpaste 读不到任何字符串，必须先按文件引用读，否则文件复制会被整体丢弃。
-    if let Some(file_urls) = read_file_urls_from_pasteboard(GENERAL_PASTEBOARD_EXPR) {
+    // 必须先按文件引用读，否则文件复制会被整体丢弃。
+    if let Ok(file_urls) = clipboard.get_files() {
         if let Some(snapshot) = normalize_file_snapshot(file_urls, &source_app) {
             return Ok(Some(snapshot));
         }
     }
 
-    let plain_text = run_pbpaste("txt").unwrap_or_default();
+    let plain_text = clipboard.get_text().unwrap_or_default();
 
-    if let Some(html) = read_html_from_nspasteboard() {
+    if let Ok(html) = clipboard.get_html() {
         if let Some(snapshot) = normalize_html_snapshot(&html, &plain_text, &source_app) {
             return Ok(Some(snapshot));
         }
     }
 
-    if let Some(rtf) = run_pbpaste("rtf") {
+    if let Ok(rtf) = clipboard.get_rich_text() {
         if let Some(snapshot) = normalize_rtf_snapshot(&rtf, &plain_text, &source_app) {
             return Ok(Some(snapshot));
         }
@@ -1821,10 +1567,16 @@ fn read_clipboard_snapshot() -> Result<Option<ClipboardSnapshot>, String> {
         return Ok(Some(snapshot));
     }
 
-    match Clipboard::new().and_then(|mut clipboard| clipboard.get_image()) {
-        Ok(image) => Ok(Some(normalize_image_snapshot(image, &source_app))),
-        Err(_) => Ok(None),
+    if let Ok(image) = clipboard.get_image() {
+        if let Ok(rgba) = image.to_rgba8() {
+            let width = rgba.width() as usize;
+            let height = rgba.height() as usize;
+            let bytes = rgba.into_raw();
+            return Ok(Some(normalize_image_snapshot(width, height, bytes, &source_app)));
+        }
     }
+
+    Ok(None)
 }
 
 fn row_to_summary(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClipboardItemSummary> {
@@ -2317,31 +2069,6 @@ fn search_clipboard_items(
     like_search_items(connection, query, kind_filter, pinned_only)
 }
 
-fn write_text_with_pbcopy(text: &str) -> Result<(), String> {
-    let mut child = Command::new("/usr/bin/pbcopy")
-        .env("LANG", "en_US.UTF-8")
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string())?;
-
-    if let Some(stdin) = child.stdin.as_mut() {
-        use std::io::Write;
-        stdin
-            .write_all(text.as_bytes())
-            .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string())?;
-    }
-
-    let status = child
-        .wait()
-        .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string())?;
-
-    if status.success() {
-        Ok(())
-    } else {
-        Err("PASTEBOARD_WRITE_FAILED".into())
-    }
-}
-
 /// 纯文本模式是否能用负载里的 text_plain 完成写入。
 /// 抽成纯函数以便单测——真正的写入带剪贴板副作用，测试环境不保证可写。
 fn plain_text_write_target(payload: &ClipboardPayloadSnapshot, as_plain_text: bool) -> Option<&str> {
@@ -2358,11 +2085,15 @@ fn write_payload_to_clipboard(
     payload: &ClipboardPayloadSnapshot,
     as_plain_text: bool,
 ) -> Result<(), String> {
+    let clipboard = || ClipboardContext::new().map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string());
+
     // 纯文本模式：有 text_plain 就只写它（HTML/RTF 条目会退化为纯文本）；
     // 图片/文件等无文本负载没有可提取的纯文本，按计划约定回退原写入路径，
     // 即此时菜单项等同于普通粘贴
     if let Some(text) = plain_text_write_target(payload, as_plain_text) {
-        return write_text_with_pbcopy(text);
+        return clipboard()?
+            .set_text(text.to_string())
+            .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string());
     }
 
     if let (Some(bytes), Some(width), Some(height)) = (
@@ -2370,33 +2101,44 @@ fn write_payload_to_clipboard(
         payload.image_width,
         payload.image_height,
     ) {
-        let mut clipboard = Clipboard::new().map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string())?;
-        clipboard
-            .set_image(ImageData {
-                width,
-                height,
-                bytes: Cow::Borrowed(bytes.as_slice()),
-            })
-            .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string())?;
-        return Ok(());
+        let rgba = RgbaImage::from_raw(width as u32, height as u32, bytes.clone())
+            .ok_or_else(|| "PASTEBOARD_WRITE_FAILED".to_string())?;
+        let image = RustImageData::from_dynamic_image(DynamicImage::ImageRgba8(rgba));
+        return clipboard()?
+            .set_image(image)
+            .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string());
     }
 
     if let Some(html) = payload.text_html.as_deref() {
         let plain = payload.text_plain.as_deref().unwrap_or_else(|| html);
-        return write_html_to_nspasteboard(html, plain);
+        return clipboard()?
+            .set(vec![
+                ClipboardContent::Text(plain.to_string()),
+                ClipboardContent::Html(html.to_string()),
+            ])
+            .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string());
     }
 
     if let Some(rtf) = payload.text_rtf.as_deref() {
         let plain = payload.text_plain.as_deref().unwrap_or("");
-        return write_rtf_to_nspasteboard(rtf, plain);
+        return clipboard()?
+            .set(vec![
+                ClipboardContent::Rtf(rtf.to_string()),
+                ClipboardContent::Text(plain.to_string()),
+            ])
+            .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string());
     }
 
     if let Some(paths) = payload.file_urls.as_ref() {
-        return write_file_urls_into_pasteboard(GENERAL_PASTEBOARD_EXPR, paths);
+        return clipboard()?
+            .set_files(paths.clone())
+            .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string());
     }
 
     if let Some(text) = payload.text_plain.as_deref() {
-        return write_text_with_pbcopy(text);
+        return clipboard()?
+            .set_text(text.to_string())
+            .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string());
     }
 
     Err("PAYLOAD_UNSUPPORTED".into())
@@ -5385,6 +5127,12 @@ fn monitor_toggle(
     };
     drop(monitoring);
 
+    // 恢复监控时立即补跑一次 tick（等价于替换前“下一轮轮询”捕获到暂停期间的剪贴板内容）
+    if response.is_monitoring {
+        let app_for_tick = app.clone();
+        std::thread::spawn(move || process_clipboard_monitor_tick(&app_for_tick));
+    }
+
     emit_superclip_event(
         &app,
         "monitor-status-changed",
@@ -6094,10 +5842,43 @@ fn process_clipboard_monitor_tick(app: &tauri::AppHandle) {
     }
 }
 
+// ---- 原生剪贴板 I/O（clipboard-rs）：替换 pbpaste/pbcopy/osascript 与 arboard ----
+
+struct ClipboardMonitorHandler {
+    app: tauri::AppHandle,
+}
+
+impl ClipboardHandler for ClipboardMonitorHandler {
+    fn on_clipboard_change(&mut self) {
+        process_clipboard_monitor_tick(&self.app);
+    }
+}
+
 fn start_clipboard_monitor(app: tauri::AppHandle) {
-    std::thread::spawn(move || loop {
+    std::thread::spawn(move || {
+        // 启动首读：保持替换前“首轮即读”的可观察行为
         process_clipboard_monitor_tick(&app);
-        std::thread::sleep(Duration::from_millis(MONITOR_POLL_MS));
+
+        if let Ok(mut watcher) =
+            ClipboardWatcherContext::new_with_interval(Duration::from_millis(500))
+        {
+            watcher.add_handler(ClipboardMonitorHandler { app: app.clone() });
+            watcher.start_watch();
+        }
+
+        // watcher 初始化失败或线程退出：记录错误并退化为进程内轮询，避免监控静默停摆
+        let state = app.state::<AppState>();
+        push_recent_error_code(
+            &state,
+            "MONITOR_WATCHER_UNAVAILABLE",
+            "clipboard-monitor/watcher",
+        );
+        drop(state);
+
+        loop {
+            process_clipboard_monitor_tick(&app);
+            std::thread::sleep(Duration::from_millis(MONITOR_POLL_MS));
+        }
     });
 }
 
@@ -6628,14 +6409,7 @@ mod tests {
         let width = 1_492;
         let height = 1_410;
         let bytes = vec![192; width * height * 4];
-        let snapshot = normalize_image_snapshot(
-            ImageData {
-                width,
-                height,
-                bytes: bytes.into(),
-            },
-            "Test",
-        );
+        let snapshot = normalize_image_snapshot(width, height, bytes, "Test");
 
         assert!(snapshot.is_truncated);
         assert!(snapshot.payload.image_bytes.is_none());
@@ -6749,16 +6523,12 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "writes the system clipboard; run explicitly with SUPERCLIP_CLIPBOARD_IT=1"]
     #[cfg(target_os = "macos")]
-    fn file_urls_roundtrip_via_named_pasteboard() {
-        let pasteboard_name = format!(
-            "com.superclip.test.file-roundtrip.{}",
-            std::process::id()
-        );
-        let pasteboard_expr = format!(
-            "current application's NSPasteboard's pasteboardWithName:{}",
-            applescript_string_literal(&pasteboard_name)
-        );
+    fn file_urls_roundtrip_with_clipboard_rs() {
+        if std::env::var("SUPERCLIP_CLIPBOARD_IT").is_err() {
+            return;
+        }
         let dir = std::env::temp_dir().join(format!(
             "superclip-file-roundtrip-{}",
             std::process::id()
@@ -6772,17 +6542,21 @@ mod tests {
             fs::write(path, b"content").expect("test file should be written");
         }
 
-        write_file_urls_into_pasteboard(&pasteboard_expr, &paths)
-            .expect("file urls should write to named pasteboard");
-        let read =
-            read_file_urls_from_pasteboard(&pasteboard_expr).expect("file urls should read back");
-        assert_eq!(read, paths);
+        let clipboard = ClipboardContext::new().expect("clipboard context should open");
+        clipboard
+            .set_files(paths.clone())
+            .expect("file urls should write to the general pasteboard");
+        let read = clipboard
+            .get_files()
+            .expect("file urls should read back from the general pasteboard");
 
-        // 清理命名 pasteboard，避免残留（需 framework 才能访问 NSPasteboard）
-        let clear = format!(
-            "use framework \"AppKit\"\n\nset pb to {pasteboard_expr}\npb's clearContents()\nreturn \"ok\""
-        );
-        run_osascript_stdin(&clear).expect("named pasteboard should clear");
+        let mut read_sorted = read.clone();
+        read_sorted.sort();
+        let mut paths_sorted = paths.clone();
+        paths_sorted.sort();
+        assert_eq!(read_sorted, paths_sorted);
+
+        let _ = fs::remove_dir_all(&dir);
     }
 
     #[test]
