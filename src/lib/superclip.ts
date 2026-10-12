@@ -115,9 +115,18 @@ export interface ClipboardPayloadSnapshot {
   extraJson: unknown | null;
 }
 
+export interface ClipboardFlavorSummary {
+  format: string;
+  sizeBytes: number;
+  isTruncated: boolean;
+  ordinal: number;
+}
+
 export interface ClipboardItemDetail {
   item: ClipboardItem;
   payload: ClipboardPayloadSnapshot;
+  /** 该条携带的额外表示（不含二进制）；旧记录为空数组 */
+  flavors: ClipboardFlavorSummary[];
   version: number;
 }
 
@@ -386,6 +395,13 @@ const initialFallbackItems: ClipboardItem[] = [
     isPinned: false,
   },
 ];
+
+/** 浏览器回退模式的 flavor 摘要（Tauri 运行时由后端 `clipboard_flavors` 提供）。 */
+const fallbackFlavors: Record<string, ClipboardFlavorSummary[]> = {
+  "clip-2": [
+    { format: "com.apple.NSColorPboardType", sizeBytes: 96, isTruncated: false, ordinal: 0 },
+  ],
+};
 
 let fallbackItems: ClipboardItem[] = initialFallbackItems.map((item) => ({ ...item }));
 
@@ -683,6 +699,19 @@ function buildFallbackAction(item: ClipboardItem, mode: "copy" | "paste"): Clipb
     };
   }
 
+  // D-07：「其他」类型固定仅复制（不进入 Accessibility 判定分支）
+  if (item.kind === "other") {
+    return {
+      itemId: item.id,
+      status: "completed",
+      mode: "copy_only",
+      message: "已复制（该类型仅支持复制）。",
+      fallbackUsed: false,
+      degraded: false,
+      errorCode: "COPY_ONLY_TYPE",
+    };
+  }
+
   if (!fallbackPermissionTrusted && item.kind !== "file") {
     return {
       itemId: item.id,
@@ -919,6 +948,7 @@ export async function clipboardGet(id: string) {
       fileUrls: getItem(id).kind === "file" ? [getItem(id).title] : null,
       extraJson: null,
     },
+    flavors: fallbackFlavors[id] ?? [],
     version: 1,
   }));
 }
@@ -1562,7 +1592,7 @@ export async function clipboardTrashPurge(trashIds?: string[]) {
 }
 
 export function getKindActionLabel(kind: ClipboardKind, defaultAction: SettingsResponse["defaultAction"]) {
-  if (kind === "file") {
+  if (kind === "file" || kind === "other") {
     return "仅复制";
   }
 
@@ -1571,6 +1601,41 @@ export function getKindActionLabel(kind: ClipboardKind, defaultAction: SettingsR
   }
 
   return kind === "image" ? "直接粘贴（尽力）" : "直接粘贴";
+}
+
+/**
+ * 动作失败 → 用户可读文案。后端以错误码字符串拒绝（如 PAYLOAD_UNSUPPORTED），
+ * 可能被 Tauri 包成 Error.message，故对两种形状做包含式匹配。
+ */
+export function describeActionError(error: unknown): string {
+  const code =
+    typeof error === "string"
+      ? error
+      : error instanceof Error
+        ? error.message
+        : String(error ?? "");
+
+  if (code.includes("PAYLOAD_UNSUPPORTED")) {
+    return "该条记录没有可粘贴的数据。";
+  }
+  if (code.includes("PASTEBOARD_WRITE_FAILED")) {
+    return "写入剪贴板失败。";
+  }
+  if (code.includes("UNDO_EXPIRED")) {
+    return "撤销已过期。";
+  }
+
+  return "操作未完成。";
+}
+
+/** 仅在非默认路径（仅复制类型 / 降级 / 未完成）弹反馈，成功且无特殊说明时不打扰用户。 */
+export function shouldSurfaceActionResult(result: ClipboardActionResult): boolean {
+  return (
+    result.status !== "completed" ||
+    result.degraded ||
+    result.errorCode === "COPY_ONLY_TYPE" ||
+    result.errorCode === "FILES_PRIORITY"
+  );
 }
 
 /**

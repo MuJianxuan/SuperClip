@@ -25,6 +25,8 @@ import {
   clipboardTrashList,
   clipboardTrashPurge,
   clipboardClear,
+  describeActionError,
+  shouldSurfaceActionResult,
   settingsReset,
   previewMouseState,
   previewShow,
@@ -140,13 +142,16 @@ export function MainApp() {
   const { query, setQuery, items, itemsRef, selectedId, setSelectedId, enqueueRefresh } = useClipboardData();
 
   // E2：chips 计数基于当前数据集的分布；前端按 tab 过滤（后端不再传 kindFilter）。
-  // pinned 已由侧栏承担（D4），chips 不再有置顶项
+  // pinned 已由侧栏承担（D4），chips 不再有置顶项；rich = html + rtf 合并
   const counts = useMemo(() => {
     return {
       all: items.length,
       text: items.filter((i) => i.kind === "text").length,
+      rich: items.filter((i) => i.kind === "html" || i.kind === "rtf").length,
       image: items.filter((i) => i.kind === "image").length,
       file: items.filter((i) => i.kind === "file").length,
+      link: items.filter((i) => i.kind === "link").length,
+      other: items.filter((i) => i.kind === "other").length,
     };
   }, [items]);
 
@@ -154,6 +159,7 @@ export function MainApp() {
     // 侧栏「已置顶」优先于类型 chips：两者不同时生效，侧栏为准
     if (activeSection === "pinned") return items.filter((i) => i.isPinned);
     if (activeTab === "all") return items;
+    if (activeTab === "rich") return items.filter((i) => i.kind === "html" || i.kind === "rtf");
     return items.filter((i) => i.kind === activeTab);
   }, [items, activeTab, activeSection]);
 
@@ -399,21 +405,22 @@ export function MainApp() {
       // 输入态下全部放行，让浏览器默认行为（如 ⌘A 全选搜索文本）正常工作，避免误触全局快捷键
       if (isInput) return;
 
-      // ⌘1–⌘4 切类型 / ⌘5 切已置顶：仅列表视图生效（回收站/设置里被静默忽略，
+      // ⌘1–⌘5 切类型（顺序与类型 chip 一致：全部/文本/富文本/图片/文件）/ ⌘6 切已置顶：
+      // 仅列表视图生效（回收站/设置里被静默忽略，
       // 避免仅改 activeTab 而不切视图，导致回到列表时过滤器已披静默改掉）
-      if (event.metaKey && event.key >= "1" && event.key <= "5") {
+      if (event.metaKey && event.key >= "1" && event.key <= "6") {
         if (section !== "all" && section !== "pinned") return;
         event.preventDefault();
         const index = parseInt(event.key) - 1;
-        if (index === 4) {
+        if (index === 5) {
           setActiveSection("pinned");
           setActiveTab("all");
           return;
         }
-        // ⌘1–⌘4 与类型 chip 一致：从已置顶视图退回全部记录（chips 在 pinned 视图不渲染，
+        // ⌘1–⌘5 与类型 chip 一致：从已置顶视图退回全部记录（chips 在 pinned 视图不渲染，
         // 键盘路径仍需保证两入口一致）
         if (section === "pinned") setActiveSection("all");
-        const tabMap: TabId[] = ["all", "text", "image", "file"];
+        const tabMap: TabId[] = ["all", "text", "rich", "image", "file"];
         setActiveTab(tabMap[index]);
         return;
       }
@@ -479,11 +486,33 @@ export function MainApp() {
 
   const handleAction = useCallback(async (id: string) => {
     if (blockIfReadOnly("粘贴")) return;
-    try { await clipboardPaste(id); } catch { try { await clipboardCopy(id); } catch {} }
+    try {
+      const result = await clipboardPaste(id);
+      if (shouldSurfaceActionResult(result)) {
+        setFeedback({ id: Date.now(), tone: result.status === "completed" ? "success" : "warning", message: result.message });
+      }
+    } catch (pasteError) {
+      try {
+        const result = await clipboardCopy(id);
+        if (shouldSurfaceActionResult(result)) {
+          setFeedback({ id: Date.now(), tone: "success", message: result.message });
+        }
+      } catch (copyError) {
+        // D-14：零可写表示（PAYLOAD_UNSUPPORTED）等失败必须让用户看到原因
+        setFeedback({ id: Date.now(), tone: "warning", message: describeActionError(copyError ?? pasteError) });
+      }
+    }
   }, [blockIfReadOnly]);
 
   const handleCopy = useCallback(async (id: string) => {
-    try { await clipboardCopy(id); } catch {}
+    try {
+      const result = await clipboardCopy(id);
+      if (shouldSurfaceActionResult(result)) {
+        setFeedback({ id: Date.now(), tone: "success", message: result.message });
+      }
+    } catch (error) {
+      setFeedback({ id: Date.now(), tone: "warning", message: describeActionError(error) });
+    }
   }, []);
 
   const handlePin = useCallback(async (id: string) => {

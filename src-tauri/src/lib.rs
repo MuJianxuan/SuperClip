@@ -1,3 +1,4 @@
+use base64::Engine as _;
 use clipboard_rs::common::RustImage;
 use clipboard_rs::{
     Clipboard, ClipboardContent, ClipboardContext, ClipboardHandler, ClipboardWatcher,
@@ -34,6 +35,12 @@ const RECENT_ERROR_LIMIT: usize = 50;
 const WINDOW_FALLBACK_RECORD_LIMIT: usize = 20;
 const TEXT_PAYLOAD_LIMIT_BYTES: usize = 2 * 1024 * 1024;
 const IMAGE_PAYLOAD_LIMIT_BYTES: usize = 8 * 1024 * 1024;
+/// 单个额外 flavor 的最大入库体积；超限时只存元数据行（is_truncated=1 + digest）。
+const FLAVOR_PAYLOAD_LIMIT_BYTES: usize = 1024 * 1024;
+/// 单条记录所有额外 flavor 的合计体积上限。
+const FLAVOR_TOTAL_LIMIT_BYTES: usize = 2 * 1024 * 1024;
+/// 单条记录额外 flavor 的最大行数（数据行 + 标记行合计）。
+const FLAVOR_MAX_COUNT: usize = 8;
 const IMAGE_PREVIEW_MAX_EDGE: usize = 360;
 const MONITOR_POLL_MS: u64 = 900;
 const DEFAULT_HISTORY_LIMIT: usize = 1000;
@@ -102,13 +109,43 @@ struct ClipboardPayloadSnapshot {
     image_height: Option<usize>,
     file_urls: Option<Vec<String>>,
     extra_json: Option<serde_json::Value>,
+    /// 额外 flavor 的原始数据（仅内部传递）。
+    /// `skip_serializing`：不写进 `clipboard_trash.payload_json`（回收站走独立的 `flavors_json`），
+    /// 也不会随 `clipboard_get` 的 payload 返回给前端；`default`：旧 payload_json 缺该字段时取空。
+    #[serde(default, skip_serializing)]
+    flavors: Vec<ClipboardFlavorPayload>,
 }
+
+/// 采集到的一条额外 flavor（内部结构，含二进制）。
+#[derive(Clone, Debug, Default, Deserialize)]
+struct ClipboardFlavorPayload {
+    format: String,
+    ordinal: usize,
+    size_bytes: usize,
+    is_truncated: bool,
+    /// 原始字节的 SHA-256（十六进制）。截断行也保存，用于 hash 与恢复重算。
+    digest: String,
+    data: Vec<u8>,
+}
+
+/// 详情接口暴露的 flavor 摘要（不含二进制）。
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ClipboardFlavorSummary {
+    format: String,
+    size_bytes: i64,
+    is_truncated: bool,
+    ordinal: i64,
+}
+
+/// 从 `clipboard_flavors` 读出的整行（粘贴与回收站路径使用）。
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ClipboardItemDetail {
     item: ClipboardItemSummary,
     payload: ClipboardPayloadSnapshot,
+    flavors: Vec<ClipboardFlavorSummary>,
     version: u8,
 }
 
@@ -815,6 +852,52 @@ fn migrate_database(connection: &Connection) -> Result<(), String> {
         )
         .map_err(map_db_error)?;
 
+    connection
+        .execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS clipboard_flavors (
+                item_id TEXT NOT NULL REFERENCES clipboard_items(id) ON DELETE CASCADE,
+                format TEXT NOT NULL,
+                ordinal INTEGER NOT NULL DEFAULT 0,
+                size_bytes INTEGER NOT NULL,
+                digest TEXT NOT NULL DEFAULT '',
+                is_truncated INTEGER NOT NULL DEFAULT 0,
+                data BLOB NOT NULL,
+                PRIMARY KEY (item_id, format)
+            );
+
+            INSERT OR IGNORE INTO _superclip_migrations(version, description, applied_at)
+            VALUES (5, 'clipboard flavors for full pasteboard representation coverage', unixepoch());
+
+            PRAGMA user_version = 5;
+            "#,
+        )
+        .map_err(map_db_error)?;
+
+    ensure_trash_flavors_column(connection)?;
+
+    Ok(())
+}
+
+/// `ALTER TABLE ... ADD COLUMN` 不幂等（第二次启动会报 duplicate column），
+/// 因此单独检查列存在性后再执行，不放进 `execute_batch`。
+fn ensure_trash_flavors_column(connection: &Connection) -> Result<(), String> {
+    let mut statement = connection
+        .prepare("PRAGMA table_info(clipboard_trash)")
+        .map_err(map_db_error)?;
+    let columns = statement
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(map_db_error)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(map_db_error)?;
+    drop(statement);
+
+    if !columns.iter().any(|column| column == "flavors_json") {
+        connection
+            .execute("ALTER TABLE clipboard_trash ADD COLUMN flavors_json TEXT", [])
+            .map_err(map_db_error)?;
+    }
+
     Ok(())
 }
 
@@ -1197,141 +1280,545 @@ fn file_paths_from_text(text: &str) -> Option<Vec<String>> {
     )
 }
 
-fn normalize_text_snapshot(text: &str, source_app: &str) -> Option<ClipboardSnapshot> {
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        return None;
+/// 采集阶段：一次读全剪贴板上的全部表示（不再 first-match）。
+#[derive(Default)]
+struct ClipboardRepresentations {
+    plain_text: Option<String>,
+    html: Option<String>,
+    rtf: Option<String>,
+    /// (width, height, rgba8 bytes)
+    image: Option<(usize, usize, Vec<u8>)>,
+    file_urls: Vec<String>,
+    url_present: bool,
+    url_text: Option<String>,
+    flavors: Vec<ClipboardFlavorPayload>,
+    /// 因数量/总量上限未入库的 flavor 数（写进 meta）。
+    dropped_flavor_count: usize,
+}
+
+/// 已知家族 flavor：已有専用字段，不再进 `clipboard_flavors`。
+/// `CorePasteboardFlavorType 0x…` 是 Apple 对旧四字符类型的回调名：
+/// 0x6675726C = 'furl'（= public.file-url）、0x75743136 = 'ut16'（= public.utf16-plain-text）、
+/// 0x69636E73 = 'icns'（图标数据，见拒绝名单）。
+/// 另含实测发现的同义别名（Finder/Preview 复制时与 public.* 同时出现）：
+/// `Apple PNG pasteboard type`（= public.png）、`NeXT TIFF v4.0 pasteboard type`（= public.tiff）。
+const FLAVOR_SKIPLIST: &[&str] = &[
+    "public.utf8-plain-text",
+    "NSStringPboardType",
+    "public.utf16-external-plain-text",
+    "public.utf16-plain-text",
+    "CorePasteboardFlavorType 0x75743136",
+    "public.html",
+    "public.rtf",
+    "public.tiff",
+    "NeXT TIFF v4.0 pasteboard type",
+    "public.png",
+    "Apple PNG pasteboard type",
+    "public.file-url",
+    "CorePasteboardFlavorType 0x6675726C",
+    "NSFilenamesPboardType",
+    "Apple URL pasteboard type",
+    "com.apple.finder.noderef",
+    "fndf",
+];
+
+/// 无粘贴价值或体积过大的 flavor：忽略且不计数。
+/// - `dyn.*`：NSPasteboard 给应用私有归档类型的动态 UTI（不可跨应用还原），Finder 文件复制实测出现；
+/// - `com.apple.icns` / `CorePasteboardFlavorType 0x69636E73`：Finder 给图标文件的预览数据（单份 1MB+）；
+/// - `PVPboardInfoPboardType`：Preview 私有粘贴板信息；
+/// - `com.apple.coredrag`：拖拽会话类型。
+const FLAVOR_DENYLIST: &[&str] = &[
+    "com.apple.coredrag",
+    "com.apple.pasteboard.promised-file-content-id",
+    "com.apple.pasteboard.promised-file-url",
+    "com.apple.icns",
+    "CorePasteboardFlavorType 0x69636E73",
+    "PVPboardInfoPboardType",
+];
+
+/// 生成式跳过（与 text_plain 字节完全相同）的豁免名单：链接的 URL flavor 必须保留。
+const FLAVOR_RESERVED: &[&str] = &["public.url"];
+
+fn is_skipped_flavor(format: &str) -> bool {
+    FLAVOR_SKIPLIST.contains(&format)
+        || FLAVOR_DENYLIST.contains(&format)
+        || format.starts_with("com.apple.pasteboard.promised-")
+        || format.starts_with("dyn.")
+}
+
+fn is_reserved_flavor(format: &str) -> bool {
+    FLAVOR_RESERVED.contains(&format)
+}
+
+/// 读取"已知家族之外"的 flavor：过滤 → 去重 → 限额 → 计算 digest。
+/// `fetch` 注入取数（生产环境是 `clipboard.get_buffer`，测试用内存表）。
+/// 返回（已接受的 flavor 行，因数量/总量上限丢弃的个数）。
+fn read_flavor_payloads<F>(
+    formats: &[String],
+    plain_text: Option<&str>,
+    mut fetch: F,
+) -> (Vec<ClipboardFlavorPayload>, usize)
+where
+    F: FnMut(&str) -> Option<Vec<u8>>,
+{
+    let mut flavors = Vec::new();
+    let mut total_bytes = 0usize;
+    let mut dropped = 0usize;
+    let mut seen_formats: Vec<String> = Vec::new();
+
+    for (ordinal, format) in formats.iter().enumerate() {
+        if is_skipped_flavor(format) || seen_formats.iter().any(|seen| seen == format) {
+            continue;
+        }
+        if flavors.len() >= FLAVOR_MAX_COUNT {
+            dropped += 1;
+            continue;
+        }
+
+        // promise 型 flavor 取不到数据：跳过（不可还原，不计入丢弃）
+        let Some(data) = fetch(format) else {
+            continue;
+        };
+        if data.is_empty() {
+            continue;
+        }
+        if !is_reserved_flavor(format) && plain_text.map(str::as_bytes) == Some(data.as_slice()) {
+            // 与纯文本完全相同的私有文本别名
+            continue;
+        }
+
+        seen_formats.push(format.clone());
+        let size_bytes = data.len();
+        let digest = hex_digest(Sha256::digest(&data).as_slice());
+
+        if size_bytes > FLAVOR_PAYLOAD_LIMIT_BYTES {
+            flavors.push(ClipboardFlavorPayload {
+                format: format.clone(),
+                ordinal,
+                size_bytes,
+                is_truncated: true,
+                digest,
+                data: Vec::new(),
+            });
+            continue;
+        }
+
+        if total_bytes + size_bytes > FLAVOR_TOTAL_LIMIT_BYTES {
+            dropped += 1;
+            continue;
+        }
+
+        total_bytes += size_bytes;
+        flavors.push(ClipboardFlavorPayload {
+            format: format.clone(),
+            ordinal,
+            size_bytes,
+            is_truncated: false,
+            digest,
+            data,
+        });
     }
 
-    if let Some(file_urls) = file_paths_from_text(trimmed) {
-        return normalize_file_snapshot(file_urls, source_app);
+    (flavors, dropped)
+}
+
+/// flavor → 中文显示名（仅名称映射，不解析数据）。
+fn flavor_display_name(format: &str) -> Option<&'static str> {
+    match format {
+        "com.apple.NSColorPboardType" => Some("颜色"),
+        "public.vcard" => Some("联系人"),
+        "com.apple.ical.ics" => Some("日历事件"),
+        "com.adobe.pdf" => Some("PDF"),
+        "com.apple.flat-rtfd" => Some("富文本（RTFD）"),
+        "com.apple.webarchive" => Some("网页归档"),
+        "public.url" => Some("链接"),
+        "public.jpeg" => Some("JPEG 图片"),
+        "com.apple.icns" => Some("图标"),
+        _ => None,
+    }
+}
+
+fn truncate_chars(value: &str, max: usize) -> String {
+    if value.chars().count() <= max {
+        return value.to_string();
     }
 
-    let original_size = trimmed.len();
-    let (stored_text, is_truncated) = truncate_payload_text(trimmed, TEXT_PAYLOAD_LIMIT_BYTES);
-    let preview = clean_preview(&stored_text);
-    let preview = if preview.chars().count() > 140 {
-        format!("{}...", preview.chars().take(140).collect::<String>())
+    format!("{}...", value.chars().take(max).collect::<String>())
+}
+
+fn preview_line(text: &str) -> String {
+    truncate_chars(&clean_preview(text), 140)
+}
+
+/// 链接标题的可读形式：去 scheme、去 query/fragment，保留 host + path。
+fn url_host_and_path(url: &str) -> String {
+    let without_scheme = url.split_once("://").map(|(_, rest)| rest).unwrap_or(url);
+    let trimmed = without_scheme.trim_end_matches('/');
+    let host_and_path = trimmed.split(['?', '#']).next().unwrap_or(trimmed);
+
+    if host_and_path.is_empty() {
+        url.to_string()
     } else {
-        preview
+        host_and_path.to_string()
+    }
+}
+
+fn human_bytes(bytes: usize) -> String {
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    }
+}
+
+/// 主类型判定（D-06，按真机实测修正边界 E-01）：
+/// url → html → rtf → file → text → image → other。
+/// `file` 不再要求“无 image”：Finder 复制图片/图标类文件时会同时给出 public.tiff 图标预览，
+/// 若把 image 当优先，会把文件复制误记为 text/image（V-06 实测）；而截图/Preview 拷贝图片
+/// 不带 public.file-url，所以“有 file-url 即文件”能同时盖两侧。
+fn decide_primary_kind(representations: &ClipboardRepresentations) -> Option<&'static str> {
+    if representations.url_present {
+        return Some("link");
+    }
+    if representations.html.is_some() {
+        return Some("html");
+    }
+    if representations.rtf.is_some() {
+        return Some("rtf");
+    }
+    if !representations.file_urls.is_empty() {
+        return Some("file");
+    }
+    if representations.plain_text.is_some() {
+        return Some("text");
+    }
+    if representations.image.is_some() {
+        return Some("image");
+    }
+    if !representations.flavors.is_empty() {
+        return Some("other");
+    }
+
+    None
+}
+
+/// 内容 hash（D-10）：只覆盖"实际会被写回"的表示；flavor 按 format 排序保证顺序无关；
+/// 被截断的 flavor 不参与；若写回集合为空，则退化为全部 flavor 的 format+size+digest 列表。
+fn snapshot_content_hash(kind: &str, payload: &ClipboardPayloadSnapshot) -> String {
+    let mut hasher = Sha256::new();
+    let mut wrote_any = false;
+
+    hasher.update(kind.as_bytes());
+    hasher.update([0]);
+
+    if let Some(text) = payload
+        .text_plain
+        .as_deref()
+        .map(normalized)
+        .filter(|value| !value.is_empty())
+    {
+        hasher.update(text.as_bytes());
+        hasher.update([0]);
+        wrote_any = true;
+    }
+    if let Some(html) = payload.text_html.as_deref() {
+        hasher.update(html.as_bytes());
+        hasher.update([0]);
+        wrote_any = true;
+    }
+    if let Some(rtf) = payload.text_rtf.as_deref() {
+        hasher.update(rtf.as_bytes());
+        hasher.update([0]);
+        wrote_any = true;
+    }
+    if let (Some(bytes), Some(width), Some(height)) = (
+        payload.image_bytes.as_deref(),
+        payload.image_width,
+        payload.image_height,
+    ) {
+        hasher.update(format!("{width}x{height}").as_bytes());
+        hasher.update([0]);
+        hasher.update(bytes);
+        hasher.update([0]);
+        wrote_any = true;
+    }
+    if let Some(urls) = payload.file_urls.as_ref() {
+        for url in urls {
+            hasher.update(url.as_bytes());
+            hasher.update([0]);
+        }
+        wrote_any = true;
+    }
+
+    let mut flavors = payload.flavors.iter().collect::<Vec<_>>();
+    flavors.sort_by(|left, right| left.format.cmp(&right.format));
+    for flavor in &flavors {
+        if flavor.is_truncated {
+            continue;
+        }
+        hasher.update(flavor.format.as_bytes());
+        hasher.update([0]);
+        hasher.update(&flavor.data);
+        hasher.update([0]);
+        wrote_any = true;
+    }
+
+    if !wrote_any {
+        // 零可写表示（例如唯一 flavor 被截断）：用元数据保底，避免不同内容撞同一 hash。
+        for flavor in &flavors {
+            hasher.update(flavor.format.as_bytes());
+            hasher.update([0]);
+            hasher.update(flavor.size_bytes.to_string().as_bytes());
+            hasher.update([0]);
+            hasher.update(flavor.digest.as_bytes());
+            hasher.update([0]);
+        }
+    }
+
+    hex_digest(hasher.finalize().as_slice())
+}
+
+fn build_clipboard_snapshot(
+    mut representations: ClipboardRepresentations,
+    source_app: &str,
+) -> Option<ClipboardSnapshot> {
+    let mut kind = decide_primary_kind(&representations)?;
+
+    // 兼容既有行为：整段纯文本都是存在的本地路径 → 按文件处理。
+    if kind == "text" {
+        if let Some(paths) = representations
+            .plain_text
+            .as_deref()
+            .and_then(file_paths_from_text)
+        {
+            representations.file_urls = paths;
+            kind = "file";
+        }
+    }
+
+    let mut payload = ClipboardPayloadSnapshot {
+        text_plain: None,
+        text_html: None,
+        text_rtf: None,
+        image_bytes: None,
+        image_width: None,
+        image_height: None,
+        file_urls: None,
+        extra_json: None,
+        flavors: representations.flavors.clone(),
     };
-    let hash = content_hash("text", normalized(trimmed).as_bytes(), &[]);
+    let mut is_truncated = representations
+        .flavors
+        .iter()
+        .any(|flavor| flavor.is_truncated)
+        || representations.dropped_flavor_count > 0;
+    let mut payload_size_bytes = 0usize;
+
+    let text_source = if kind == "link" {
+        representations
+            .url_text
+            .clone()
+            .or_else(|| representations.plain_text.clone())
+    } else {
+        representations.plain_text.clone()
+    };
+    if let Some(text) = text_source {
+        let (stored, truncated) = truncate_payload_text(&text, TEXT_PAYLOAD_LIMIT_BYTES);
+        payload.text_plain = Some(stored);
+        payload_size_bytes = payload_size_bytes.max(text.len());
+        is_truncated |= truncated;
+    }
+    if let Some(html) = representations.html.clone() {
+        let (stored, truncated) = truncate_payload_text(&html, TEXT_PAYLOAD_LIMIT_BYTES);
+        payload.text_html = Some(stored);
+        payload_size_bytes = payload_size_bytes.max(html.len());
+        is_truncated |= truncated;
+    }
+    if let Some(rtf) = representations.rtf.clone() {
+        let (stored, truncated) = truncate_payload_text(&rtf, TEXT_PAYLOAD_LIMIT_BYTES);
+        payload.text_rtf = Some(stored);
+        payload_size_bytes = payload_size_bytes.max(rtf.len());
+        is_truncated |= truncated;
+    }
+    // 既有行为：富文本条目必须带可退化的纯文本（HTML → 去标签；RTF → 固定提示）。
+    if payload.text_plain.is_none() {
+        if let Some(html) = payload.text_html.clone() {
+            let stripped = strip_html_tags(&html);
+            if !stripped.trim().is_empty() {
+                let (stored, truncated) =
+                    truncate_payload_text(&stripped, TEXT_PAYLOAD_LIMIT_BYTES);
+                payload.text_plain = Some(stored);
+                is_truncated |= truncated;
+            }
+        } else if kind == "rtf" {
+            payload.text_plain =
+                Some("RTF 内容可复制，但当前预览只能显示富文本摘要。".to_string());
+        }
+    }
+    if let Some((width, height, bytes)) = representations.image.clone() {
+        let size = bytes.len();
+        if size > IMAGE_PAYLOAD_LIMIT_BYTES {
+            payload.extra_json = build_image_preview_extra_json(&bytes, width, height);
+            is_truncated = true;
+        } else {
+            payload.image_bytes = Some(bytes);
+        }
+        payload.image_width = Some(width);
+        payload.image_height = Some(height);
+        payload_size_bytes = payload_size_bytes.max(size);
+    }
+    if kind == "file" {
+        payload.text_plain = Some(representations.file_urls.join("\n"));
+        if let Ok(serialized) = serde_json::to_string(&representations.file_urls) {
+            payload_size_bytes = payload_size_bytes.max(serialized.len());
+        }
+        payload.file_urls = Some(representations.file_urls.clone());
+    }
+
+    let (title, preview, meta) = match kind {
+        "link" => {
+            let url = payload.text_plain.clone().unwrap_or_default();
+            let host_and_path = url_host_and_path(&url);
+            (
+                truncate_chars(&host_and_path, 28),
+                truncate_chars(&url, 140),
+                format!("链接 · {host_and_path}"),
+            )
+        }
+        "html" => {
+            let plain = resolve_plain_text(&payload, true);
+            (
+                first_line_title(&plain),
+                preview_line(&plain),
+                format!("HTML · {} 字符 · 可退化为纯文本", plain.chars().count()),
+            )
+        }
+        "rtf" => {
+            let plain = resolve_plain_text(&payload, true);
+            (
+                first_line_title(&plain),
+                preview_line(&plain),
+                format!("RTF · {} 字符 · 可退化为纯文本", plain.chars().count()),
+            )
+        }
+        "file" => {
+            let first_path = representations.file_urls.first()?.clone();
+            let primary_name = Path::new(&first_path)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or(&first_path)
+                .to_string();
+            let count = representations.file_urls.len();
+            (
+                primary_name.clone(),
+                if count == 1 {
+                    format!("本地文件：{primary_name}")
+                } else {
+                    format!("{count} 个本地文件，首项：{primary_name}")
+                },
+                format!("{count} 个文件 · copy-only"),
+            )
+        }
+        "image" => {
+            let width = payload.image_width.unwrap_or(0);
+            let height = payload.image_height.unwrap_or(0);
+            (
+                "图片剪贴板".to_string(),
+                format!("读取到 {width}×{height} 图片，P0 采用 best-effort direct paste。"),
+                format!("Image · {width}×{height}"),
+            )
+        }
+        "text" => {
+            let plain = resolve_plain_text(&payload, false);
+            (
+                first_line_title(&plain),
+                preview_line(&plain),
+                format!("{} 行文本 · {} 字符", count_lines(&plain), plain.chars().count()),
+            )
+        }
+        _ => {
+            let names = representations
+                .flavors
+                .iter()
+                .map(|flavor| {
+                    flavor_display_name(&flavor.format)
+                        .unwrap_or(flavor.format.as_str())
+                        .to_string()
+                })
+                .collect::<Vec<_>>();
+            let first_name = names.first().cloned().unwrap_or_else(|| "未知类型".into());
+            let title = if names.len() > 1 {
+                truncate_chars(&format!("{first_name} 等 {} 种格式", names.len()), 28)
+            } else {
+                first_name
+            };
+            let total_bytes = representations
+                .flavors
+                .iter()
+                .map(|flavor| flavor.size_bytes)
+                .sum();
+            let raw_names = representations
+                .flavors
+                .iter()
+                .map(|flavor| flavor.format.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let mut meta = format!(
+                "其他 · {} 种格式 · 合计 {} · {raw_names}",
+                names.len(),
+                human_bytes(total_bytes)
+            );
+            if representations
+                .flavors
+                .iter()
+                .any(|flavor| flavor.is_truncated)
+            {
+                meta.push_str(" · 已截断");
+            }
+            if representations.dropped_flavor_count > 0 {
+                meta.push_str(&format!(" · 另有 {} 个格式未存", representations.dropped_flavor_count));
+            }
+            (title, truncate_chars(&names.join(" · "), 140), meta)
+        }
+    };
+
+    let content_hash = snapshot_content_hash(kind, &payload);
 
     Some(ClipboardSnapshot {
-        kind: "text".into(),
-        title: first_line_title(&stored_text),
+        kind: kind.into(),
+        title,
         preview,
         source_app: source_app.into(),
-        meta: format!(
-            "{} 行文本 · {} 字符",
-            count_lines(&stored_text),
-            stored_text.chars().count()
-        ),
-        content_hash: hash,
-        payload: ClipboardPayloadSnapshot {
-            text_plain: Some(stored_text),
-            text_html: None,
-            text_rtf: None,
-            image_bytes: None,
-            image_width: None,
-            image_height: None,
-            file_urls: None,
-            extra_json: None,
-        },
-        payload_size_bytes: original_size,
+        meta,
+        content_hash,
+        payload,
+        payload_size_bytes,
         is_truncated,
     })
 }
 
-fn normalize_rtf_snapshot(
-    rtf: &str,
-    plain_text: &str,
-    source_app: &str,
-) -> Option<ClipboardSnapshot> {
-    let rtf_trimmed = rtf.trim();
-    if !rtf_trimmed.starts_with("{\\rtf") {
-        return None;
+/// html/rtf/text 的纯文本来源：优先 payload，回退到去标签或固定提示。
+fn resolve_plain_text(payload: &ClipboardPayloadSnapshot, with_fallback: bool) -> String {
+    if let Some(text) = payload.text_plain.as_deref() {
+        if !text.trim().is_empty() {
+            return text.to_string();
+        }
     }
 
-    let plain = if plain_text.trim().is_empty() {
+    if let Some(html) = payload.text_html.as_deref() {
+        let stripped = strip_html_tags(html);
+        if !stripped.trim().is_empty() {
+            return stripped;
+        }
+    }
+
+    if with_fallback {
         "RTF 内容可复制，但当前预览只能显示富文本摘要。".to_string()
     } else {
-        plain_text.trim().to_string()
-    };
-    let original_size = rtf_trimmed.len();
-    let (stored_rtf, is_truncated) = truncate_payload_text(rtf_trimmed, TEXT_PAYLOAD_LIMIT_BYTES);
-    let (stored_plain, plain_truncated) = truncate_payload_text(&plain, TEXT_PAYLOAD_LIMIT_BYTES);
-    let preview = clean_preview(&stored_plain);
-    let preview = if preview.chars().count() > 140 {
-        format!("{}...", preview.chars().take(140).collect::<String>())
-    } else {
-        preview
-    };
-    let hash = content_hash(
-        "rtf",
-        normalized(&stored_plain).as_bytes(),
-        stored_rtf.as_bytes(),
-    );
-
-    Some(ClipboardSnapshot {
-        kind: "rtf".into(),
-        title: first_line_title(&stored_plain),
-        preview,
-        source_app: source_app.into(),
-        meta: format!(
-            "RTF · {} 字符 · 可退化为纯文本",
-            stored_plain.chars().count()
-        ),
-        content_hash: hash,
-        payload: ClipboardPayloadSnapshot {
-            text_plain: Some(stored_plain),
-            text_html: None,
-            text_rtf: Some(stored_rtf),
-            image_bytes: None,
-            image_width: None,
-            image_height: None,
-            file_urls: None,
-            extra_json: None,
-        },
-        payload_size_bytes: original_size,
-        is_truncated: is_truncated || plain_truncated,
-    })
-}
-
-fn normalize_file_snapshot(file_urls: Vec<String>, source_app: &str) -> Option<ClipboardSnapshot> {
-    let first_path = file_urls.first()?;
-    let primary_name = Path::new(first_path)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(first_path)
-        .to_string();
-    let serialized = serde_json::to_string(&file_urls).ok()?;
-    let hash = content_hash("file", serialized.as_bytes(), &[]);
-
-    Some(ClipboardSnapshot {
-        kind: "file".into(),
-        title: primary_name.clone(),
-        preview: if file_urls.len() == 1 {
-            format!("本地文件：{primary_name}")
-        } else {
-            format!("{} 个本地文件，首项：{primary_name}", file_urls.len())
-        },
-        source_app: source_app.into(),
-        meta: format!("{} 个文件 · copy-only", file_urls.len()),
-        content_hash: hash,
-        payload: ClipboardPayloadSnapshot {
-            text_plain: Some(file_urls.join("\n")),
-            text_html: None,
-            text_rtf: None,
-            image_bytes: None,
-            image_width: None,
-            image_height: None,
-            file_urls: Some(file_urls),
-            extra_json: None,
-        },
-        payload_size_bytes: serialized.len(),
-        is_truncated: false,
-    })
+        String::new()
+    }
 }
 
 fn build_image_preview_extra_json(
@@ -1378,47 +1865,6 @@ fn build_image_preview_extra_json(
     }))
 }
 
-fn normalize_image_snapshot(
-    width: usize,
-    height: usize,
-    bytes: Vec<u8>,
-    source_app: &str,
-) -> ClipboardSnapshot {
-    let payload_size = bytes.len();
-    let is_truncated = payload_size > IMAGE_PAYLOAD_LIMIT_BYTES;
-    let stored_bytes = if is_truncated {
-        None
-    } else {
-        Some(bytes.clone())
-    };
-    let hash = content_hash("image", format!("{width}x{height}").as_bytes(), &bytes);
-
-    ClipboardSnapshot {
-        kind: "image".into(),
-        title: "图片剪贴板".into(),
-        preview: format!("读取到 {width}×{height} 图片，P0 采用 best-effort direct paste。"),
-        source_app: source_app.into(),
-        meta: format!("Image · {width}×{height}"),
-        content_hash: hash,
-        payload: ClipboardPayloadSnapshot {
-            text_plain: None,
-            text_html: None,
-            text_rtf: None,
-            image_bytes: stored_bytes,
-            image_width: Some(width),
-            image_height: Some(height),
-            file_urls: None,
-            extra_json: if is_truncated {
-                build_image_preview_extra_json(&bytes, width, height)
-            } else {
-                None
-            },
-        },
-        payload_size_bytes: payload_size,
-        is_truncated,
-    }
-}
-
 fn run_osascript(args: &[&str]) -> Result<String, String> {
     let output = Command::new("/usr/bin/osascript")
         .args(args)
@@ -1458,62 +1904,6 @@ fn strip_html_tags(html: &str) -> String {
         .replace("&quot;", "\"")
 }
 
-fn normalize_html_snapshot(
-    html: &str,
-    plain_text: &str,
-    source_app: &str,
-) -> Option<ClipboardSnapshot> {
-    let html_trimmed = html.trim();
-    if html_trimmed.is_empty() {
-        return None;
-    }
-
-    let plain = if plain_text.trim().is_empty() {
-        strip_html_tags(html_trimmed)
-    } else {
-        plain_text.trim().to_string()
-    };
-    let original_size = html_trimmed.len();
-    let (stored_html, html_truncated) =
-        truncate_payload_text(html_trimmed, TEXT_PAYLOAD_LIMIT_BYTES);
-    let (stored_plain, plain_truncated) = truncate_payload_text(&plain, TEXT_PAYLOAD_LIMIT_BYTES);
-    let preview = clean_preview(&stored_plain);
-    let preview = if preview.chars().count() > 140 {
-        format!("{}...", preview.chars().take(140).collect::<String>())
-    } else {
-        preview
-    };
-    let hash = content_hash(
-        "html",
-        normalized(&stored_plain).as_bytes(),
-        stored_html.as_bytes(),
-    );
-
-    Some(ClipboardSnapshot {
-        kind: "html".into(),
-        title: first_line_title(&stored_plain),
-        preview,
-        source_app: source_app.into(),
-        meta: format!(
-            "HTML · {} 字符 · 可退化为纯文本",
-            stored_plain.chars().count()
-        ),
-        content_hash: hash,
-        payload: ClipboardPayloadSnapshot {
-            text_plain: Some(stored_plain),
-            text_html: Some(stored_html),
-            text_rtf: None,
-            image_bytes: None,
-            image_width: None,
-            image_height: None,
-            file_urls: None,
-            extra_json: None,
-        },
-        payload_size_bytes: original_size,
-        is_truncated: html_truncated || plain_truncated,
-    })
-}
-
 fn check_accessibility_trusted() -> Result<bool, String> {
     let output = run_osascript(&[
         "-l",
@@ -1537,46 +1927,71 @@ fn frontmost_app_bundle_id() -> String {
 
 fn read_clipboard_snapshot() -> Result<Option<ClipboardSnapshot>, String> {
     let bundle_id = frontmost_app_bundle_id();
-    let source_app = if bundle_id.is_empty() { "System Clipboard".to_string() } else { bundle_id };
+    let source_app = if bundle_id.is_empty() {
+        "System Clipboard".to_string()
+    } else {
+        bundle_id
+    };
 
+    let representations = read_clipboard_representations()?;
+
+    Ok(build_clipboard_snapshot(representations, &source_app))
+}
+
+/// 一次读全剪贴板：5 个已知家族 + 其余 flavor（过滤/限额/digest）。
+fn read_clipboard_representations() -> Result<ClipboardRepresentations, String> {
     let clipboard = ClipboardContext::new().map_err(|_| "MACOS_API_UNAVAILABLE".to_string())?;
+    let formats = clipboard.available_formats().unwrap_or_default();
 
-    // 文件优先：Finder 复制文件时剪贴板只有文件引用 flavor（无文本），
-    // 必须先按文件引用读，否则文件复制会被整体丢弃。
-    if let Ok(file_urls) = clipboard.get_files() {
-        if let Some(snapshot) = normalize_file_snapshot(file_urls, &source_app) {
-            return Ok(Some(snapshot));
-        }
-    }
-
-    let plain_text = clipboard.get_text().unwrap_or_default();
-
-    if let Ok(html) = clipboard.get_html() {
-        if let Some(snapshot) = normalize_html_snapshot(&html, &plain_text, &source_app) {
-            return Ok(Some(snapshot));
-        }
-    }
-
-    if let Ok(rtf) = clipboard.get_rich_text() {
-        if let Some(snapshot) = normalize_rtf_snapshot(&rtf, &plain_text, &source_app) {
-            return Ok(Some(snapshot));
-        }
-    }
-
-    if let Some(snapshot) = normalize_text_snapshot(&plain_text, &source_app) {
-        return Ok(Some(snapshot));
-    }
-
-    if let Ok(image) = clipboard.get_image() {
-        if let Ok(rgba) = image.to_rgba8() {
+    let plain_text = clipboard
+        .get_text()
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let html = clipboard
+        .get_html()
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+    let rtf = clipboard
+        .get_rich_text()
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| value.starts_with("{\\rtf"));
+    let file_urls = clipboard.get_files().unwrap_or_default();
+    let image = clipboard
+        .get_image()
+        .ok()
+        .and_then(|image| image.to_rgba8().ok())
+        .map(|rgba| {
             let width = rgba.width() as usize;
             let height = rgba.height() as usize;
-            let bytes = rgba.into_raw();
-            return Ok(Some(normalize_image_snapshot(width, height, bytes, &source_app)));
-        }
-    }
+            (width, height, rgba.into_raw())
+        });
 
-    Ok(None)
+    let (flavors, dropped_flavor_count) = read_flavor_payloads(&formats, plain_text.as_deref(), |format| {
+        clipboard.get_buffer(format).ok()
+    });
+
+    let url_present = formats.iter().any(|format| format == "public.url");
+    let url_text = flavors
+        .iter()
+        .find(|flavor| flavor.format == "public.url" && !flavor.is_truncated)
+        .and_then(|flavor| String::from_utf8(flavor.data.clone()).ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    Ok(ClipboardRepresentations {
+        plain_text,
+        html,
+        rtf,
+        image,
+        file_urls,
+        url_present,
+        url_text,
+        flavors,
+        dropped_flavor_count,
+    })
 }
 
 fn row_to_summary(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClipboardItemSummary> {
@@ -1643,12 +2058,173 @@ fn get_payload_by_id(
                         .and_then(|value| serde_json::from_str::<Vec<String>>(&value).ok()),
                     extra_json: extra_json
                         .and_then(|value| serde_json::from_str::<serde_json::Value>(&value).ok()),
+                    flavors: Vec::new(),
                 })
             },
         )
         .optional()
         .map_err(map_db_error)?
         .ok_or_else(|| format!("clipboard payload not found: {id}"))
+}
+
+/// 详情接口用的 flavor 摘要（不读二进制）。
+fn get_flavor_summaries(
+    connection: &Connection,
+    id: &str,
+) -> Result<Vec<ClipboardFlavorSummary>, String> {
+    let mut statement = connection
+        .prepare(
+            r#"
+            SELECT format, size_bytes, is_truncated, ordinal
+            FROM clipboard_flavors
+            WHERE item_id = ?1
+            ORDER BY ordinal ASC
+            "#,
+        )
+        .map_err(map_db_error)?;
+    let rows = statement
+        .query_map(params![id], |row| {
+            Ok(ClipboardFlavorSummary {
+                format: row.get("format")?,
+                size_bytes: row.get("size_bytes")?,
+                is_truncated: row.get::<_, i64>("is_truncated")? == 1,
+                ordinal: row.get("ordinal")?,
+            })
+        })
+        .map_err(map_db_error)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(map_db_error)?;
+
+    Ok(rows)
+}
+
+/// 回收站里的 flavor 行：二进制用 base64 编码，与 item_json/payload_json 同存一列。
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TrashFlavorEntry {
+    format: String,
+    ordinal: usize,
+    size_bytes: usize,
+    digest: String,
+    is_truncated: bool,
+    data_base64: String,
+}
+
+fn encode_trash_flavor_entries(flavors: &[ClipboardFlavorPayload]) -> Option<String> {
+    if flavors.is_empty() {
+        return None;
+    }
+
+    let engine = base64::engine::general_purpose::STANDARD;
+    let entries = flavors
+        .iter()
+        .map(|flavor| TrashFlavorEntry {
+            format: flavor.format.clone(),
+            ordinal: flavor.ordinal,
+            size_bytes: flavor.size_bytes,
+            digest: flavor.digest.clone(),
+            is_truncated: flavor.is_truncated,
+            data_base64: engine.encode(&flavor.data),
+        })
+        .collect::<Vec<_>>();
+
+    serde_json::to_string(&entries).ok()
+}
+
+fn decode_trash_flavor_entries(encoded: &str) -> Result<Vec<ClipboardFlavorPayload>, String> {
+    let engine = base64::engine::general_purpose::STANDARD;
+    let entries: Vec<TrashFlavorEntry> =
+        serde_json::from_str(encoded).map_err(|_| "CLIPBOARD_SERIALIZE_FAILED".to_string())?;
+
+    entries
+        .into_iter()
+        .map(|entry| {
+            let data = engine
+                .decode(&entry.data_base64)
+                .map_err(|_| "CLIPBOARD_SERIALIZE_FAILED".to_string())?;
+
+            Ok(ClipboardFlavorPayload {
+                format: entry.format,
+                ordinal: entry.ordinal,
+                size_bytes: entry.size_bytes,
+                digest: entry.digest,
+                is_truncated: entry.is_truncated,
+                data,
+            })
+        })
+        .collect()
+}
+
+fn insert_flavor_row(
+    connection: &Connection,
+    item_id: &str,
+    flavor: &ClipboardFlavorPayload,
+) -> Result<(), String> {
+    connection
+        .execute(
+            r#"
+            INSERT OR REPLACE INTO clipboard_flavors(
+                item_id, format, ordinal, size_bytes, digest, is_truncated, data
+            )
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "#,
+            params![
+                item_id,
+                &flavor.format,
+                flavor.ordinal as i64,
+                flavor.size_bytes as i64,
+                &flavor.digest,
+                if flavor.is_truncated { 1 } else { 0 },
+                &flavor.data,
+            ],
+        )
+        .map_err(map_db_error)?;
+
+    Ok(())
+}
+
+/// 从 `clipboard_flavors` 读出带二进制的整行（粘贴与回收站路径使用；详情路径用摘要）。
+fn get_flavor_records(
+    connection: &Connection,
+    id: &str,
+) -> Result<Vec<ClipboardFlavorPayload>, String> {
+    let mut statement = connection
+        .prepare(
+            r#"
+            SELECT format, ordinal, size_bytes, digest, is_truncated, data
+            FROM clipboard_flavors
+            WHERE item_id = ?1
+            ORDER BY ordinal ASC
+            "#,
+        )
+        .map_err(map_db_error)?;
+    let rows = statement
+        .query_map(params![id], |row| {
+            Ok(ClipboardFlavorPayload {
+                format: row.get("format")?,
+                ordinal: row.get::<_, i64>("ordinal")? as usize,
+                size_bytes: row.get::<_, i64>("size_bytes")? as usize,
+                digest: row.get("digest")?,
+                is_truncated: row.get::<_, i64>("is_truncated")? == 1,
+                data: row.get("data")?,
+            })
+        })
+        .map_err(map_db_error)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(map_db_error)?;
+
+    Ok(rows)
+}
+
+/// 带 flavor 二进制的 payload（写回与回收站用；详情接口不用它）。
+fn get_payload_with_flavors_by_id(
+    connection: &Connection,
+    id: &str,
+) -> Result<ClipboardPayloadSnapshot, String> {
+    let mut payload = get_payload_by_id(connection, id)?;
+    payload.flavors = get_flavor_records(connection, id)?;
+
+    Ok(payload)
 }
 
 fn insert_fts(
@@ -1774,6 +2350,9 @@ fn upsert_clipboard_snapshot(
         )
         .map_err(map_db_error)?;
     insert_fts(&transaction, &snapshot, &id)?;
+    for flavor in &snapshot.payload.flavors {
+        insert_flavor_row(&transaction, &id, flavor)?;
+    }
     transaction.commit().map_err(map_db_error)?;
 
     cleanup_history(connection, history_limit)?;
@@ -2081,13 +2660,143 @@ fn plain_text_write_target(payload: &ClipboardPayloadSnapshot, as_plain_text: bo
         .filter(|text| !text.is_empty())
 }
 
+/// RGBA 像素 → TIFF 字节（best-effort：基座的 Image 写入只保证 PNG）。
+fn encode_tiff_bytes(width: usize, height: usize, rgba: &[u8]) -> Option<Vec<u8>> {
+    use image::codecs::tiff::TiffEncoder;
+    use image::ImageEncoder;
+
+    if width == 0 || height == 0 {
+        return None;
+    }
+
+    let mut buffer = std::io::Cursor::new(Vec::new());
+    TiffEncoder::new(&mut buffer)
+        .write_image(
+            rgba,
+            width as u32,
+            height as u32,
+            image::ExtendedColorType::Rgba8,
+        )
+        .ok()?;
+
+    let bytes = buffer.into_inner();
+    if bytes.is_empty() || bytes.len() > IMAGE_PAYLOAD_LIMIT_BYTES {
+        return None;
+    }
+
+    Some(bytes)
+}
+
+/// files 与其他表示同时存在（仅历史/异常数据）：粘贴按文件优先，其他表示本次不写回。
+fn files_take_priority(payload: &ClipboardPayloadSnapshot) -> bool {
+    payload
+        .file_urls
+        .as_ref()
+        .is_some_and(|paths| !paths.is_empty())
+        && (payload.text_html.is_some()
+            || payload.text_rtf.is_some()
+            || payload.image_bytes.is_some()
+            || payload
+                .flavors
+                .iter()
+                .any(|flavor| !flavor.is_truncated))
+}
+
+/// 组装写回内容（D-07）：files 非空 → 文件优先；否则 Html → Rtf → Text → Image(+TIFF) → Other*。
+/// 截断的 flavor 一律不写回；空集合 → `PAYLOAD_UNSUPPORTED`（D-14）。
+fn build_write_contents(
+    payload: &ClipboardPayloadSnapshot,
+) -> Result<Vec<ClipboardContent>, String> {
+    if let Some(paths) = payload.file_urls.as_ref().filter(|paths| !paths.is_empty()) {
+        return Ok(vec![ClipboardContent::Files(paths.clone())]);
+    }
+
+    let mut contents = Vec::new();
+
+    if let Some(html) = payload
+        .text_html
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        contents.push(ClipboardContent::Html(html.to_string()));
+    }
+    if let Some(rtf) = payload
+        .text_rtf
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        contents.push(ClipboardContent::Rtf(rtf.to_string()));
+    }
+    if let Some(text) = payload
+        .text_plain
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        contents.push(ClipboardContent::Text(text.to_string()));
+    }
+
+    let mut image_written = false;
+    if let (Some(bytes), Some(width), Some(height)) = (
+        payload.image_bytes.as_ref(),
+        payload.image_width,
+        payload.image_height,
+    ) {
+        let rgba = RgbaImage::from_raw(width as u32, height as u32, bytes.clone())
+            .ok_or_else(|| "PASTEBOARD_WRITE_FAILED".to_string())?;
+        contents.push(ClipboardContent::Image(RustImageData::from_dynamic_image(
+            DynamicImage::ImageRgba8(rgba),
+        )));
+        image_written = true;
+
+        if let Some(tiff) = encode_tiff_bytes(width, height, bytes) {
+            contents.push(ClipboardContent::Other("public.tiff".into(), tiff));
+        }
+    }
+
+    for flavor in &payload.flavors {
+        if flavor.is_truncated || flavor.data.is_empty() {
+            continue;
+        }
+        // 图片像素已由 Image 分支写出，不重复写同一数据的 TIFF 表示。
+        if image_written && flavor.format == "public.tiff" {
+            continue;
+        }
+        contents.push(ClipboardContent::Other(
+            flavor.format.clone(),
+            flavor.data.clone(),
+        ));
+    }
+
+    if contents.is_empty() {
+        return Err("PAYLOAD_UNSUPPORTED".into());
+    }
+
+    Ok(contents)
+}
+
+/// 写回内容的可观测形式（仅供测试断言组合规则）。
+#[cfg(test)]
+fn describe_write_contents(contents: &[ClipboardContent]) -> Vec<(String, usize)> {
+    contents
+        .iter()
+        .map(|content| match content {
+            ClipboardContent::Text(value) => ("text".to_string(), value.len()),
+            ClipboardContent::Rtf(value) => ("rtf".to_string(), value.len()),
+            ClipboardContent::Html(value) => ("html".to_string(), value.len()),
+            ClipboardContent::Image(_) => ("image".to_string(), 0),
+            ClipboardContent::Files(files) => ("files".to_string(), files.len()),
+            ClipboardContent::Other(format, buffer) => (format.clone(), buffer.len()),
+        })
+        .collect()
+}
+
 fn write_payload_to_clipboard(
     payload: &ClipboardPayloadSnapshot,
     as_plain_text: bool,
 ) -> Result<(), String> {
     let clipboard = || ClipboardContext::new().map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string());
 
-    // 纯文本模式：有 text_plain 就只写它（HTML/RTF 条目会退化为纯文本）；
+    // 纯文本模式：有 text_plain 就只写它（HTML/RTF/链接会退化为纯文本）；
     // 图片/文件等无文本负载没有可提取的纯文本，按计划约定回退原写入路径，
     // 即此时菜单项等同于普通粘贴
     if let Some(text) = plain_text_write_target(payload, as_plain_text) {
@@ -2096,52 +2805,16 @@ fn write_payload_to_clipboard(
             .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string());
     }
 
-    if let (Some(bytes), Some(width), Some(height)) = (
-        payload.image_bytes.as_ref(),
-        payload.image_width,
-        payload.image_height,
-    ) {
-        let rgba = RgbaImage::from_raw(width as u32, height as u32, bytes.clone())
-            .ok_or_else(|| "PASTEBOARD_WRITE_FAILED".to_string())?;
-        let image = RustImageData::from_dynamic_image(DynamicImage::ImageRgba8(rgba));
-        return clipboard()?
-            .set_image(image)
-            .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string());
-    }
-
-    if let Some(html) = payload.text_html.as_deref() {
-        let plain = payload.text_plain.as_deref().unwrap_or_else(|| html);
-        return clipboard()?
-            .set(vec![
-                ClipboardContent::Text(plain.to_string()),
-                ClipboardContent::Html(html.to_string()),
-            ])
-            .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string());
-    }
-
-    if let Some(rtf) = payload.text_rtf.as_deref() {
-        let plain = payload.text_plain.as_deref().unwrap_or("");
-        return clipboard()?
-            .set(vec![
-                ClipboardContent::Rtf(rtf.to_string()),
-                ClipboardContent::Text(plain.to_string()),
-            ])
-            .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string());
-    }
-
-    if let Some(paths) = payload.file_urls.as_ref() {
+    // 文件一律走基座专有的 set_files（writeObjects），而非 set(vec![Files])。
+    if let Some(paths) = payload.file_urls.as_ref().filter(|paths| !paths.is_empty()) {
         return clipboard()?
             .set_files(paths.clone())
             .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string());
     }
 
-    if let Some(text) = payload.text_plain.as_deref() {
-        return clipboard()?
-            .set_text(text.to_string())
-            .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string());
-    }
-
-    Err("PAYLOAD_UNSUPPORTED".into())
+    clipboard()?
+        .set(build_write_contents(payload)?)
+        .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string())
 }
 
 fn trigger_direct_paste() -> Result<(), String> {
@@ -2192,7 +2865,31 @@ fn mark_item_used(connection: &Connection, id: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn build_copy_result(item: &ClipboardItemSummary) -> ClipboardActionResult {
+fn build_copy_result(item: &ClipboardItemSummary, degraded: bool) -> ClipboardActionResult {
+    if item.kind == "other" {
+        return ClipboardActionResult {
+            item_id: item.id.clone(),
+            status: "completed".into(),
+            mode: "copy_only".into(),
+            message: "已复制（该类型仅支持复制）。".into(),
+            fallback_used: false,
+            degraded: false,
+            error_code: Some("COPY_ONLY_TYPE".into()),
+        };
+    }
+
+    if degraded {
+        return ClipboardActionResult {
+            item_id: item.id.clone(),
+            status: "completed".into(),
+            mode: "copy_only".into(),
+            message: "已复制文件（其他格式本次未写回）。".into(),
+            fallback_used: false,
+            degraded: true,
+            error_code: None,
+        };
+    }
+
     ClipboardActionResult {
         item_id: item.id.clone(),
         status: "completed".into(),
@@ -2208,15 +2905,32 @@ fn build_paste_result(
     item: &ClipboardItemSummary,
     accessibility_trusted: bool,
     direct_paste_result: Result<(), String>,
+    degraded: bool,
 ) -> ClipboardActionResult {
+    if item.kind == "other" {
+        return ClipboardActionResult {
+            item_id: item.id.clone(),
+            status: "completed".into(),
+            mode: "copy_only".into(),
+            message: "已复制（该类型仅支持复制）。".into(),
+            fallback_used: false,
+            degraded: false,
+            error_code: Some("COPY_ONLY_TYPE".into()),
+        };
+    }
+
     if item.kind == "file" {
         return ClipboardActionResult {
             item_id: item.id.clone(),
             status: "completed".into(),
             mode: "copy_only".into(),
-            message: "文件在 P0 固定走仅复制，不承诺 direct paste。".into(),
+            message: if degraded {
+                "已复制文件（其他格式本次未写回）。".into()
+            } else {
+                "文件在 P0 固定走仅复制，不承诺 direct paste。".into()
+            },
             fallback_used: false,
-            degraded: false,
+            degraded,
             error_code: None,
         };
     }
@@ -2226,9 +2940,13 @@ fn build_paste_result(
             item_id: item.id.clone(),
             status: "completed".into(),
             mode: "copy_only".into(),
-            message: "未授予 Accessibility，已回退为仅复制。".into(),
+            message: if degraded {
+                "已复制文件（其他格式本次未写回）。".into()
+            } else {
+                "未授予 Accessibility，已回退为仅复制。".into()
+            },
             fallback_used: true,
-            degraded: false,
+            degraded,
             error_code: Some("NO_ACCESSIBILITY".into()),
         };
     }
@@ -2238,10 +2956,26 @@ fn build_paste_result(
             item_id: item.id.clone(),
             status: "completed".into(),
             mode: "copy_only".into(),
-            message: "直接粘贴未能确认完成，已保留为仅复制，可手动粘贴。".into(),
+            message: if degraded {
+                "已复制文件（其他格式本次未写回）。".into()
+            } else {
+                "直接粘贴未能确认完成，已保留为仅复制，可手动粘贴。".into()
+            },
             fallback_used: true,
-            degraded: false,
+            degraded,
             error_code: Some(error_code),
+        };
+    }
+
+    if degraded {
+        return ClipboardActionResult {
+            item_id: item.id.clone(),
+            status: "completed".into(),
+            mode: "direct_paste".into(),
+            message: "已复制文件（其他格式本次未写回）。".into(),
+            fallback_used: false,
+            degraded: true,
+            error_code: Some("FILES_PRIORITY".into()),
         };
     }
 
@@ -3917,6 +4651,7 @@ fn clipboard_get(id: String, state: State<'_, AppState>) -> Result<ClipboardItem
     Ok(ClipboardItemDetail {
         item: get_item_by_id(&db, &id)?,
         payload: get_payload_by_id(&db, &id)?,
+        flavors: get_flavor_summaries(&db, &id)?,
         version: 1,
     })
 }
@@ -5155,11 +5890,12 @@ fn clipboard_copy(
             .map_err(|_| "clipboard store unavailable".to_string())?;
         (
             get_item_by_id(&db, &id)?,
-            get_payload_by_id(&db, &id)?,
+            get_payload_with_flavors_by_id(&db, &id)?,
             content_hash_for_item(&db, &id)?,
         )
     };
 
+    let degraded = files_take_priority(&payload);
     write_payload_to_clipboard(&payload, false)?;
     mark_self_write_hash(&state, hash);
 
@@ -5171,14 +5907,17 @@ fn clipboard_copy(
         mark_item_used(&db, &id)?;
     }
 
-    let result = build_copy_result(&item);
+    let result = build_copy_result(&item, degraded);
     emit_superclip_event(
         &app,
         "item-updated",
         json!({ "item_id": item.id.clone(), "action": "copy", "use_count_changed": true }),
     );
 
-    hide_popup_window(&app);
+    // D-13：「其他」类型不立即关闭 popup，留出前端行内提示的时间。
+    if item.kind != "other" {
+        hide_popup_window(&app);
+    }
 
     Ok(result)
 }
@@ -5200,7 +5939,7 @@ fn clipboard_paste(
             .map_err(|_| "clipboard store unavailable".to_string())?;
         (
             get_item_by_id(&db, &id)?,
-            get_payload_by_id(&db, &id)?,
+            get_payload_with_flavors_by_id(&db, &id)?,
             content_hash_for_item(&db, &id)?,
         )
     };
@@ -5209,9 +5948,10 @@ fn clipboard_paste(
         .lock()
         .map_err(|_| "permission state unavailable".to_string())?;
 
+    let degraded = files_take_priority(&payload);
     write_payload_to_clipboard(&payload, as_plain_text)?;
     mark_self_write_hash(&state, hash);
-    let direct_paste_result = if trusted && item.kind != "file" {
+    let direct_paste_result = if trusted && item.kind != "file" && item.kind != "other" {
         trigger_direct_paste()
     } else {
         Err("NO_ACCESSIBILITY".into())
@@ -5225,7 +5965,7 @@ fn clipboard_paste(
         mark_item_used(&db, &id)?;
     }
 
-    let result = build_paste_result(&item, trusted, direct_paste_result);
+    let result = build_paste_result(&item, trusted, direct_paste_result, degraded);
     record_paste_outcome(&app, &state, &result);
     emit_superclip_event(
         &app,
@@ -5233,7 +5973,10 @@ fn clipboard_paste(
         json!({ "item_id": item.id.clone(), "action": "paste", "use_count_changed": true }),
     );
 
-    hide_popup_window(&app);
+    // D-13：「其他」类型不立即关闭 popup，留出前端行内提示的时间。
+    if item.kind != "other" {
+        hide_popup_window(&app);
+    }
 
     Ok(result)
 }
@@ -5317,21 +6060,22 @@ fn clipboard_delete(
             .lock()
             .map_err(|_| "clipboard store unavailable".to_string())?;
         let item = get_item_by_id(&db, &id)?;
-        let payload = get_payload_by_id(&db, &id)?;
+        let payload = get_payload_with_flavors_by_id(&db, &id)?;
         let item_json =
             serde_json::to_string(&item).map_err(|_| "CLIPBOARD_SERIALIZE_FAILED".to_string())?;
         let payload_json = serde_json::to_string(&payload)
             .map_err(|_| "CLIPBOARD_SERIALIZE_FAILED".to_string())?;
+        let flavors_json = encode_trash_flavor_entries(&payload.flavors);
         let transaction = db.transaction().map_err(map_db_error)?;
 
         transaction
             .execute(
                 r#"
                 INSERT INTO clipboard_trash(
-                    trash_id, item_id, undo_token, item_json, payload_json,
+                    trash_id, item_id, undo_token, item_json, payload_json, flavors_json,
                     deleted_at, expires_at, deleted_by_action
                 )
-                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'delete')
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'delete')
                 "#,
                 params![
                     format!("trash-{now}-{id}"),
@@ -5339,6 +6083,7 @@ fn clipboard_delete(
                     &undo_token,
                     &item_json,
                     &payload_json,
+                    flavors_json,
                     now,
                     expires_at,
                 ],
@@ -5385,7 +6130,7 @@ fn restore_trash_entry(db: &mut Connection, undo_token: &str, now: i64) -> Resul
     let trash_row = db
         .query_row(
             r#"
-            SELECT item_json, payload_json, expires_at
+            SELECT item_json, payload_json, flavors_json, expires_at
             FROM clipboard_trash
             WHERE undo_token = ?1
             "#,
@@ -5394,6 +6139,7 @@ fn restore_trash_entry(db: &mut Connection, undo_token: &str, now: i64) -> Resul
                 Ok((
                     row.get::<_, String>("item_json")?,
                     row.get::<_, String>("payload_json")?,
+                    row.get::<_, Option<String>>("flavors_json")?,
                     row.get::<_, i64>("expires_at")?,
                 ))
             },
@@ -5401,7 +6147,7 @@ fn restore_trash_entry(db: &mut Connection, undo_token: &str, now: i64) -> Resul
         .optional()
         .map_err(map_db_error)?;
 
-    let Some((item_json, payload_json, expires_at)) = trash_row else {
+    let Some((item_json, payload_json, flavors_json, expires_at)) = trash_row else {
         return Err("UNDO_EXPIRED".to_string());
     };
 
@@ -5411,17 +6157,13 @@ fn restore_trash_entry(db: &mut Connection, undo_token: &str, now: i64) -> Resul
 
     let item: ClipboardItemSummary =
         serde_json::from_str(&item_json).map_err(|_| "CLIPBOARD_SERIALIZE_FAILED".to_string())?;
-    let payload: ClipboardPayloadSnapshot =
+    let mut payload: ClipboardPayloadSnapshot =
         serde_json::from_str(&payload_json).map_err(|_| "CLIPBOARD_SERIALIZE_FAILED".to_string())?;
-    let hash = content_hash(
-        &item.kind,
-        payload
-            .text_plain
-            .as_deref()
-            .unwrap_or(&item.preview)
-            .as_bytes(),
-        payload.image_bytes.as_deref().unwrap_or(&[]),
-    );
+    payload.flavors = match flavors_json.as_deref() {
+        Some(encoded) => decode_trash_flavor_entries(encoded)?,
+        None => Vec::new(),
+    };
+    let hash = snapshot_content_hash(&item.kind, &payload);
     let snapshot = ClipboardSnapshot {
         kind: item.kind.clone(),
         title: item.title.clone(),
@@ -5504,6 +6246,9 @@ fn restore_trash_entry(db: &mut Connection, undo_token: &str, now: i64) -> Resul
         )
         .map_err(map_db_error)?;
     insert_fts(&transaction, &snapshot, &item.id)?;
+    for flavor in &snapshot.payload.flavors {
+        insert_flavor_row(&transaction, &item.id, flavor)?;
+    }
     transaction.commit().map_err(map_db_error)?;
     get_item_by_id(db, &item.id)
 }
@@ -5885,6 +6630,64 @@ fn start_clipboard_monitor(app: tauri::AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 测试用快照构造：等价旧 `normalize_*` 入口，现在统一走 `build_clipboard_snapshot`。
+    fn normalize_text_snapshot(text: &str, source_app: &str) -> Option<ClipboardSnapshot> {
+        build_clipboard_snapshot(
+            ClipboardRepresentations {
+                plain_text: Some(text.trim().to_string()).filter(|value| !value.is_empty()),
+                ..Default::default()
+            },
+            source_app,
+        )
+    }
+
+    fn normalize_html_snapshot(
+        html: &str,
+        plain_text: &str,
+        source_app: &str,
+    ) -> Option<ClipboardSnapshot> {
+        build_clipboard_snapshot(
+            ClipboardRepresentations {
+                plain_text: Some(plain_text.trim().to_string()).filter(|value| !value.is_empty()),
+                html: Some(html.trim().to_string()).filter(|value| !value.is_empty()),
+                ..Default::default()
+            },
+            source_app,
+        )
+    }
+
+    fn normalize_image_snapshot(
+        width: usize,
+        height: usize,
+        bytes: Vec<u8>,
+        source_app: &str,
+    ) -> ClipboardSnapshot {
+        build_clipboard_snapshot(
+            ClipboardRepresentations {
+                image: Some((width, height, bytes)),
+                ..Default::default()
+            },
+            source_app,
+        )
+        .expect("image representation should build a snapshot")
+    }
+
+    fn flavor(
+        format: &str,
+        ordinal: usize,
+        data: &[u8],
+        is_truncated: bool,
+    ) -> ClipboardFlavorPayload {
+        ClipboardFlavorPayload {
+            format: format.to_string(),
+            ordinal,
+            size_bytes: data.len(),
+            is_truncated,
+            digest: hex_digest(Sha256::digest(data).as_slice()),
+            data: if is_truncated { Vec::new() } else { data.to_vec() },
+        }
+    }
 
     fn test_connection() -> Connection {
         let connection = Connection::open_in_memory().expect("in-memory sqlite must open");
@@ -6299,6 +7102,7 @@ mod tests {
             image_height: None,
             file_urls: None,
             extra_json: None,
+            flavors: Vec::new(),
         };
         // 富文本条目开纯文本模式：选中 text_plain，不会走 HTML 分支
         assert_eq!(plain_text_write_target(&html_payload, true), Some("plain body"));
@@ -6321,6 +7125,7 @@ mod tests {
             image_height: Some(1),
             file_urls: None,
             extra_json: None,
+            flavors: Vec::new(),
         };
         // 图片无 text_plain：不选纯文本分支，回退到常规写入路径（图片分支）
         assert_eq!(plain_text_write_target(&image_only, true), None);
@@ -6501,6 +7306,52 @@ mod tests {
     }
 
     #[test]
+    fn migration_v5_upgrades_v4_database_idempotently() {
+        let connection = Connection::open_in_memory().expect("in-memory sqlite must open");
+        migrate_database(&connection).expect("first migration must pass");
+
+        // 模拟遗留的 v4 库：删掉 v5 新增对象、清版本号
+        connection
+            .execute_batch(
+                r#"
+                DROP TABLE IF EXISTS clipboard_flavors;
+                ALTER TABLE clipboard_trash DROP COLUMN flavors_json;
+                DELETE FROM _superclip_migrations WHERE version = 5;
+                PRAGMA user_version = 4;
+                "#,
+            )
+            .expect("v4 simulation must pass");
+
+        migrate_database(&connection).expect("v5 upgrade must pass");
+
+        let version: i64 = connection
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .expect("user_version must read");
+        assert_eq!(version, 5);
+        let migration_rows: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM _superclip_migrations WHERE version = 5",
+                [],
+                |row| row.get(0),
+            )
+            .expect("migration row must count");
+        assert_eq!(migration_rows, 1);
+
+        // 二次启动必须幂等（ALTER TABLE ADD COLUMN 不能重复执行）
+        migrate_database(&connection).expect("second migration must pass");
+
+        let mut statement = connection
+            .prepare("PRAGMA table_info(clipboard_trash)")
+            .expect("table_info must prepare");
+        let columns = statement
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("table_info must query")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("columns must collect");
+        assert!(columns.iter().any(|column| column == "flavors_json"));
+    }
+
+    #[test]
     fn text_paths_normalize_as_file_payload() {
         let connection = test_connection();
         let snapshot = normalize_text_snapshot(
@@ -6657,7 +7508,7 @@ mod tests {
     #[test]
     fn paste_result_falls_back_when_accessibility_is_missing() {
         let item = test_clipboard_item("text");
-        let result = build_paste_result(&item, false, Ok(()));
+        let result = build_paste_result(&item, false, Ok(()), false);
 
         assert_eq!(result.mode, "copy_only");
         assert!(result.fallback_used);
@@ -6667,7 +7518,7 @@ mod tests {
     #[test]
     fn paste_result_preserves_target_payload_rejection_error() {
         let item = test_clipboard_item("image");
-        let result = build_paste_result(&item, true, Err("PAYLOAD_UNSUPPORTED".into()));
+        let result = build_paste_result(&item, true, Err("PAYLOAD_UNSUPPORTED".into()), false);
 
         assert_eq!(result.mode, "copy_only");
         assert!(result.fallback_used);
@@ -6745,6 +7596,651 @@ mod tests {
             raw_bits & (1 << 3) != 0,
             "transient bit must be set"
         );
+    }
+
+    // ── P-02：主类型判定表 / flavor 采集 / hash 语义 ─────────────────────────
+
+    fn only_item_id(connection: &Connection) -> String {
+        connection
+            .query_row("SELECT id FROM clipboard_items LIMIT 1", [], |row| row.get(0))
+            .expect("one item should exist")
+    }
+
+    fn payload_with_flavors(flavors: Vec<ClipboardFlavorPayload>) -> ClipboardPayloadSnapshot {
+        ClipboardPayloadSnapshot {
+            text_plain: None,
+            text_html: None,
+            text_rtf: None,
+            image_bytes: None,
+            image_width: None,
+            image_height: None,
+            file_urls: None,
+            extra_json: None,
+            flavors,
+        }
+    }
+
+    #[test]
+    fn clipboard_kind_precedence_follows_decision_table() {
+        // ① public.url 最优先（即使同时有 html/rtf/文本）
+        let link = build_clipboard_snapshot(
+            ClipboardRepresentations {
+                plain_text: Some("https://example.com/a".into()),
+                html: Some("<a href=\"https://example.com/a\">example</a>".into()),
+                url_present: true,
+                url_text: Some("https://example.com/a".into()),
+                ..Default::default()
+            },
+            "Safari",
+        )
+        .expect("link snapshot");
+        assert_eq!(link.kind, "link");
+        assert_eq!(link.title, "example.com/a");
+        assert_eq!(link.preview, "https://example.com/a");
+        assert_eq!(link.meta, "链接 · example.com/a");
+        // 链接仍保留其他表示（写回时全部写出）
+        assert!(link.payload.text_html.is_some());
+
+        // ② html > rtf
+        let html_first = build_clipboard_snapshot(
+            ClipboardRepresentations {
+                plain_text: Some("body".into()),
+                html: Some("<b>body</b>".into()),
+                rtf: Some("{\\rtf1 body}".into()),
+                ..Default::default()
+            },
+            "Notes",
+        )
+        .expect("html snapshot");
+        assert_eq!(html_first.kind, "html");
+        assert!(html_first.payload.text_rtf.is_some());
+
+        // ③ rtf > files/text
+        let rtf_first = build_clipboard_snapshot(
+            ClipboardRepresentations {
+                plain_text: Some("body".into()),
+                rtf: Some("{\\rtf1 body}".into()),
+                file_urls: vec!["/tmp/ignored.txt".into()],
+                ..Default::default()
+            },
+            "Notes",
+        )
+        .expect("rtf snapshot");
+        assert_eq!(rtf_first.kind, "rtf");
+
+        // ④ files（无 image）> 文本
+        let file_first = build_clipboard_snapshot(
+            ClipboardRepresentations {
+                plain_text: Some("/tmp/a.txt".into()),
+                file_urls: vec!["/tmp/a.txt".into()],
+                ..Default::default()
+            },
+            "Finder",
+        )
+        .expect("file snapshot");
+        assert_eq!(file_first.kind, "file");
+        assert_eq!(file_first.title, "a.txt");
+        assert_eq!(file_first.meta, "1 个文件 · copy-only");
+        assert_eq!(file_first.payload.file_urls.as_deref(), Some(&["/tmp/a.txt".to_string()][..]));
+
+        // ⑤ 文本 > 图片
+        let text_first = build_clipboard_snapshot(
+            ClipboardRepresentations {
+                plain_text: Some("caption".into()),
+                image: Some((1, 1, vec![1, 2, 3, 255])),
+                ..Default::default()
+            },
+            "Preview",
+        )
+        .expect("text snapshot");
+        assert_eq!(text_first.kind, "text");
+        assert!(text_first.payload.image_bytes.is_some());
+
+        // ⑥ 图片（无文本/文件）
+        let image_only = build_clipboard_snapshot(
+            ClipboardRepresentations {
+                image: Some((2, 3, vec![0; 2 * 3 * 4])),
+                ..Default::default()
+            },
+            "Preview",
+        )
+        .expect("image snapshot");
+        assert_eq!(image_only.kind, "image");
+        assert_eq!(image_only.meta, "Image · 2×3");
+
+        // ⑦ 其他（只有未知 flavor）
+        let other = build_clipboard_snapshot(
+            ClipboardRepresentations {
+                flavors: vec![flavor("com.adobe.pdf", 0, b"%PDF-1.4 fake", false)],
+                ..Default::default()
+            },
+            "Preview",
+        )
+        .expect("other snapshot");
+        assert_eq!(other.kind, "other");
+        assert_eq!(other.title, "PDF");
+        assert!(other.meta.contains("com.adobe.pdf"), "meta 必含原始 flavor 名");
+
+        // ⑧ 完全无表示 → 不入库
+        assert!(build_clipboard_snapshot(ClipboardRepresentations::default(), "Test").is_none());
+    }
+
+    #[test]
+    fn clipboard_kind_finder_image_file_is_a_file_not_an_image() {
+        // V-06 实测：Finder 复制图片文件时会带 public.tiff 图标预览 + public.file-url，
+        // 用户意图是“文件”；截图/Preview 拷贝不带 file-url，仍是 image
+        let file_like = build_clipboard_snapshot(
+            ClipboardRepresentations {
+                image: Some((1024, 1024, vec![9, 9, 9, 255])),
+                file_urls: vec!["/private/tmp/a.png".into()],
+                ..Default::default()
+            },
+            "Finder",
+        )
+        .expect("snapshot");
+        assert_eq!(file_like.kind, "file");
+        assert_eq!(file_like.payload.file_urls.as_deref(), Some(&["/private/tmp/a.png".to_string()][..]));
+
+        // 纯图片（无 file-url，如 Preview 拷贝）：仍是 image，且不写 file_urls
+        let image_only = build_clipboard_snapshot(
+            ClipboardRepresentations {
+                image: Some((4, 4, vec![1, 2, 3, 255])),
+                ..Default::default()
+            },
+            "Preview",
+        )
+        .expect("snapshot");
+        assert_eq!(image_only.kind, "image");
+        assert!(image_only.payload.file_urls.is_none());
+    }
+
+    #[test]
+    fn clipboard_kind_image_snapshot_never_carries_file_urls() {
+        // 纯图片（无文件引用）仍是 image
+        let snapshot = build_clipboard_snapshot(
+            ClipboardRepresentations {
+                image: Some((1, 1, vec![9, 9, 9, 255])),
+                ..Default::default()
+            },
+            "Preview",
+        )
+        .expect("image snapshot");
+
+        assert_eq!(snapshot.kind, "image");
+        assert!(snapshot.payload.file_urls.is_none());
+        assert!(snapshot.payload.image_bytes.is_some());
+    }
+
+    #[test]
+    fn flavor_reading_filters_dedupes_and_marks_truncated_rows() {
+        let oversized = vec![7u8; FLAVOR_PAYLOAD_LIMIT_BYTES + 1];
+        let formats = vec![
+            "public.utf8-plain-text".to_string(),
+            "com.apple.coredrag".to_string(),
+            "com.apple.pasteboard.promised-file-url".to_string(),
+            // Finder 文件复制实测出现的别名/私有类型（F-01）：全部跳过，不产生噪音行
+            "CorePasteboardFlavorType 0x6675726C".to_string(),
+            "CorePasteboardFlavorType 0x75743136".to_string(),
+            "com.apple.finder.noderef".to_string(),
+            "fndf".to_string(),
+            "dyn.ah62d4rv4gu8y6y4grf0gn5xbrzw1gydcr7u1e3cytf2gn".to_string(),
+            "CorePasteboardFlavorType 0x69636E73".to_string(),
+            "com.apple.icns".to_string(),
+            "PVPboardInfoPboardType".to_string(),
+            // 同义别名（Finder/Preview 复制实测）：与 public.png / public.tiff 重复
+            "Apple PNG pasteboard type".to_string(),
+            "NeXT TIFF v4.0 pasteboard type".to_string(),
+            "public.url".to_string(),
+            "com.apple.fake.plain-alias".to_string(),
+            "com.adobe.pdf".to_string(),
+            "com.adobe.pdf".to_string(),
+            "com.apple.NSColorPboardType".to_string(),
+            "public.vcard".to_string(),
+        ];
+        let plain = "same-as-plain";
+        let (flavors, dropped) = read_flavor_payloads(&formats, Some(plain), |format| match format {
+            "public.url" => Some(plain.as_bytes().to_vec()),
+            "com.apple.fake.plain-alias" => Some(plain.as_bytes().to_vec()),
+            "com.adobe.pdf" => Some(b"%PDF".to_vec()),
+            "com.apple.NSColorPboardType" => Some(oversized.clone()),
+            "public.vcard" => Some(b"BEGIN:VCARD".to_vec()),
+            // 即使这些格式真的可读数据，也必须被跳过名单拦住
+            _ => Some(vec![9, 9, 9]),
+        });
+
+        let format_names = flavors.iter().map(|entry| entry.format.as_str()).collect::<Vec<_>>();
+        assert_eq!(
+            format_names,
+            vec![
+                "public.url",
+                "com.adobe.pdf",
+                "com.apple.NSColorPboardType",
+                "public.vcard"
+            ],
+            "跳过名单/生成式跳过/同 format 去重都必须生效"
+        );
+        assert_eq!(dropped, 0);
+
+        let truncated = flavors
+            .iter()
+            .find(|entry| entry.is_truncated)
+            .expect("oversized flavor should keep a marker row");
+        assert!(truncated.data.is_empty());
+        assert_eq!(truncated.size_bytes, FLAVOR_PAYLOAD_LIMIT_BYTES + 1);
+        assert_eq!(truncated.digest.len(), 64, "截断行也要保留 sha256 摘要");
+    }
+
+    #[test]
+    fn flavor_reading_enforces_count_and_total_limits() {
+        // 数量上限：8 个数据行 + 其余计入 dropped
+        let many = (0..11)
+            .map(|index| format!("com.example.flavor-{index}"))
+            .collect::<Vec<_>>();
+        let (flavors, dropped) = read_flavor_payloads(&many, None, |_| Some(vec![1, 2, 3]));
+        assert_eq!(flavors.len(), FLAVOR_MAX_COUNT);
+        assert_eq!(dropped, 3);
+
+        // 总量上限：1MB + 1MB 通过，再来 1KB 就丢弃
+        let big = vec![0u8; FLAVOR_PAYLOAD_LIMIT_BYTES];
+        let (flavors, dropped) = read_flavor_payloads(
+            &[
+                "com.example.big-a".to_string(),
+                "com.example.big-b".to_string(),
+                "com.example.small".to_string(),
+            ],
+            None,
+            |format| {
+                if format == "com.example.small" {
+                    Some(vec![0u8; 1024])
+                } else {
+                    Some(big.clone())
+                }
+            },
+        );
+        assert_eq!(flavors.len(), 2);
+        assert_eq!(dropped, 1);
+    }
+
+    #[test]
+    fn flavor_display_names_map_known_formats() {
+        assert_eq!(flavor_display_name("com.adobe.pdf"), Some("PDF"));
+        assert_eq!(flavor_display_name("public.vcard"), Some("联系人"));
+        assert_eq!(
+            flavor_display_name("com.apple.NSColorPboardType"),
+            Some("颜色")
+        );
+        assert_eq!(flavor_display_name("com.example.unknown"), None);
+    }
+
+    #[test]
+    fn content_hash_tracks_written_representations() {
+        let mut with_text = payload_with_flavors(Vec::new());
+        with_text.text_plain = Some("body".into());
+        let mut with_flavor = with_text.clone();
+        with_flavor.flavors = vec![flavor("com.adobe.pdf", 0, b"%PDF", false)];
+        assert_ne!(
+            snapshot_content_hash("text", &with_text),
+            snapshot_content_hash("text", &with_flavor),
+            "不同 flavor 集合不能撞 hash"
+        );
+
+        let mut order_a = with_text.clone();
+        order_a.flavors = vec![
+            flavor("com.adobe.pdf", 0, b"a", false),
+            flavor("public.vcard", 1, b"b", false),
+        ];
+        let mut order_b = with_text.clone();
+        order_b.flavors = vec![
+            flavor("public.vcard", 0, b"b", false),
+            flavor("com.adobe.pdf", 1, b"a", false),
+        ];
+        assert_eq!(
+            snapshot_content_hash("text", &order_a),
+            snapshot_content_hash("text", &order_b),
+            "flavor 顺序不影响 hash"
+        );
+
+        let mut truncated_extra = with_text.clone();
+        truncated_extra.flavors = vec![flavor("com.adobe.pdf", 0, b"ignored", true)];
+        assert_eq!(
+            snapshot_content_hash("text", &with_text),
+            snapshot_content_hash("text", &truncated_extra),
+            "截断 flavor 不参与 hash（保证粘贴后不产生重复记录）"
+        );
+
+        let only_truncated_a = payload_with_flavors(vec![flavor("com.adobe.pdf", 0, b"big-a", true)]);
+        let only_truncated_b = payload_with_flavors(vec![flavor("com.adobe.pdf", 0, b"big-b", true)]);
+        assert_ne!(
+            snapshot_content_hash("other", &only_truncated_a),
+            snapshot_content_hash("other", &only_truncated_b),
+            "写回集合为空时靠 digest 区分不同内容"
+        );
+
+        let duplicate_read_a = {
+            let mut value = with_text.clone();
+            value.flavors = vec![flavor("com.adobe.pdf", 0, b"same", false)];
+            value
+        };
+        let duplicate_read_b = {
+            let mut value = with_text.clone();
+            value.flavors = vec![flavor("com.adobe.pdf", 3, b"same", false)];
+            value
+        };
+        assert_eq!(
+            snapshot_content_hash("text", &duplicate_read_a),
+            snapshot_content_hash("text", &duplicate_read_b),
+            "同一表示重复采集（ordinal 不同）必须得到同一 hash"
+        );
+    }
+
+    // ── P-03：flavor 存储 / 回收站保真 ────────────────────────────────────────
+
+    #[test]
+    fn upsert_stores_flavors_and_detail_exposes_summaries() {
+        let connection = test_connection();
+        let snapshot = build_clipboard_snapshot(
+            ClipboardRepresentations {
+                plain_text: Some("flavor storage probe".into()),
+                flavors: vec![
+                    flavor("com.adobe.pdf", 0, &vec![1u8; 1024], false),
+                    flavor("public.vcard", 1, b"BEGIN:VCARD", false),
+                    flavor("com.apple.NSColorPboardType", 2, &vec![3u8; 32], true),
+                ],
+                ..Default::default()
+            },
+            "Test",
+        )
+        .expect("snapshot should build");
+        upsert_clipboard_snapshot(&connection, snapshot, DEFAULT_HISTORY_LIMIT)
+            .expect("upsert should pass");
+        let id = only_item_id(&connection);
+
+        let records = get_flavor_records(&connection, &id).expect("records should load");
+        assert_eq!(records.len(), 3);
+        assert_eq!(records[0].format, "com.adobe.pdf");
+        assert_eq!(records[0].data.len(), 1024);
+        assert_eq!(records[0].digest.len(), 64);
+        assert!(records[2].is_truncated);
+        assert!(records[2].data.is_empty());
+        assert!(!records[2].digest.is_empty());
+
+        let summaries = get_flavor_summaries(&connection, &id).expect("summaries should load");
+        assert_eq!(summaries.len(), 3);
+        assert_eq!(summaries[1].format, "public.vcard");
+        assert!(summaries[2].is_truncated);
+
+        // 详情 payload 不带二进制（skip_serializing），flavor 只从摘要接口出
+        let detail_payload = get_payload_by_id(&connection, &id).expect("payload should load");
+        assert!(detail_payload.flavors.is_empty());
+        assert!(!serde_json::to_string(&detail_payload)
+            .expect("payload should serialize")
+            .contains("flavors"));
+    }
+
+    #[test]
+    fn trash_round_trip_keeps_flavor_blobs_and_original_hash() {
+        let mut connection = test_connection();
+        let snapshot = build_clipboard_snapshot(
+            ClipboardRepresentations {
+                plain_text: Some("flavor trash probe".into()),
+                flavors: vec![
+                    flavor("com.adobe.pdf", 0, b"%PDF-1.4 fake", false),
+                    flavor("com.apple.NSColorPboardType", 1, &vec![9u8; 32], true),
+                ],
+                ..Default::default()
+            },
+            "Test",
+        )
+        .expect("snapshot should build");
+        let original_hash = snapshot.content_hash.clone();
+        upsert_clipboard_snapshot(&connection, snapshot, DEFAULT_HISTORY_LIMIT)
+            .expect("upsert should pass");
+        let id = only_item_id(&connection);
+
+        let item = get_item_by_id(&connection, &id).expect("item should load");
+        let payload = get_payload_with_flavors_by_id(&connection, &id).expect("payload should load");
+        let item_json = serde_json::to_string(&item).expect("item should serialize");
+        let payload_json = serde_json::to_string(&payload).expect("payload should serialize");
+        let flavors_json = encode_trash_flavor_entries(&payload.flavors);
+        let now = now_epoch_secs().expect("clock should pass");
+        let token = "undo-flavor-round-trip";
+        connection
+            .execute(
+                r#"
+                INSERT INTO clipboard_trash(
+                    trash_id, item_id, undo_token, item_json, payload_json, flavors_json,
+                    deleted_at, expires_at, deleted_by_action
+                )
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'delete')
+                "#,
+                params![
+                    format!("trash-{now}-{id}"),
+                    &id,
+                    token,
+                    &item_json,
+                    &payload_json,
+                    flavors_json,
+                    now,
+                    now + TRASH_RETENTION_SECS,
+                ],
+            )
+            .expect("trash insert should pass");
+        connection
+            .execute("DELETE FROM clipboard_items WHERE id = ?1", params![&id])
+            .expect("delete should pass");
+
+        let restored = restore_trash_entry(&mut connection, token, now).expect("restore should pass");
+        assert_eq!(restored.id, id);
+        let records = get_flavor_records(&connection, &id).expect("records should load");
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].data, b"%PDF-1.4 fake");
+        assert!(records[1].is_truncated);
+        assert_eq!(
+            content_hash_for_item(&connection, &id).expect("hash should load"),
+            original_hash,
+            "恢复后 hash 必须与原条目一致，否则粘贴/监控会造重复记录"
+        );
+    }
+
+    #[test]
+    fn legacy_trash_payload_without_flavors_field_parses() {
+        let mut connection = test_connection();
+        let snapshot = normalize_text_snapshot("legacy flavor probe", "Test")
+            .expect("snapshot should build");
+        upsert_clipboard_snapshot(&connection, snapshot, DEFAULT_HISTORY_LIMIT)
+            .expect("upsert should pass");
+        let id = only_item_id(&connection);
+        let item = get_item_by_id(&connection, &id).expect("item should load");
+        let payload = get_payload_by_id(&connection, &id).expect("payload should load");
+        let item_json = serde_json::to_string(&item).expect("item should serialize");
+        let payload_json = serde_json::to_string(&payload).expect("payload should serialize");
+        // 旧行的 payload_json 里没有 flavors 字段（skip_serializing 保证新行也没有）
+        assert!(!payload_json.contains("flavors"));
+        let now = now_epoch_secs().expect("clock should pass");
+        let token = "undo-legacy-flavor";
+        connection
+            .execute(
+                r#"
+                INSERT INTO clipboard_trash(
+                    trash_id, item_id, undo_token, item_json, payload_json, flavors_json,
+                    deleted_at, expires_at, deleted_by_action
+                )
+                VALUES (?1, ?2, ?3, ?4, ?5, NULL, ?6, ?7, 'delete')
+                "#,
+                params![
+                    format!("trash-{now}-{id}"),
+                    &id,
+                    token,
+                    &item_json,
+                    &payload_json,
+                    now,
+                    now + TRASH_RETENTION_SECS,
+                ],
+            )
+            .expect("trash insert should pass");
+        connection
+            .execute("DELETE FROM clipboard_items WHERE id = ?1", params![&id])
+            .expect("delete should pass");
+
+        let restored = restore_trash_entry(&mut connection, token, now).expect("restore should pass");
+        assert!(get_flavor_records(&connection, &restored.id)
+            .expect("records should load")
+            .is_empty());
+        assert_eq!(restored.kind, "text");
+    }
+
+    // ── P-04：写回组合规则 ──────────────────────────────────────────────────
+
+    fn text_only_payload(text: &str) -> ClipboardPayloadSnapshot {
+        ClipboardPayloadSnapshot {
+            text_plain: Some(text.to_string()),
+            text_html: None,
+            text_rtf: None,
+            image_bytes: None,
+            image_width: None,
+            image_height: None,
+            file_urls: None,
+            extra_json: None,
+            flavors: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn paste_write_builds_expected_content_matrix() {
+        // 纯文本
+        assert_eq!(
+            describe_write_contents(&build_write_contents(&text_only_payload("hello")).expect("text")),
+            vec![("text".to_string(), 5)]
+        );
+
+        // 富文本：html + rtf + 可退化纯文本都写回
+        let rich = ClipboardPayloadSnapshot {
+            text_plain: Some("plain body".into()),
+            text_html: Some("<b>plain body</b>".into()),
+            text_rtf: Some("{\\rtf1 plain body}".into()),
+            ..text_only_payload("plain body")
+        };
+        assert_eq!(
+            describe_write_contents(&build_write_contents(&rich).expect("rich"))
+                .into_iter()
+                .map(|(format, _)| format)
+                .collect::<Vec<_>>(),
+            vec!["html", "rtf", "text"]
+        );
+
+        // 图片：Image + best-effort TIFF
+        let image = ClipboardPayloadSnapshot {
+            text_plain: None,
+            text_html: None,
+            text_rtf: None,
+            image_bytes: Some(vec![10, 20, 30, 255]),
+            image_width: Some(1),
+            image_height: Some(1),
+            file_urls: None,
+            extra_json: None,
+            flavors: Vec::new(),
+        };
+        let described = describe_write_contents(&build_write_contents(&image).expect("image"));
+        assert_eq!(described[0].0, "image");
+        assert!(
+            described.iter().any(|(format, _)| format == "public.tiff"),
+            "图片要带 TIFF best-effort 表示"
+        );
+
+        // 文件：一律走 files 分支
+        let files = ClipboardPayloadSnapshot {
+            file_urls: Some(vec!["/tmp/a.txt".into(), "/tmp/b.txt".into()]),
+            text_plain: Some("/tmp/a.txt\n/tmp/b.txt".into()),
+            ..text_only_payload("ignored")
+        };
+        assert!(!files_take_priority(&files), "纯文件条目不标降级");
+        assert_eq!(
+            describe_write_contents(&build_write_contents(&files).expect("files")),
+            vec![("files".to_string(), 2)]
+        );
+
+        // 文件 + 图片（仅历史/异常数据）：文件优先 + 降级
+        let legacy = ClipboardPayloadSnapshot {
+            image_bytes: Some(vec![1, 2, 3, 255]),
+            image_width: Some(1),
+            image_height: Some(1),
+            ..files.clone()
+        };
+        assert!(files_take_priority(&legacy));
+        assert_eq!(
+            describe_write_contents(&build_write_contents(&legacy).expect("legacy")),
+            vec![("files".to_string(), 2)]
+        );
+
+        // 其他类型：其余 flavor 原样写出；截断的不写
+        let other = payload_with_flavors(vec![
+            flavor("com.adobe.pdf", 0, b"%PDF", false),
+            flavor("public.vcard", 1, b"BEGIN:VCARD", true),
+        ]);
+        assert_eq!(
+            describe_write_contents(&build_write_contents(&other).expect("other")),
+            vec![("com.adobe.pdf".to_string(), 4)]
+        );
+    }
+
+    #[test]
+    fn paste_write_rejects_empty_write_set() {
+        // 唯一 flavor 被截断 → 零可写表示 → PAYLOAD_UNSUPPORTED（不碰剪贴板）
+        let payload = payload_with_flavors(vec![flavor("com.adobe.pdf", 0, &vec![7u8; 64], true)]);
+        let error = match build_write_contents(&payload) {
+            Ok(_) => panic!("empty write set must fail"),
+            Err(error) => error,
+        };
+        assert_eq!(error, "PAYLOAD_UNSUPPORTED");
+    }
+
+    #[test]
+    fn paste_write_keeps_truncated_text_regression() {
+        // >2MB 文本仍写回截断后的内容（既有行为，不回退为仅复制）
+        let text = "a".repeat(TEXT_PAYLOAD_LIMIT_BYTES + 16);
+        let snapshot = normalize_text_snapshot(&text, "Test").expect("snapshot should build");
+        assert!(snapshot.is_truncated);
+        assert_eq!(
+            describe_write_contents(&build_write_contents(&snapshot.payload).expect("contents")),
+            vec![("text".to_string(), TEXT_PAYLOAD_LIMIT_BYTES)]
+        );
+    }
+
+    #[test]
+    fn build_results_mark_copy_only_for_other_kind() {
+        let summary = ClipboardItemSummary {
+            id: "clip-other".into(),
+            kind: "other".into(),
+            title: "PDF".into(),
+            preview: "其他 · 1 种格式".into(),
+            source_app: "Preview".into(),
+            meta: "其他 · 1 种格式 · 12 B · com.adobe.pdf".into(),
+            time_label: "刚刚".into(),
+            is_pinned: false,
+            use_count: 0,
+            payload_size_bytes: 12,
+            match_type: None,
+            matched_fields: Vec::new(),
+            highlight_ranges: Vec::new(),
+        };
+
+        let copy = build_copy_result(&summary, false);
+        assert_eq!(copy.mode, "copy_only");
+        assert_eq!(copy.error_code.as_deref(), Some("COPY_ONLY_TYPE"));
+        assert!(!copy.degraded);
+
+        let paste = build_paste_result(&summary, true, Ok(()), false);
+        assert_eq!(paste.mode, "copy_only");
+        assert_eq!(paste.error_code.as_deref(), Some("COPY_ONLY_TYPE"));
+
+        let mut file_like = summary.clone();
+        file_like.kind = "text".into();
+        let degraded_copy = build_copy_result(&file_like, true);
+        assert!(degraded_copy.degraded);
+        assert!(degraded_copy.message.contains("已复制文件"));
+        let degraded_paste = build_paste_result(&file_like, true, Ok(()), true);
+        assert!(degraded_paste.degraded);
+        assert_eq!(degraded_paste.mode, "direct_paste");
     }
 }
 

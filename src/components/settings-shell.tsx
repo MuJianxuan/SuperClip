@@ -87,6 +87,8 @@ const contentKindOptions = [
   { value: "rtf", label: "RTF" },
   { value: "image", label: "Image" },
   { value: "file", label: "File" },
+  { value: "link", label: "Link" },
+  { value: "other", label: "Other" },
 ];
 
 /* 主题分段按钮 —— F2 原型语言（与 Quick Panel 分段一致），hover 由 React state 驱动。

@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { File, FileCode2, FileImage, FileText, Type } from "lucide-react";
+import { File, FileCode2, FileImage, FileText, Layers, Link2, Type } from "lucide-react";
 import type { ClipboardKind } from "../../components/history-row";
 
 /**
@@ -12,4 +12,6 @@ export const KIND_META: Record<ClipboardKind, { label: string; icon: LucideIcon 
   rtf: { label: "RTF", icon: FileText },
   image: { label: "图片", icon: FileImage },
   file: { label: "文件", icon: File },
+  link: { label: "链接", icon: Link2 },
+  other: { label: "其他", icon: Layers },
 };

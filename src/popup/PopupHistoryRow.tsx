@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from "react";
-import { Copy, FileImage, FileText, Link, Pin, Star, Trash2 } from "lucide-react";
+import { Copy, FileImage, FileText, Layers, Link, Link2, Pin, Star, Trash2 } from "lucide-react";
 import type { ClipboardItem } from "../components/history-row";
 
 interface PopupHistoryRowProps {
@@ -28,6 +28,10 @@ function KindIcon({ kind }: { kind: string }) {
       return <FileImage className="h-[13px] w-[13px]" />;
     case "html":
       return <Link className="h-[13px] w-[13px]" />;
+    case "link":
+      return <Link2 className="h-[13px] w-[13px]" />;
+    case "other":
+      return <Layers className="h-[13px] w-[13px]" />;
     default:
       return <FileText className="h-[13px] w-[13px]" />;
   }
@@ -214,14 +218,23 @@ export function PopupContextMenu({
     onSelect: () => void;
   }> = [
     { key: "copy", label: "复制", shortcut: "⌘C", icon: <Copy className="h-[13px] w-[13px]" />, onSelect: onCopy },
-    { key: "paste", label: "粘贴到前台应用", shortcut: "↵", icon: <FileText className="h-[13px] w-[13px]" />, onSelect: onPaste },
-    {
-      key: "paste-plain",
-      label: "粘贴为纯文本",
-      shortcut: "⌥↵",
-      icon: <FileText className="h-[13px] w-[13px]" />,
-      onSelect: onPastePlainText,
-    },
+  ];
+
+  // D-07：「其他」类型固定仅复制 → 隐藏两个直接粘贴入口
+  if (item.kind !== "other") {
+    entries.push(
+      { key: "paste", label: "粘贴到前台应用", shortcut: "↵", icon: <FileText className="h-[13px] w-[13px]" />, onSelect: onPaste },
+      {
+        key: "paste-plain",
+        label: "粘贴为纯文本",
+        shortcut: "⌥↵",
+        icon: <FileText className="h-[13px] w-[13px]" />,
+        onSelect: onPastePlainText,
+      },
+    );
+  }
+
+  entries.push(
     {
       key: "pin",
       label: item.isPinned ? "取消置顶" : "置顶",
@@ -231,7 +244,7 @@ export function PopupContextMenu({
     },
     { key: "detail", label: "查看详情", icon: <FileImage className="h-[13px] w-[13px]" />, onSelect: onDetail },
     { key: "delete", label: "删除", shortcut: "⌘⌫", icon: <Trash2 className="h-[13px] w-[13px]" />, danger: true, onSelect: onDelete },
-  ];
+  );
 
   return (
     <div

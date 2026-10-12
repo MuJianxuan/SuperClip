@@ -1,6 +1,6 @@
 import { memo } from "react";
 
-export type TabId = "all" | "text" | "image" | "file";
+export type TabId = "all" | "text" | "rich" | "image" | "file" | "link" | "other";
 
 interface MainTabNavigationProps {
   activeTab: TabId;
@@ -8,12 +8,20 @@ interface MainTabNavigationProps {
   onTabChange: (tab: TabId) => void;
 }
 
-/* D4：左侧栏已承载「已置顶」入口，chips 只保留类型过滤（全部/文本/图片/文件） */
-const tabs: { id: TabId; label: string }[] = [
+/* D4：左侧栏已承载「已置顶」入口，chips 只保留类型过滤；
+   富文本把 html+rtf 合并为一个 chip，行内仍显示精确标签（HTML/RTF）。
+   链接/其他仅在有记录时出现（否则多数用户看到空 chip 只会困惑）。 */
+const baseTabs: { id: TabId; label: string }[] = [
   { id: "all", label: "全部" },
   { id: "text", label: "文本" },
+  { id: "rich", label: "富文本" },
   { id: "image", label: "图片" },
   { id: "file", label: "文件" },
+];
+
+const conditionalTabs: { id: TabId; label: string }[] = [
+  { id: "link", label: "链接" },
+  { id: "other", label: "其他" },
 ];
 
 /**
@@ -25,6 +33,12 @@ export const MainTabNavigation = memo(function MainTabNavigation({
   counts,
   onTabChange,
 }: MainTabNavigationProps) {
+  const tabs = [
+    ...baseTabs,
+    // 条件 chip：有记录才显示；若当前正停在该 tab（记录被删到 0），仍保留以免过滤器无法切回
+    ...conditionalTabs.filter((tab) => (counts[tab.id] ?? 0) > 0 || activeTab === tab.id),
+  ];
+
   return (
     <nav className="flex shrink-0 items-center gap-1.5 px-5 pb-3" aria-label="内容过滤">
       {tabs.map((tab) => {
@@ -54,7 +68,7 @@ export const MainTabNavigation = memo(function MainTabNavigation({
                 color: isActive ? "var(--chip-badge-active-text, var(--text-secondary))" : "var(--chip-badge-text, var(--text-tertiary))",
               }}
             >
-              {counts[tab.id]}
+              {counts[tab.id] ?? 0}
             </span>
           </button>
         );

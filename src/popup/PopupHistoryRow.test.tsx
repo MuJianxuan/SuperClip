@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { PopupHistoryRow } from "./PopupHistoryRow";
+import { PopupContextMenu, PopupHistoryRow } from "./PopupHistoryRow";
 import type { ClipboardItem } from "../components/history-row";
 
 const mockItem: ClipboardItem = {
@@ -110,5 +110,49 @@ describe("PopupHistoryRow", () => {
     const button = container.querySelector("button")!;
     fireEvent.mouseLeave(button);
     expect(onMouseLeave).toHaveBeenCalled();
+  });
+
+  it("other 类型右键菜单隐藏两个直接粘贴入口（D-07 固定仅复制）", () => {
+    render(
+      <PopupContextMenu
+        x={0}
+        y={0}
+        item={{ ...mockItem, kind: "other" }}
+        onCopy={() => {}}
+        onPaste={() => {}}
+        onPastePlainText={() => {}}
+        onPin={() => {}}
+        onDetail={() => {}}
+        onDelete={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("复制")).toBeInTheDocument();
+    expect(screen.queryByText("粘贴到前台应用")).not.toBeInTheDocument();
+    expect(screen.queryByText("粘贴为纯文本")).not.toBeInTheDocument();
+    expect(screen.getByText("置顶")).toBeInTheDocument();
+    expect(screen.getByText("查看详情")).toBeInTheDocument();
+    expect(screen.getByText("删除")).toBeInTheDocument();
+  });
+
+  it("普通类型右键菜单保留两个粘贴入口", () => {
+    render(
+      <PopupContextMenu
+        x={0}
+        y={0}
+        item={{ ...mockItem, kind: "link" }}
+        onCopy={() => {}}
+        onPaste={() => {}}
+        onPastePlainText={() => {}}
+        onPin={() => {}}
+        onDetail={() => {}}
+        onDelete={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+    expect(screen.getByText("粘贴到前台应用")).toBeInTheDocument();
+    expect(screen.getByText("粘贴为纯文本")).toBeInTheDocument();
   });
 });

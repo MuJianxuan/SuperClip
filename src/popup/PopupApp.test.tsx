@@ -13,9 +13,11 @@ vi.mock("@tauri-apps/api/event", () => ({
   emit: vi.fn(() => Promise.resolve()),
 }));
 
+const windowMock = vi.hoisted(() => ({ hide: vi.fn() }));
+
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
-    hide: vi.fn(),
+    hide: windowMock.hide,
     outerPosition: () => Promise.resolve({ x: 100, y: 50 }),
     scaleFactor: () => Promise.resolve(1),
   }),
@@ -250,6 +252,82 @@ describe("PopupApp", () => {
       expect(screen.queryByTestId("popup-context-menu")).not.toBeInTheDocument();
 
       pasteSpy.mockRestore();
+    });
+
+    it("other 类型固定走复制通道：不调 paste，行内提示后才关闭", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        const otherItem: ClipboardItem = {
+          id: "clip-other",
+          kind: "other",
+          title: "PDF",
+          preview: "其他 · 1 种格式",
+          sourceApp: "Preview",
+          meta: "",
+          timeLabel: "刚刚",
+          isPinned: false,
+        };
+        const searchSpy = vi.spyOn(superclip, "clipboardSearch").mockResolvedValue({
+          query: "",
+          normalizedQuery: "",
+          results: [otherItem],
+          total: 1,
+          searchTimeMs: 0,
+          version: 1,
+        });
+        const copySpy = vi.spyOn(superclip, "clipboardCopy").mockResolvedValue({
+          itemId: "clip-other",
+          status: "completed",
+          mode: "copy_only",
+          message: "已复制（该类型仅支持复制）。",
+          fallbackUsed: false,
+          degraded: false,
+          errorCode: "COPY_ONLY_TYPE",
+        });
+        const pasteSpy = vi.spyOn(superclip, "clipboardPaste");
+
+        render(<PopupApp />);
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 60));
+        });
+
+        // hidePopup 仅在 Tauri 运行时才调 window.hide；数据已加载完再打开开关，
+        // 避免影响 superclip 的 fallback 数据通道
+        Object.defineProperty(window, "__TAURI_INTERNALS__", {
+          value: {},
+          writable: true,
+          configurable: true,
+        });
+
+        try {
+          fireEvent.click(screen.getByText("PDF"));
+          await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          });
+
+          expect(copySpy).toHaveBeenCalledWith("clip-other");
+          expect(pasteSpy).not.toHaveBeenCalled();
+          expect(screen.getByText("已复制（该类型仅支持复制）。")).toBeInTheDocument();
+          // D-13：后端已跳过 hide_popup_window，前端也要等提示展示完再关
+          expect(windowMock.hide).not.toHaveBeenCalled();
+
+          act(() => {
+            vi.advanceTimersByTime(1600);
+          });
+          await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          });
+          expect(windowMock.hide).toHaveBeenCalled();
+        } finally {
+          delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
+        }
+
+        copySpy.mockRestore();
+        pasteSpy.mockRestore();
+        searchSpy.mockRestore();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it("⌥↵ 触发纯文本粘贴", async () => {

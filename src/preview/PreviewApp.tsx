@@ -14,6 +14,8 @@ const KIND_LABELS: Record<string, string> = {
   rtf: "RTF",
   image: "图片",
   file: "文件",
+  link: "链接",
+  other: "其他",
 };
 
 /** 字节数 → 人类可读体积（B / KB / MB），保留 1 位小数 */
@@ -116,6 +118,64 @@ function MetaChip({ children, testId }: { children: React.ReactNode; testId?: st
     >
       {children}
     </span>
+  );
+}
+
+/** 表示清单：「这条记录携带哪些表示」（flavor 名 + 体积 + 截断标记），不含二进制。 */
+function FlavorSection({ flavors }: { flavors: ClipboardItemDetail["flavors"] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!flavors || flavors.length === 0) return null;
+
+  const visible = expanded ? flavors : flavors.slice(0, 6);
+  const hiddenCount = flavors.length - visible.length;
+
+  return (
+    <section
+      data-testid="preview-flavors"
+      className="mb-2.5 rounded-[8px] px-2 py-1.5"
+      style={{ background: "var(--surface-2)", border: "1px solid var(--preview-divider)" }}
+    >
+      <div
+        className="mb-1 text-[10px] tracking-[0.3px]"
+        style={{ color: "var(--text-tertiary)" }}
+      >
+        表示（{flavors.length}）
+      </div>
+      <ul className="m-0 list-none space-y-[3px] p-0">
+        {visible.map((flavor) => (
+          <li
+            key={`${flavor.ordinal}-${flavor.format}`}
+            className="flex items-center gap-1.5 text-[10.5px]"
+            style={{ color: "var(--text-secondary)" }}
+          >
+            <span className="truncate font-mono">{flavor.format}</span>
+            <span className="ml-auto shrink-0 tabular-nums" style={{ color: "var(--text-tertiary)" }}>
+              {formatBytes(flavor.sizeBytes)}
+            </span>
+            {flavor.isTruncated ? (
+              <span
+                data-testid="preview-flavor-truncated"
+                className="shrink-0 rounded-[4px] px-1"
+                style={{ background: "var(--accent-soft)", color: "var(--accent-text)" }}
+              >
+                已截断
+              </span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+      {hiddenCount > 0 || expanded ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          className="mt-1 text-[10px]"
+          style={{ color: "var(--accent-text)" }}
+        >
+          {expanded ? "收起" : `还有 ${hiddenCount} 种…`}
+        </button>
+      ) : null}
+    </section>
   );
 }
 
@@ -342,7 +402,17 @@ export function PreviewApp() {
                 {item.title}
               </h3>
             ) : null}
+            {item.kind === "other" ? (
+              <p
+                data-testid="preview-copy-only-note"
+                className="mb-2 text-[11px]"
+                style={{ color: "var(--text-tertiary)" }}
+              >
+                该类型仅支持复制，可手动粘贴。
+              </p>
+            ) : null}
             {renderRichContent(previewText)}
+            <FlavorSection flavors={detail?.flavors ?? []} />
           </div>
         )}
       </div>

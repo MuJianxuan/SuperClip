@@ -305,6 +305,85 @@ describe("PreviewApp", () => {
     expect(screen.queryByText("FALLBACK")).not.toBeInTheDocument();
   });
 
+  describe("flavor representation list", () => {
+    it("renders stored flavors with sizes and truncation marker", async () => {
+      const invoke = (await import("@tauri-apps/api/core")).invoke as ReturnType<typeof vi.fn>;
+      invoke.mockImplementation((cmd: string) =>
+        cmd === "clipboard_get"
+          ? Promise.resolve({
+              item: baseItem({ kind: "other", title: "PDF" }),
+              payload: { textPlain: null },
+              flavors: [
+                { format: "com.adobe.pdf", sizeBytes: 4096, isTruncated: false, ordinal: 0 },
+                { format: "com.apple.NSColorPboardType", sizeBytes: 1048577, isTruncated: true, ordinal: 1 },
+              ],
+              version: 1,
+            })
+          : Promise.resolve(null),
+      );
+      render(<PreviewApp />);
+      await vi.waitFor(() => expect(listenHandler).not.toBeNull());
+
+      emitShow(baseItem({ kind: "other", title: "PDF", preview: "PDF" }));
+
+      await vi.waitFor(() =>
+        expect(screen.getByTestId("preview-flavors")).toBeInTheDocument(),
+      );
+      expect(screen.getByText("com.adobe.pdf")).toBeInTheDocument();
+      expect(screen.getByText("4.0 KB")).toBeInTheDocument();
+      expect(screen.getByTestId("preview-flavor-truncated")).toBeInTheDocument();
+      // 「其他」类型固定仅复制说明
+      expect(screen.getByTestId("preview-copy-only-note")).toHaveTextContent(
+        "该类型仅支持复制",
+      );
+      expect(screen.getByText("其他")).toBeInTheDocument();
+      invoke.mockResolvedValue(null);
+    });
+
+    it("collapses the list beyond 6 entries", async () => {
+      const invoke = (await import("@tauri-apps/api/core")).invoke as ReturnType<typeof vi.fn>;
+      const flavors = Array.from({ length: 8 }, (_, index) => ({
+        format: `com.example.flavor-${index}`,
+        sizeBytes: 10,
+        isTruncated: false,
+        ordinal: index,
+      }));
+      invoke.mockImplementation((cmd: string) =>
+        cmd === "clipboard_get"
+          ? Promise.resolve({
+              item: baseItem({ kind: "other" }),
+              payload: { textPlain: null },
+              flavors,
+              version: 1,
+            })
+          : Promise.resolve(null),
+      );
+      render(<PreviewApp />);
+      await vi.waitFor(() => expect(listenHandler).not.toBeNull());
+
+      emitShow(baseItem({ kind: "other", title: "集合", preview: "集合" }));
+
+      await vi.waitFor(() =>
+        expect(screen.getByTestId("preview-flavors")).toBeInTheDocument(),
+      );
+      expect(screen.queryByText("com.example.flavor-7")).not.toBeInTheDocument();
+      const toggle = screen.getByText("还有 2 种…");
+      fireEvent.click(toggle);
+      expect(screen.getByText("com.example.flavor-7")).toBeInTheDocument();
+      invoke.mockResolvedValue(null);
+    });
+
+    it("keeps legacy details without flavors rendering unchanged", async () => {
+      render(<PreviewApp />);
+      await vi.waitFor(() => expect(listenHandler).not.toBeNull());
+
+      emitShow(baseItem({ kind: "link", title: "example.com", preview: "https://example.com" }));
+
+      await vi.waitFor(() => expect(screen.getByText("链接")).toBeInTheDocument());
+      expect(screen.queryByTestId("preview-flavors")).not.toBeInTheDocument();
+    });
+  });
+
   describe("theme following", () => {
     beforeEach(() => {
       delete document.documentElement.dataset.themeMode;

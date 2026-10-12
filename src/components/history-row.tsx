@@ -1,8 +1,8 @@
 import type { LucideIcon } from "lucide-react";
-import { FileCode2, FileImage, FileText, FolderClosed, Pin, Type } from "lucide-react";
+import { FileCode2, FileImage, FileText, FolderClosed, Layers, Link2, Pin, Type } from "lucide-react";
 import { cn } from "../lib/utils";
 
-export type ClipboardKind = "text" | "html" | "rtf" | "image" | "file";
+export type ClipboardKind = "text" | "html" | "rtf" | "image" | "file" | "link" | "other";
 
 export interface HighlightRange {
   field: string;
@@ -34,6 +34,8 @@ const iconMap: Record<ClipboardKind, LucideIcon> = {
   rtf: FileText,
   image: FileImage,
   file: FolderClosed,
+  link: Link2,
+  other: Layers,
 };
 
 const labelMap: Record<ClipboardKind, string> = {
@@ -42,6 +44,8 @@ const labelMap: Record<ClipboardKind, string> = {
   rtf: "RTF",
   image: "Image",
   file: "File",
+  link: "Link",
+  other: "Other",
 };
 
 interface HistoryRowProps {

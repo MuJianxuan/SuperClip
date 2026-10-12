@@ -19,6 +19,7 @@ import {
   settingsGet,
   shortcutGet,
   systemAppearanceGet,
+  describeActionError,
   type SettingsResponse,
 } from "../lib/superclip";
 import type { ClipboardItem } from "../components/history-row";
@@ -471,6 +472,19 @@ export function PopupApp() {
   }, []);
 
   async function handleAction(item: ClipboardItem, alternate = false) {
+    // D-07/D-13：「其他」类型固定仅复制；popup 不立即关闭，先显示行内一次性提示，
+    // 1.5s 后再关闭（后端对应路径已跳过 hide_popup_window）
+    if (item.kind === "other") {
+      try {
+        const result = await clipboardCopy(item.id);
+        setToast({ id: Date.now(), tone: "success", message: result.message });
+      } catch (error) {
+        setToast({ id: Date.now(), tone: "warning", message: describeActionError(error) });
+      }
+      window.setTimeout(hidePopup, 1500);
+      return;
+    }
+
     try {
       const defaultAction = settingsRef.current?.defaultAction ?? "direct_paste";
       if (alternate || defaultAction === "copy_only") {
