@@ -352,3 +352,5 @@ PRAGMA user_version = 5;
 - **V-13 已部分证实**：真库 `~/Library/Application Support/SuperClip/superclip.sqlite3` 已升到 `PRAGMA user_version = 5`，`_superclip_migrations` 含 v5 行；说明 `tauri dev` 热重启后新迁移生效。
 - **新捕获链路已在真机运行**：新代码跑起来后新写入的条目（如 22:25 的「基座支持面」）均为 `kind=text` 并正常入库（既有类型零回归）。
 - **待人工**：V-04~V-12、V-14、V-15。最高优先级：V-06（Finder 文件仍是 `kind=file`——若 Finder 文件复制也带可读 TIFF 图标，会被 D-06③ 判为 `image`，届时按 K-02 微调 `decide_primary_kind` 一处）、V-07（链接）、V-05（截图→图片）、V-10（其他类型仅复制反馈）。
+
+**后续（2026-10-14）**：E-01 的 PDF→image 条件判据已按预案实现（`decide_primary_kind` 对非空 `com.adobe.pdf` flavor 豁免 image，单测覆盖），真机 V-09 仍待人工确认；截断信息可见性、截断 hash、失败重试、watcher 生命周期、图片写回路径等缺口修复账本见 `.docs/20261014-plan/20261014-clipboard-rs-fix-ledger.md`。

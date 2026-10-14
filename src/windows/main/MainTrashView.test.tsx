@@ -16,6 +16,7 @@ const entries: TrashEntry[] = [
     deletedLabel: "3 分钟前",
     expiresAt: 1_700_000_000 + 30 * 86_400,
     remainingDays: 29,
+    isTruncated: true,
   },
   {
     trashId: "trash-2",
@@ -29,6 +30,7 @@ const entries: TrashEntry[] = [
     deletedLabel: "昨天",
     expiresAt: 1_699_000_000 + 30 * 86_400,
     remainingDays: 28,
+    isTruncated: false,
   },
 ];
 
@@ -64,6 +66,11 @@ describe("MainTrashView", () => {
     expect(screen.getByText("Warp")).toBeInTheDocument();
     expect(screen.getByText("3 分钟前")).toBeInTheDocument();
     expect(screen.getByText("29 天")).toBeInTheDocument();
+  });
+
+  it("marks truncated trash rows with a badge", () => {
+    render(<MainTrashView {...makeProps()} />);
+    expect(screen.getAllByTestId("trash-row-truncated")).toHaveLength(1);
   });
 
   it("renders the retention note card", () => {

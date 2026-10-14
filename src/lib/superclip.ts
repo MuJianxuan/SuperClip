@@ -237,6 +237,8 @@ export interface TrashEntry {
   deletedLabel: string;
   expiresAt: number;
   remainingDays: number;
+  /** 是否有表示被截断存储（后端 ClipboardItemSummary.is_truncated） */
+  isTruncated: boolean;
 }
 
 export interface TrashListResponse {
@@ -368,9 +370,10 @@ const initialFallbackItems: ClipboardItem[] = [
     preview:
       "标准双栏 popover 预览图，包含历史列表、详情摘要与功能列表。",
     sourceApp: "Figma",
-    meta: "PNG · 1920×1080",
+    meta: "PNG · 1920×1080 · 已截断",
     timeLabel: "8 分钟前",
     isPinned: false,
+    isTruncated: true,
   },
   {
     id: "clip-4",
@@ -394,6 +397,26 @@ const initialFallbackItems: ClipboardItem[] = [
     timeLabel: "27 分钟前",
     isPinned: false,
   },
+  {
+    id: "clip-6",
+    kind: "link",
+    title: "example.com/docs/clipboard",
+    preview: "https://example.com/docs/clipboard",
+    sourceApp: "Safari",
+    meta: "链接 · example.com/docs/clipboard",
+    timeLabel: "35 分钟前",
+    isPinned: false,
+  },
+  {
+    id: "clip-7",
+    kind: "other",
+    title: "PDF",
+    preview: "其他 · 1 种格式 · 12.4 KB · com.adobe.pdf",
+    sourceApp: "Preview",
+    meta: "其他 · 1 种格式 · 12.4 KB · com.adobe.pdf",
+    timeLabel: "41 分钟前",
+    isPinned: false,
+  },
 ];
 
 /** 浏览器回退模式的 flavor 摘要（Tauri 运行时由后端 `clipboard_flavors` 提供）。 */
@@ -401,6 +424,8 @@ const fallbackFlavors: Record<string, ClipboardFlavorSummary[]> = {
   "clip-2": [
     { format: "com.apple.NSColorPboardType", sizeBytes: 96, isTruncated: false, ordinal: 0 },
   ],
+  "clip-6": [{ format: "public.url", sizeBytes: 32, isTruncated: false, ordinal: 0 }],
+  "clip-7": [{ format: "com.adobe.pdf", sizeBytes: 12700, isTruncated: false, ordinal: 0 }],
 };
 
 let fallbackItems: ClipboardItem[] = initialFallbackItems.map((item) => ({ ...item }));
@@ -467,6 +492,26 @@ const fallbackPayloads: Record<string, ClipboardPayloadSnapshot> = {
       "多显示器回退、恢复模式只读与 diagnostics export 字段映射必须同时完成。\n\nRTF 内容在预览区按纯文本展示，复制/粘贴时仍保留后端可用 payload。",
     textHtml: null,
     textRtf: "{\\rtf1\\ansi 多显示器回退、恢复模式只读与 diagnostics export 字段映射必须同时完成。}",
+    imageBytes: null,
+    imageWidth: null,
+    imageHeight: null,
+    fileUrls: null,
+    extraJson: null,
+  },
+  "clip-6": {
+    textPlain: "https://example.com/docs/clipboard",
+    textHtml: null,
+    textRtf: null,
+    imageBytes: null,
+    imageWidth: null,
+    imageHeight: null,
+    fileUrls: null,
+    extraJson: null,
+  },
+  "clip-7": {
+    textPlain: null,
+    textHtml: null,
+    textRtf: null,
     imageBytes: null,
     imageWidth: null,
     imageHeight: null,
@@ -1548,6 +1593,7 @@ export async function clipboardTrashList() {
       deletedLabel: item.timeLabel,
       expiresAt: Date.now() / 1000 + 30 * 86_400,
       remainingDays: 30,
+      isTruncated: item.isTruncated === true,
     }));
 
     return {

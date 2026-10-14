@@ -107,6 +107,14 @@ export const PopupHistoryRow = memo(function PopupHistoryRow({
           style={{ fontSize: "var(--list-font-size)" }}
         >
           <span className="truncate">{item.title}</span>
+          {item.isTruncated && (
+            <span
+              data-testid="popup-row-truncated"
+              className="shrink-0 rounded-[5px] bg-[var(--icon-bg)] px-1 text-[9px] leading-[14px] text-[var(--text-tertiary)]"
+            >
+              已截断
+            </span>
+          )}
           {item.isPinned && (
             <Star
               className="h-[9px] w-[9px] shrink-0 text-[var(--pinned)]"

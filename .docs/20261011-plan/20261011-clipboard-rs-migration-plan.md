@@ -234,3 +234,5 @@ osascript Cmd+V（trigger_direct_paste，不变）
 
 **实机验证（新代码运行中）**：text / html / file / 仅 PNG flavor 的 image 四类捕获均正确入库（PNG-only 场景为旧 arboard 读 TIFF-only 会漏读的改进项）；连续 9s 三次采样无 osascript/pbpaste/pbcopy 子进程；进程无崩溃重启（V-05 通过）。
 
+**后续（2026-10-14）**：完整性复查发现的缺口（截断表示 hash 退化、写库失败无重试、watcher 降级不可达/无退出路径、陈旧 self_write_hash、PDF 误判 image、截断信息 UI 不可见、图片写回静默失败路径、前端测试退出码）已集中修复，账本见 `.docs/20261014-plan/20261014-clipboard-rs-fix-ledger.md`；`cargo test --lib` 49 passed / 2 ignored，`npm run test:frontend` EXIT=0。P-06 清库端到端与 V-01~V-09、V-15 人工项仍待执行。
+

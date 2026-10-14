@@ -193,6 +193,48 @@ describe("PreviewApp", () => {
     expect(preBlocks[0].textContent).toContain("const a = 1;");
   });
 
+  it("shows truncation note for oversized stored items", async () => {
+    render(<PreviewApp />);
+    await vi.waitFor(() => expect(listenHandler).not.toBeNull());
+
+    emitShow(baseItem({ isTruncated: true }));
+
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("preview-truncated-note")).toBeInTheDocument(),
+    );
+  });
+
+  it("omits truncation note for normal items", async () => {
+    render(<PreviewApp />);
+    await vi.waitFor(() => expect(listenHandler).not.toBeNull());
+
+    emitShow(baseItem());
+
+    await vi.waitFor(() =>
+      expect(screen.getByText("Preview content here")).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId("preview-truncated-note")).not.toBeInTheDocument();
+  });
+
+  it("shows truncation note for oversized image items", async () => {
+    render(<PreviewApp />);
+    await vi.waitFor(() => expect(listenHandler).not.toBeNull());
+
+    emitShow(
+      baseItem({
+        kind: "image",
+        title: "Big screenshot",
+        preview: "",
+        meta: "Image · 4000×4000",
+        isTruncated: true,
+      }),
+    );
+
+    await vi.waitFor(() =>
+      expect(screen.getByTestId("preview-truncated-note")).toBeInTheDocument(),
+    );
+  });
+
   it("renders image placeholder with meta for image kind", async () => {
     render(<PreviewApp />);
     await vi.waitFor(() => expect(listenHandler).not.toBeNull());

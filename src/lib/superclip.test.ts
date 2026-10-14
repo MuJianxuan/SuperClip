@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   __resetSuperClipFallbackForTests,
+  clipboardDelete,
   clipboardGet,
   clipboardSearch,
+  clipboardTrashList,
   previewHide,
   previewShow,
   sessionUiStateGet,
@@ -37,6 +39,14 @@ describe("superclip browser fallback", () => {
 
     expect(response.results.some((item) => item.id === "clip-2")).toBe(true);
     expect(detail.payload.textPlain).toContain("HTML 原文不会直接渲染");
+  });
+
+  it("keeps the truncation marker on fallback trash entries", async () => {
+    await clipboardDelete("clip-3");
+    const trash = await clipboardTrashList();
+    const entry = trash.entries.find((candidate) => candidate.itemId === "clip-3");
+
+    expect(entry?.isTruncated).toBe(true);
   });
 
   it("keeps session and runtime state aligned in fallback mode", async () => {

@@ -163,7 +163,18 @@ function GridCard({
 
       {/* body */}
       <div className="min-w-0 flex-1">
-        <p className="line-clamp-2 text-[12px] font-semibold leading-snug text-[var(--row-title,var(--text-primary))]">{item.title}</p>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <p className="line-clamp-2 min-w-0 text-[12px] font-semibold leading-snug text-[var(--row-title,var(--text-primary))]">{item.title}</p>
+          {item.isTruncated ? (
+            <span
+              data-testid="grid-card-truncated"
+              className="shrink-0 rounded-[6px] border px-1 text-[10px] leading-4"
+              style={{ borderColor: "var(--border)", color: "var(--row-meta, var(--text-tertiary))" }}
+            >
+              已截断
+            </span>
+          ) : null}
+        </span>
         <p className="mt-1 truncate text-[10.5px] text-[var(--text-tertiary)]">{item.preview}</p>
       </div>
 

@@ -77,6 +77,18 @@ const initialShortcut: ShortcutStateResponse = {
   version: 1,
 };
 
+/** 事件清理：窗口销毁/退出时 unlisten 可能失败，失败不应产生未处理拒绝。 */
+function safeUnlisten(fn: (() => void) | null | undefined) {
+  try {
+    const result = fn?.() as unknown;
+    if (result && typeof (result as Promise<void>).catch === "function") {
+      void (result as Promise<void>).catch(() => {});
+    }
+  } catch {
+    // 退出路径清理失败无所谓：不阻塞卸载
+  }
+}
+
 export function MainApp() {
   const [activeTab, setActiveTab] = useState<TabId>("all");
   const [viewMode, setViewMode] = useState<"list" | "grid">(() => {
@@ -284,10 +296,10 @@ export function MainApp() {
           }),
         ]),
       )
-      .then((fns) => { if (disposed) fns.forEach((f) => void f()); else unlisten = fns; })
+      .then((fns) => { if (disposed) fns.forEach(safeUnlisten); else unlisten = fns; })
       .catch(() => {});
 
-    return () => { disposed = true; unlisten.forEach((f) => f()); };
+    return () => { disposed = true; unlisten.forEach(safeUnlisten); };
   }, []);
 
   // 悬浮预览显示/隐藏：hover 行 → 定位跟随鼠标并显示 preview 窗口 + 广播 preview:show；
@@ -346,17 +358,23 @@ export function MainApp() {
     let unlistenLeave: (() => void) | null = null;
     let disposed = false;
 
-    void import("@tauri-apps/api/event").then(({ listen }) => {
-      listen("preview:mouse-enter", () => {
-        if (!disposed) hoverPreview.handlePreviewEnter();
-      }).then((fn) => { if (disposed) void fn(); else unlistenEnter = fn; });
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) => {
+        listen("preview:mouse-enter", () => {
+          if (!disposed) hoverPreview.handlePreviewEnter();
+        })
+          .then((fn) => { if (disposed) safeUnlisten(fn); else unlistenEnter = fn; })
+          .catch(() => {});
 
-      listen("preview:mouse-leave", () => {
-        if (!disposed) hoverPreview.handlePreviewLeave();
-      }).then((fn) => { if (disposed) void fn(); else unlistenLeave = fn; });
-    });
+        listen("preview:mouse-leave", () => {
+          if (!disposed) hoverPreview.handlePreviewLeave();
+        })
+          .then((fn) => { if (disposed) safeUnlisten(fn); else unlistenLeave = fn; })
+          .catch(() => {});
+      })
+      .catch(() => {});
 
-    return () => { disposed = true; unlistenEnter?.(); unlistenLeave?.(); };
+    return () => { disposed = true; safeUnlisten(unlistenEnter); safeUnlisten(unlistenLeave); };
   }, [hoverPreview.handlePreviewEnter, hoverPreview.handlePreviewLeave]);
 
   // 悬浮窗鼠标状态轮询：preview 窗口（focused(false) 非激活 NSPanel）的 webview
@@ -617,13 +635,13 @@ export function MainApp() {
         }),
       )
       .then((fn) => {
-        if (disposed) void fn();
+        if (disposed) safeUnlisten(fn);
         else unlisten = fn;
       })
       .catch(() => {});
     return () => {
       disposed = true;
-      unlisten?.();
+      safeUnlisten(unlisten);
     };
   }, [loadTrash]);
 

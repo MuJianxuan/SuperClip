@@ -23,6 +23,8 @@ export interface ClipboardItem {
   useCount?: number;
   /** 负载字节数（后端 clipboard_items.payload_size_bytes）；预览元信息用 */
   payloadSizeBytes?: number;
+  /** 是否有表示被截断存储（后端 clipboard_items.is_truncated） */
+  isTruncated?: boolean;
   matchType?: "exact" | "prefix" | "contains" | "recent" | null;
   matchedFields?: string[];
   highlightRanges?: HighlightRange[];

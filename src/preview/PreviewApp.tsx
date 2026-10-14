@@ -345,6 +345,15 @@ export function PreviewApp() {
             : "flex-1 overflow-auto px-4 pt-3.5 pb-3"
         }
       >
+        {item.isTruncated ? (
+          <p
+            data-testid="preview-truncated-note"
+            className="mb-2 text-[11px]"
+            style={{ color: "var(--text-tertiary)" }}
+          >
+            该条目内容过大，已截断存储。
+          </p>
+        ) : null}
         {item.kind === "image" ? (
           <div className="flex w-full justify-center">
             {imageDataUrl ? (

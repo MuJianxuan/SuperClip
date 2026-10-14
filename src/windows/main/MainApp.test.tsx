@@ -210,9 +210,21 @@ describe("MainApp", () => {
     expect(main!.className).toContain("frost-window");
   });
 
+  it("marks truncated clipboard rows in the main list", async () => {
+    render(<MainApp />);
+    await waitFor(() =>
+      expect(screen.getAllByTestId("main-row-truncated").length).toBeGreaterThan(0),
+    );
+  });
+
   it("renders status banner slot styling for permission banner", async () => {
     // 启用 Tauri 运行时，让 bootstrap 走 invoke 路径（fallback 默认 trusted=true）
-    (window as unknown as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__ = {};
+    // transformCallback/invoke 桩：残留的 preview 事件 effect 在 mock 恢复后会落到真实 listen，
+    // 补桩避免 unhandled rejection（仅测试环境需要）
+    (window as unknown as { __TAURI_INTERNALS__?: object }).__TAURI_INTERNALS__ = {
+      transformCallback: () => 1,
+      invoke: async () => 1,
+    };
     const { invoke } = await import("@tauri-apps/api/core");
     (invoke as ReturnType<typeof vi.fn>).mockImplementation(async (cmd: string) => {
       if (cmd === "clipboard_search") return { query: "", normalizedQuery: "", results: [], total: 0, searchTimeMs: 2, version: 1 };

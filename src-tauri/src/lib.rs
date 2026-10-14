@@ -2,9 +2,8 @@ use base64::Engine as _;
 use clipboard_rs::common::RustImage;
 use clipboard_rs::{
     Clipboard, ClipboardContent, ClipboardContext, ClipboardHandler, ClipboardWatcher,
-    ClipboardWatcherContext, RustImageData,
+    ClipboardWatcherContext, WatcherShutdown,
 };
-use image::{DynamicImage, RgbaImage};
 use rusqlite::{params, Connection, ErrorCode, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -12,6 +11,7 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{
@@ -85,6 +85,9 @@ struct ClipboardItemSummary {
     use_count: i64,
     #[serde(default)]
     payload_size_bytes: i64,
+    /// 是否有表示被截断存储（列表/浮窗标记用；旧回收站 item_json 缺该字段）。
+    #[serde(default)]
+    is_truncated: bool,
     match_type: Option<String>,
     matched_fields: Vec<String>,
     highlight_ranges: Vec<HighlightRange>,
@@ -455,6 +458,7 @@ struct TrashEntry {
     deleted_label: String,
     expires_at: i64,
     remaining_days: i64,
+    is_truncated: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -476,6 +480,8 @@ struct TrashPurgeResult {
 struct ClipboardMonitorState {
     last_seen_hash: Option<String>,
     self_write_hash: Option<String>,
+    /// 失败后的单飞重试排程标记（见 `schedule_monitor_retry`）。
+    retry_scheduled: bool,
 }
 
 struct WindowPlacementCoordinator {
@@ -530,6 +536,10 @@ struct AppState {
     database_path: PathBuf,
     exclusion_rules_cache: std::sync::RwLock<Vec<ExclusionRule>>,
     monitor_state: Mutex<ClipboardMonitorState>,
+    /// watcher 停止通道：应用退出时 drop 以结束监听线程。
+    monitor_shutdown: Mutex<Option<WatcherShutdown>>,
+    /// 主动停止标记：区分正常退出与 watcher 异常结束。
+    monitor_stopping: AtomicBool,
     shortcut_state: Mutex<ShortcutStateResponse>,
     shortcut_recording: Mutex<bool>,
     is_monitoring: Mutex<bool>,
@@ -614,7 +624,10 @@ impl AppState {
             monitor_state: Mutex::new(ClipboardMonitorState {
                 last_seen_hash: None,
                 self_write_hash: None,
+                retry_scheduled: false,
             }),
+            monitor_shutdown: Mutex::new(None),
+            monitor_stopping: AtomicBool::new(false),
             shortcut_state: Mutex::new(default_shortcut_state()),
             shortcut_recording: Mutex::new(false),
             is_monitoring: Mutex::new(true),
@@ -1259,6 +1272,24 @@ fn truncate_payload_text(text: &str, limit: usize) -> (String, bool) {
     (text[..end].to_string(), true)
 }
 
+/// 把截断表示的全文 digest 合并进 `extra_json`（hash 与回收站恢复重算依赖它）。
+fn merge_truncated_digests(extra_json: &mut Option<serde_json::Value>, digests: &[(&str, String)]) {
+    if digests.is_empty() {
+        return;
+    }
+
+    let mut extra = extra_json.take().unwrap_or_else(|| json!({}));
+    if let Some(object) = extra.as_object_mut() {
+        let entries = digests
+            .iter()
+            .map(|(field, digest)| ((*field).to_string(), json!(digest)))
+            .collect::<serde_json::Map<String, serde_json::Value>>();
+        object.insert("truncatedDigests".into(), serde_json::Value::Object(entries));
+    }
+
+    *extra_json = Some(extra);
+}
+
 fn file_paths_from_text(text: &str) -> Option<Vec<String>> {
     let paths = text
         .lines()
@@ -1296,7 +1327,7 @@ struct ClipboardRepresentations {
     dropped_flavor_count: usize,
 }
 
-/// 已知家族 flavor：已有専用字段，不再进 `clipboard_flavors`。
+/// 已知家族 flavor：已有专用字段，不再进 `clipboard_flavors`。
 /// `CorePasteboardFlavorType 0x…` 是 Apple 对旧四字符类型的回调名：
 /// 0x6675726C = 'furl'（= public.file-url）、0x75743136 = 'ut16'（= public.utf16-plain-text）、
 /// 0x69636E73 = 'icns'（图标数据，见拒绝名单）。
@@ -1479,6 +1510,15 @@ fn human_bytes(bytes: usize) -> String {
     }
 }
 
+/// 保留完整数据的 PDF 表示：此时复制意图是 PDF，NSImage 渲染位图不得参与主类型判定。
+/// 超过 1MB 的 PDF flavor 会被截断（data 清空），无法原样写回，仍按 image 处理（位图是
+/// 唯一可粘贴的表示），保证写回→回读 hash 闭环。
+fn intact_pdf_flavor(representations: &ClipboardRepresentations) -> bool {
+    representations.flavors.iter().any(|flavor| {
+        flavor.format == "com.adobe.pdf" && !flavor.is_truncated && !flavor.data.is_empty()
+    })
+}
+
 /// 主类型判定（D-06，按真机实测修正边界 E-01）：
 /// url → html → rtf → file → text → image → other。
 /// `file` 不再要求“无 image”：Finder 复制图片/图标类文件时会同时给出 public.tiff 图标预览，
@@ -1500,7 +1540,7 @@ fn decide_primary_kind(representations: &ClipboardRepresentations) -> Option<&'s
     if representations.plain_text.is_some() {
         return Some("text");
     }
-    if representations.image.is_some() {
+    if representations.image.is_some() && !intact_pdf_flavor(representations) {
         return Some("image");
     }
     if !representations.flavors.is_empty() {
@@ -1512,9 +1552,32 @@ fn decide_primary_kind(representations: &ClipboardRepresentations) -> Option<&'s
 
 /// 内容 hash（D-10）：只覆盖"实际会被写回"的表示；flavor 按 format 排序保证顺序无关；
 /// 被截断的 flavor 不参与；若写回集合为空，则退化为全部 flavor 的 format+size+digest 列表。
+/// 截断的 text/html/rtf/image 用采集时存入 `extra_json` 的全文 digest 参与 hash，
+/// 否则 >2MB 文本 / >8MB 图片只剩前缀，会被互相去重（旧版用全文/全字节）。
 fn snapshot_content_hash(kind: &str, payload: &ClipboardPayloadSnapshot) -> String {
     let mut hasher = Sha256::new();
     let mut wrote_any = false;
+
+    let truncated_digests = payload
+        .extra_json
+        .as_ref()
+        .and_then(|value| value.get("truncatedDigests"))
+        .and_then(|value| value.as_object());
+    let digest_for = |field: &str| {
+        truncated_digests
+            .and_then(|map| map.get(field))
+            .and_then(|value| value.as_str())
+    };
+    let update_field = |hasher: &mut Sha256, raw: &[u8], digest: Option<&str>| {
+        if let Some(digest) = digest {
+            hasher.update(b"truncated-digest");
+            hasher.update([0]);
+            hasher.update(digest.as_bytes());
+        } else {
+            hasher.update(raw);
+        }
+        hasher.update([0]);
+    };
 
     hasher.update(kind.as_bytes());
     hasher.update([0]);
@@ -1525,18 +1588,15 @@ fn snapshot_content_hash(kind: &str, payload: &ClipboardPayloadSnapshot) -> Stri
         .map(normalized)
         .filter(|value| !value.is_empty())
     {
-        hasher.update(text.as_bytes());
-        hasher.update([0]);
+        update_field(&mut hasher, text.as_bytes(), digest_for("text_plain"));
         wrote_any = true;
     }
     if let Some(html) = payload.text_html.as_deref() {
-        hasher.update(html.as_bytes());
-        hasher.update([0]);
+        update_field(&mut hasher, html.as_bytes(), digest_for("text_html"));
         wrote_any = true;
     }
     if let Some(rtf) = payload.text_rtf.as_deref() {
-        hasher.update(rtf.as_bytes());
-        hasher.update([0]);
+        update_field(&mut hasher, rtf.as_bytes(), digest_for("text_rtf"));
         wrote_any = true;
     }
     if let (Some(bytes), Some(width), Some(height)) = (
@@ -1546,8 +1606,16 @@ fn snapshot_content_hash(kind: &str, payload: &ClipboardPayloadSnapshot) -> Stri
     ) {
         hasher.update(format!("{width}x{height}").as_bytes());
         hasher.update([0]);
-        hasher.update(bytes);
+        update_field(&mut hasher, bytes, digest_for("image"));
+        wrote_any = true;
+    } else if let (Some(digest), Some(width), Some(height)) = (
+        digest_for("image"),
+        payload.image_width,
+        payload.image_height,
+    ) {
+        hasher.update(format!("{width}x{height}").as_bytes());
         hasher.update([0]);
+        update_field(&mut hasher, &[], Some(digest));
         wrote_any = true;
     }
     if let Some(urls) = payload.file_urls.as_ref() {
@@ -1621,6 +1689,8 @@ fn build_clipboard_snapshot(
         .any(|flavor| flavor.is_truncated)
         || representations.dropped_flavor_count > 0;
     let mut payload_size_bytes = 0usize;
+    // 截断表示的全文 digest：hash 与回收站恢复重算都依赖它（存 extra_json，不迁移 schema）。
+    let mut truncated_digests: Vec<(&str, String)> = Vec::new();
 
     let text_source = if kind == "link" {
         representations
@@ -1632,18 +1702,36 @@ fn build_clipboard_snapshot(
     };
     if let Some(text) = text_source {
         let (stored, truncated) = truncate_payload_text(&text, TEXT_PAYLOAD_LIMIT_BYTES);
+        if truncated {
+            truncated_digests.push((
+                "text_plain",
+                hex_digest(Sha256::digest(text.as_bytes()).as_slice()),
+            ));
+        }
         payload.text_plain = Some(stored);
         payload_size_bytes = payload_size_bytes.max(text.len());
         is_truncated |= truncated;
     }
     if let Some(html) = representations.html.clone() {
         let (stored, truncated) = truncate_payload_text(&html, TEXT_PAYLOAD_LIMIT_BYTES);
+        if truncated {
+            truncated_digests.push((
+                "text_html",
+                hex_digest(Sha256::digest(html.as_bytes()).as_slice()),
+            ));
+        }
         payload.text_html = Some(stored);
         payload_size_bytes = payload_size_bytes.max(html.len());
         is_truncated |= truncated;
     }
     if let Some(rtf) = representations.rtf.clone() {
         let (stored, truncated) = truncate_payload_text(&rtf, TEXT_PAYLOAD_LIMIT_BYTES);
+        if truncated {
+            truncated_digests.push((
+                "text_rtf",
+                hex_digest(Sha256::digest(rtf.as_bytes()).as_slice()),
+            ));
+        }
         payload.text_rtf = Some(stored);
         payload_size_bytes = payload_size_bytes.max(rtf.len());
         is_truncated |= truncated;
@@ -1666,11 +1754,17 @@ fn build_clipboard_snapshot(
     if let Some((width, height, bytes)) = representations.image.clone() {
         // 文件条目不存图片表示：Finder 复制图片/图标类文件时会附带 TIFF 图标（≈4MB RGBA），
         // 而粘贴一律走 set_files，这份图片不会被用（V-06 实测发现，见验收记录 F-03）。
-        if kind != "file" {
+        // PDF 原样保留时不存 NSImage 渲染位图：写回只写 PDF 原表示，不凭空造一个位图表示。
+        let pdf_keeps_original = kind == "other" && intact_pdf_flavor(&representations);
+        if kind != "file" && !pdf_keeps_original {
             let size = bytes.len();
             if size > IMAGE_PAYLOAD_LIMIT_BYTES {
                 payload.extra_json = build_image_preview_extra_json(&bytes, width, height);
                 is_truncated = true;
+                truncated_digests.push((
+                    "image",
+                    hex_digest(Sha256::digest(&bytes).as_slice()),
+                ));
             } else {
                 payload.image_bytes = Some(bytes);
             }
@@ -1686,6 +1780,17 @@ fn build_clipboard_snapshot(
         }
         payload.file_urls = Some(representations.file_urls.clone());
     }
+
+    // 其他类型的体积由 flavor 数据决定（图片不再计入时避免 payload_size 归零）
+    let flavor_payload_bytes: usize = representations
+        .flavors
+        .iter()
+        .filter(|flavor| !flavor.is_truncated)
+        .map(|flavor| flavor.data.len())
+        .sum();
+    payload_size_bytes = payload_size_bytes.max(flavor_payload_bytes);
+
+    merge_truncated_digests(&mut payload.extra_json, &truncated_digests);
 
     let (title, preview, meta) = match kind {
         "link" => {
@@ -2036,6 +2141,7 @@ fn row_to_summary(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClipboardItemSumm
         is_pinned: row.get::<_, i64>("is_pinned")? == 1,
         use_count: row.get("use_count")?,
         payload_size_bytes: row.get("payload_size_bytes")?,
+        is_truncated: row.get::<_, i64>("is_truncated")? == 1,
         match_type: None,
         matched_fields: Vec::new(),
         highlight_ranges: Vec::new(),
@@ -2693,7 +2799,8 @@ fn encode_tiff_bytes(width: usize, height: usize, rgba: &[u8]) -> Option<Vec<u8>
     use image::codecs::tiff::TiffEncoder;
     use image::ImageEncoder;
 
-    if width == 0 || height == 0 {
+    // TiffEncoder::write_image 对长度不等会 panic，必须用 != 严格拦截
+    if width == 0 || height == 0 || rgba.len() != width.saturating_mul(height).saturating_mul(4) {
         return None;
     }
 
@@ -2715,6 +2822,29 @@ fn encode_tiff_bytes(width: usize, height: usize, rgba: &[u8]) -> Option<Vec<u8>
     Some(bytes)
 }
 
+/// RGBA 像素 → PNG 字节。写回走显式编码：基座 `ClipboardContent::Image` 的 `to_png` 失败
+/// 只会在 `clearContents` 后静默返回 `Ok(())`（剪贴板被清空但调用方以为成功）。
+fn encode_png_bytes(width: usize, height: usize, rgba: &[u8]) -> Result<Vec<u8>, String> {
+    use image::codecs::png::PngEncoder;
+    use image::ImageEncoder;
+
+    if width == 0 || height == 0 || rgba.len() != width.saturating_mul(height).saturating_mul(4) {
+        return Err("PASTEBOARD_WRITE_FAILED".to_string());
+    }
+
+    let mut buffer = std::io::Cursor::new(Vec::new());
+    PngEncoder::new(&mut buffer)
+        .write_image(
+            rgba,
+            width as u32,
+            height as u32,
+            image::ExtendedColorType::Rgba8,
+        )
+        .map_err(|_| "PASTEBOARD_WRITE_FAILED".to_string())?;
+
+    Ok(buffer.into_inner())
+}
+
 /// files 与其他表示同时存在（仅历史/异常数据）：粘贴按文件优先，其他表示本次不写回。
 fn files_take_priority(payload: &ClipboardPayloadSnapshot) -> bool {
     payload
@@ -2730,8 +2860,9 @@ fn files_take_priority(payload: &ClipboardPayloadSnapshot) -> bool {
                 .any(|flavor| !flavor.is_truncated))
 }
 
-/// 组装写回内容（D-07）：files 非空 → 文件优先；否则 Html → Rtf → Text → Image(+TIFF) → Other*。
+/// 组装写回内容（D-07）：files 非空 → 文件优先；否则 Html → Rtf → Text → Image(PNG+TIFF) → Other*。
 /// 截断的 flavor 一律不写回；空集合 → `PAYLOAD_UNSUPPORTED`（D-14）。
+/// 基座约束：`set(Vec)` 中 `Files` 与其他表示混写会互相清空，所以文件分支必须独占早退。
 fn build_write_contents(
     payload: &ClipboardPayloadSnapshot,
 ) -> Result<Vec<ClipboardContent>, String> {
@@ -2769,11 +2900,8 @@ fn build_write_contents(
         payload.image_width,
         payload.image_height,
     ) {
-        let rgba = RgbaImage::from_raw(width as u32, height as u32, bytes.clone())
-            .ok_or_else(|| "PASTEBOARD_WRITE_FAILED".to_string())?;
-        contents.push(ClipboardContent::Image(RustImageData::from_dynamic_image(
-            DynamicImage::ImageRgba8(rgba),
-        )));
+        let png = encode_png_bytes(width, height, bytes)?;
+        contents.push(ClipboardContent::Other("public.png".into(), png));
         image_written = true;
 
         if let Some(tiff) = encode_tiff_bytes(width, height, bytes) {
@@ -6200,8 +6328,8 @@ fn restore_trash_entry(db: &mut Connection, undo_token: &str, now: i64) -> Resul
         meta: item.meta.clone(),
         content_hash: hash,
         payload,
-        payload_size_bytes: item.preview.len(),
-        is_truncated: false,
+        payload_size_bytes: item.payload_size_bytes.max(0) as usize,
+        is_truncated: item.is_truncated,
     };
     let transaction = db.transaction().map_err(map_db_error)?;
     transaction
@@ -6213,7 +6341,7 @@ fn restore_trash_entry(db: &mut Connection, undo_token: &str, now: i64) -> Resul
                 is_truncated, is_sensitive, origin_bundle_id, preview_strategy,
                 created_at, last_seen_at
             )
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, 0, NULL, ?9, 0, 0, NULL, 'inline', ?10, ?10)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, 0, NULL, ?9, ?11, 0, NULL, 'inline', ?10, ?10)
             "#,
             params![
                 &item.id,
@@ -6226,6 +6354,7 @@ fn restore_trash_entry(db: &mut Connection, undo_token: &str, now: i64) -> Resul
                 if item.is_pinned { 1 } else { 0 },
                 snapshot.payload_size_bytes as i64,
                 now,
+                if snapshot.is_truncated { 1 } else { 0 },
             ],
         )
         .map_err(map_db_error)?;
@@ -6406,6 +6535,7 @@ fn list_trash_entries(connection: &Connection, now: i64) -> Result<Vec<TrashEntr
             deleted_label: time_label_from_epoch(deleted_at),
             expires_at,
             remaining_days: (remaining_secs + 86_399) / 86_400,
+            is_truncated: item.is_truncated,
         });
     }
 
@@ -6523,8 +6653,58 @@ fn emit_superclip_event(app: &tauri::AppHandle, event: &str, payload: serde_json
     let _ = app.emit(event, serde_json::Value::Object(body));
 }
 
+/// 失败重试的单飞排程：返回 true 表示调用方应启动一次重试 tick。
+fn try_mark_monitor_retry(state: &AppState) -> bool {
+    // 锁中毒时继续使用内部状态：重试标记不应因一次性 panic 永久失效
+    let mut monitor_state = match state.monitor_state.lock() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
+
+    if monitor_state.retry_scheduled {
+        false
+    } else {
+        monitor_state.retry_scheduled = true;
+        true
+    }
+}
+
+/// 监控读板/写库失败后补一次 tick：等价替换前「下一轮 900ms 轮询会重试」的语义。
+fn schedule_monitor_retry(app: &tauri::AppHandle) {
+    let state: State<'_, AppState> = app.state();
+    if !try_mark_monitor_retry(&state) {
+        return;
+    }
+    drop(state);
+
+    let app_for_thread = app.clone();
+    let spawn_result = std::thread::Builder::new()
+        .name("superclip-monitor-retry".into())
+        .spawn(move || {
+            std::thread::sleep(Duration::from_millis(MONITOR_POLL_MS));
+            if let Some(state) = app_for_thread.try_state::<AppState>() {
+                if let Ok(mut monitor_state) = state.monitor_state.lock() {
+                    monitor_state.retry_scheduled = false;
+                }
+            }
+            process_clipboard_monitor_tick(&app_for_thread);
+        });
+
+    // 线程创建失败时复位标记，否则重试被永久抑制
+    if spawn_result.is_err() {
+        if let Some(state) = app.try_state::<AppState>() {
+            if let Ok(mut monitor_state) = state.monitor_state.lock() {
+                monitor_state.retry_scheduled = false;
+            }
+        }
+    }
+}
+
 fn process_clipboard_monitor_tick(app: &tauri::AppHandle) {
     let state: State<'_, AppState> = app.state();
+    if state.monitor_stopping.load(Ordering::SeqCst) {
+        return;
+    }
     let is_monitoring = state
         .is_monitoring
         .lock()
@@ -6561,6 +6741,9 @@ fn process_clipboard_monitor_tick(app: &tauri::AppHandle) {
                     monitor_state.self_write_hash = None;
                     true
                 } else {
+                    // 标记只对「下一次观察到的变化」有效；被外部复制插队即作废，
+                    // 否则陈旧标记会吞掉后续同内容的真实复制。
+                    monitor_state.self_write_hash = None;
                     monitor_state.last_seen_hash.as_deref() == Some(hash.as_str())
                 }
             };
@@ -6605,12 +6788,14 @@ fn process_clipboard_monitor_tick(app: &tauri::AppHandle) {
                 }
                 Err(error_code) => {
                     push_recent_error_code(&state, &error_code, "clipboard-monitor/write");
+                    schedule_monitor_retry(app);
                 }
             }
         }
         Ok(None) => {}
         Err(error_code) => {
             push_recent_error_code(&state, &error_code, "clipboard-monitor/read");
+            schedule_monitor_retry(app);
         }
     }
 }
@@ -6632,27 +6817,87 @@ fn start_clipboard_monitor(app: tauri::AppHandle) {
         // 启动首读：保持替换前“首轮即读”的可观察行为
         process_clipboard_monitor_tick(&app);
 
-        if let Ok(mut watcher) =
-            ClipboardWatcherContext::new_with_interval(Duration::from_millis(500))
-        {
-            watcher.add_handler(ClipboardMonitorHandler { app: app.clone() });
-            watcher.start_watch();
-        }
-
-        // watcher 初始化失败或线程退出：记录错误并退化为进程内轮询，避免监控静默停摆
         let state = app.state::<AppState>();
-        push_recent_error_code(
-            &state,
-            "MONITOR_WATCHER_UNAVAILABLE",
-            "clipboard-monitor/watcher",
-        );
+        let mut watcher =
+            match ClipboardWatcherContext::new_with_interval(Duration::from_millis(500)) {
+                Ok(watcher) => watcher,
+                Err(_) => {
+                    drop(state);
+                    start_clipboard_monitor_fallback(app);
+                    return;
+                }
+            };
+
+        if let Ok(mut slot) = state.monitor_shutdown.lock() {
+            *slot = Some(watcher.get_shutdown_channel());
+        }
         drop(state);
 
-        loop {
-            process_clipboard_monitor_tick(&app);
-            std::thread::sleep(Duration::from_millis(MONITOR_POLL_MS));
+        watcher.add_handler(ClipboardMonitorHandler { app: app.clone() });
+
+        // start_watch 是阻塞方法：正常只在主动停止（drop shutdown）时返回；panic 由 catch_unwind 承接。
+        let watch_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            watcher.start_watch();
+        }));
+        let deliberately_stopped = app
+            .state::<AppState>()
+            .monitor_stopping
+            .load(Ordering::SeqCst);
+
+        if watch_result.is_ok() && deliberately_stopped {
+            return;
         }
+
+        // watcher 初始化失败 / 崩溃 / 异常结束：记录错误并退化为进程内轮询，避免监控静默停摆
+        start_clipboard_monitor_fallback(app);
     });
+}
+
+/// watcher 不可用时的进程内轮询降级（不产生剪贴板子进程）。
+fn start_clipboard_monitor_fallback(app: tauri::AppHandle) {
+    // 主动停止（退出中）不算 watcher 故障，不写错误码
+    if app
+        .state::<AppState>()
+        .monitor_stopping
+        .load(Ordering::SeqCst)
+    {
+        return;
+    }
+
+    let state = app.state::<AppState>();
+    push_recent_error_code(
+        &state,
+        "MONITOR_WATCHER_UNAVAILABLE",
+        "clipboard-monitor/watcher",
+    );
+    drop(state);
+
+    loop {
+        if app
+            .state::<AppState>()
+            .monitor_stopping
+            .load(Ordering::SeqCst)
+        {
+            return;
+        }
+        process_clipboard_monitor_tick(&app);
+        std::thread::sleep(Duration::from_millis(MONITOR_POLL_MS));
+    }
+}
+
+/// 应用退出：置主动停止标记并 drop shutdown 通道，让 watcher 循环正常结束。
+fn stop_clipboard_monitor(app: &tauri::AppHandle) {
+    let Some(state) = app.try_state::<AppState>() else {
+        return;
+    };
+
+    state.monitor_stopping.store(true, Ordering::SeqCst);
+    let shutdown = state
+        .monitor_shutdown
+        .lock()
+        .ok()
+        .and_then(|mut slot| slot.take());
+    drop(shutdown);
 }
 
 #[cfg(test)]
@@ -6732,7 +6977,10 @@ mod tests {
             monitor_state: Mutex::new(ClipboardMonitorState {
                 last_seen_hash: None,
                 self_write_hash: None,
+                retry_scheduled: false,
             }),
+            monitor_shutdown: Mutex::new(None),
+            monitor_stopping: AtomicBool::new(false),
             shortcut_state: Mutex::new(default_shortcut_state()),
             shortcut_recording: Mutex::new(false),
             is_monitoring: Mutex::new(true),
@@ -6786,6 +7034,7 @@ mod tests {
             is_pinned: false,
             use_count: 0,
             payload_size_bytes: 24,
+            is_truncated: false,
             match_type: None,
             matched_fields: Vec::new(),
             highlight_ranges: Vec::new(),
@@ -7439,6 +7688,63 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "writes the system clipboard; run explicitly with SUPERCLIP_CLIPBOARD_IT=1"]
+    #[cfg(target_os = "macos")]
+    fn paste_roundtrip_recomputes_same_hash() {
+        if std::env::var("SUPERCLIP_CLIPBOARD_IT").is_err() {
+            return;
+        }
+
+        let cases: Vec<(&str, ClipboardRepresentations)> = vec![
+            (
+                "text",
+                ClipboardRepresentations {
+                    plain_text: Some("roundtrip text".into()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "html",
+                ClipboardRepresentations {
+                    plain_text: Some("roundtrip html".into()),
+                    html: Some("<p>roundtrip html</p>".into()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "image",
+                ClipboardRepresentations {
+                    image: Some((
+                        2,
+                        2,
+                        vec![
+                            255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
+                        ],
+                    )),
+                    ..Default::default()
+                },
+            ),
+            (
+                "other",
+                ClipboardRepresentations {
+                    flavors: vec![flavor("com.adobe.pdf", 0, b"%PDF-1.7 roundtrip", false)],
+                    ..Default::default()
+                },
+            ),
+        ];
+
+        // 自写抑制依赖：写回集合的 hash 必须与从存储重算的 hash 相等（否则粘贴会产生重复条目）
+        for (label, representations) in cases {
+            let expected = build_clipboard_snapshot(representations, "RoundTrip").expect(label);
+            write_payload_to_clipboard(&expected.payload, false).expect(label);
+            let read = read_clipboard_representations().expect("read representations");
+            let actual = build_clipboard_snapshot(read, "RoundTrip").expect(label);
+            assert_eq!(actual.kind, expected.kind, "{label} kind");
+            assert_eq!(actual.content_hash, expected.content_hash, "{label} hash");
+        }
+    }
+
+    #[test]
     fn session_ui_state_carries_layout_sidebar_width() {
         let update: SessionUiStateUpdateRequest = serde_json::from_value(serde_json::json!({
             "query": "",
@@ -7992,6 +8298,173 @@ mod tests {
         );
     }
 
+    #[test]
+    fn truncated_representations_keep_distinct_hashes() {
+        // >2MB 文本：前缀相同、全文不同 → hash 必须不同（迁移后曾退化为前缀 hash）
+        let prefix = "a".repeat(TEXT_PAYLOAD_LIMIT_BYTES);
+        let text_a = format!("{prefix}AAAA");
+        let text_b = format!("{prefix}BBBB");
+        let snapshot_a = normalize_text_snapshot(&text_a, "Test").expect("snapshot a");
+        let snapshot_b = normalize_text_snapshot(&text_b, "Test").expect("snapshot b");
+        assert!(snapshot_a.is_truncated && snapshot_b.is_truncated);
+        assert_ne!(
+            snapshot_a.content_hash, snapshot_b.content_hash,
+            "同前缀大文本不能碰同一 hash"
+        );
+        let digests = snapshot_a
+            .payload
+            .extra_json
+            .as_ref()
+            .and_then(|value| value.get("truncatedDigests"))
+            .and_then(|value| value.get("text_plain"))
+            .and_then(|value| value.as_str());
+        assert!(digests.is_some(), "截断文本必须存全文 digest");
+        let snapshot_a_again = normalize_text_snapshot(&text_a, "Test").expect("snapshot a again");
+        assert_eq!(snapshot_a.content_hash, snapshot_a_again.content_hash);
+
+        // >8MB 图片：同尺寸、像素不同 → hash 必须不同
+        let width = 1500;
+        let height = 1500;
+        let bytes_a = vec![7u8; width * height * 4];
+        let mut bytes_b = bytes_a.clone();
+        bytes_b[0] = 9;
+        let image_a = normalize_image_snapshot(width, height, bytes_a, "Test");
+        let image_b = normalize_image_snapshot(width, height, bytes_b, "Test");
+        assert!(image_a.is_truncated && image_b.is_truncated);
+        assert_ne!(
+            image_a.content_hash, image_b.content_hash,
+            "同尺寸大图不能碰同一 hash"
+        );
+
+        // 同字节、宽高互换 → 必须仍可区分（截断图片分支必须把尺寸纳入 hash）
+        let portrait = normalize_image_snapshot(2, 2_000_000, vec![3u8; 2 * 2_000_000 * 4], "Test");
+        let landscape = normalize_image_snapshot(2_000_000, 2, vec![3u8; 2 * 2_000_000 * 4], "Test");
+        assert!(portrait.is_truncated && landscape.is_truncated);
+        assert_ne!(
+            portrait.content_hash, landscape.content_hash,
+            "宽高互换的大图不能碰同一 hash"
+        );
+    }
+
+    #[test]
+    fn truncated_digest_survives_payload_json_round_trip() {
+        // 回收站与 payload_json 反序列化路径：digest 必须随 extra_json 一起保存并复现同一 hash
+        let text = "b".repeat(TEXT_PAYLOAD_LIMIT_BYTES + 16);
+        let snapshot = normalize_text_snapshot(&text, "Test").expect("snapshot");
+        let serialized = serde_json::to_string(&snapshot.payload).expect("payload serializes");
+        let decoded: ClipboardPayloadSnapshot =
+            serde_json::from_str(&serialized).expect("payload deserializes");
+        assert!(decoded.extra_json.is_some(), "digest 必须进 payload_json");
+        assert_eq!(
+            snapshot_content_hash("text", &snapshot.payload),
+            snapshot_content_hash("text", &decoded),
+            "反序列化后重算 hash 必须一致"
+        );
+    }
+
+    #[test]
+    fn trash_restore_preserves_truncation_metadata() {
+        // 列表/浮窗的「已截断」标记依赖恢复后仍保留 is_truncated 与真实负载体积
+        let mut connection = test_connection();
+        let text = "c".repeat(TEXT_PAYLOAD_LIMIT_BYTES + 16);
+        let snapshot = normalize_text_snapshot(&text, "Test").expect("snapshot");
+        assert!(snapshot.is_truncated);
+        let expected_size = snapshot.payload_size_bytes as i64;
+        let original_hash = snapshot.content_hash.clone();
+        upsert_clipboard_snapshot(&connection, snapshot, DEFAULT_HISTORY_LIMIT).expect("upsert");
+
+        let item_id: String = connection
+            .query_row("SELECT id FROM clipboard_items LIMIT 1", [], |row| row.get(0))
+            .expect("id");
+        let item = get_item_by_id(&connection, &item_id).expect("item");
+        let payload = get_payload_with_flavors_by_id(&connection, &item_id).expect("payload");
+        let item_json = serde_json::to_string(&item).expect("item json");
+        let payload_json = serde_json::to_string(&payload).expect("payload json");
+        let now = now_epoch_secs().expect("now");
+        connection
+            .execute(
+                r#"
+                INSERT INTO clipboard_trash(
+                    trash_id, item_id, undo_token, item_json, payload_json,
+                    deleted_at, expires_at, deleted_by_action
+                )
+                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'delete')
+                "#,
+                params![
+                    format!("trash-{now}-{item_id}"),
+                    &item_id,
+                    "undo-truncated",
+                    &item_json,
+                    &payload_json,
+                    now,
+                    now + TRASH_RETENTION_SECS,
+                ],
+            )
+            .expect("trash insert");
+        connection
+            .execute("DELETE FROM clipboard_items WHERE id = ?1", params![&item_id])
+            .expect("item delete");
+
+        let restored = restore_trash_entry(&mut connection, "undo-truncated", now)
+            .expect("restore should pass");
+        assert!(restored.is_truncated, "恢复后截断标记必须保留");
+        assert_eq!(restored.payload_size_bytes, expected_size);
+        assert_eq!(
+            content_hash_for_item(&connection, &item_id).expect("hash should load"),
+            original_hash,
+            "截断 digest 经回收站往返后必须复现同一 hash"
+        );
+    }
+
+    #[test]
+    fn monitor_retry_is_single_flight() {
+        let state = test_app_state();
+        assert!(try_mark_monitor_retry(&state), "首次应允许排程");
+        assert!(!try_mark_monitor_retry(&state), "重复排程应被抑制");
+        state
+            .monitor_state
+            .lock()
+            .expect("monitor state lock")
+            .retry_scheduled = false;
+        assert!(try_mark_monitor_retry(&state), "释放后应可再次排程");
+    }
+
+    #[test]
+    fn pdf_flavor_exempts_nsimage_rendered_image_from_image_kind() {
+        let mut representations = ClipboardRepresentations {
+            image: Some((2, 2, vec![0u8; 16])),
+            ..Default::default()
+        };
+        representations.flavors = vec![flavor("com.adobe.pdf", 0, b"%PDF-1.7", false)];
+        let snapshot = build_clipboard_snapshot(representations, "Test").expect("snapshot");
+        assert_eq!(
+            snapshot.kind, "other",
+            "PDF 原样可写回时不能被 NSImage 渲染结果劫持为 image"
+        );
+        assert!(
+            snapshot.payload.image_bytes.is_none(),
+            "PDF 原样保留时不存 NSImage 渲染位图"
+        );
+        assert_eq!(
+            snapshot.payload_size_bytes,
+            "%PDF-1.7".len(),
+            "other 的体积累计自保留的 flavor 数据"
+        );
+
+        let image_only = normalize_image_snapshot(2, 2, vec![0u8; 16], "Test");
+        assert_eq!(image_only.kind, "image");
+
+        // 超 1MB 的 PDF flavor 被截断、无法原样写回：退回 image，位图是唯一可粘贴表示
+        let mut truncated_pdf = ClipboardRepresentations {
+            image: Some((2, 2, vec![0u8; 16])),
+            ..Default::default()
+        };
+        truncated_pdf.flavors = vec![flavor("com.adobe.pdf", 0, &vec![7u8; 32], true)];
+        let truncated_snapshot = build_clipboard_snapshot(truncated_pdf, "Test").expect("snapshot");
+        assert_eq!(truncated_snapshot.kind, "image");
+        assert!(truncated_snapshot.payload.image_bytes.is_some());
+    }
+
     // ── P-03：flavor 存储 / 回收站保真 ────────────────────────────────────────
 
     #[test]
@@ -8200,10 +8673,13 @@ mod tests {
             flavors: Vec::new(),
         };
         let described = describe_write_contents(&build_write_contents(&image).expect("image"));
-        assert_eq!(described[0].0, "image");
-        assert!(
-            described.iter().any(|(format, _)| format == "public.tiff"),
-            "图片要带 TIFF best-effort 表示"
+        assert_eq!(
+            described
+                .iter()
+                .map(|(format, _)| format.as_str())
+                .collect::<Vec<_>>(),
+            vec!["public.png", "public.tiff"],
+            "图片写回固定为自编码 PNG + best-effort TIFF（不走基座 Image 静默失败路径）"
         );
 
         // 文件：一律走 files 分支
@@ -8213,6 +8689,7 @@ mod tests {
             ..text_only_payload("ignored")
         };
         assert!(!files_take_priority(&files), "纯文件条目不标降级");
+        // 基座约束：Files 与其他表示混写会互相清空；这里断言文件分支永远独占输出集合。
         assert_eq!(
             describe_write_contents(&build_write_contents(&files).expect("files")),
             vec![("files".to_string(), 2)]
@@ -8240,6 +8717,49 @@ mod tests {
             describe_write_contents(&build_write_contents(&other).expect("other")),
             vec![("com.adobe.pdf".to_string(), 4)]
         );
+    }
+
+    #[test]
+    fn encoded_image_flavors_decode_back_to_same_pixels() {
+        // 自编码 PNG/TIFF 是写回回读 hash 相等的先决条件：编码→解码必须像素无损
+        let width = 3;
+        let height = 2;
+        let rgba: Vec<u8> = (0..(width * height * 4) as u8).collect();
+
+        let png = encode_png_bytes(width, height, &rgba).expect("png should encode");
+        let png_image = image::load_from_memory_with_format(&png, image::ImageFormat::Png)
+            .expect("encoded png should decode")
+            .to_rgba8();
+        assert_eq!((png_image.width(), png_image.height()), (width as u32, height as u32));
+        assert_eq!(png_image.into_raw(), rgba);
+
+        let tiff = encode_tiff_bytes(width, height, &rgba).expect("tiff should encode");
+        let tiff_image = image::load_from_memory_with_format(&tiff, image::ImageFormat::Tiff)
+            .expect("encoded tiff should decode")
+            .to_rgba8();
+        assert_eq!((tiff_image.width(), tiff_image.height()), (width as u32, height as u32));
+        assert_eq!(tiff_image.into_raw(), rgba);
+    }
+
+    #[test]
+    fn paste_write_rejects_malformed_image_length() {
+        // 脏 DB 行（长度不等于 w*h*4）必须返回错误而不是让 PNG/TIFF 编码器 assert panic
+        let payload = ClipboardPayloadSnapshot {
+            text_plain: None,
+            text_html: None,
+            text_rtf: None,
+            image_bytes: Some(vec![1, 2, 3, 4, 5]),
+            image_width: Some(1),
+            image_height: Some(1),
+            file_urls: None,
+            extra_json: None,
+            flavors: Vec::new(),
+        };
+        let error = match build_write_contents(&payload) {
+            Ok(_) => panic!("malformed image length must fail"),
+            Err(error) => error,
+        };
+        assert_eq!(error, "PASTEBOARD_WRITE_FAILED");
     }
 
     #[test]
@@ -8278,6 +8798,7 @@ mod tests {
             is_pinned: false,
             use_count: 0,
             payload_size_bytes: 12,
+            is_truncated: false,
             match_type: None,
             matched_fields: Vec::new(),
             highlight_ranges: Vec::new(),
@@ -8510,6 +9031,9 @@ pub fn run() {
             ..
         } if label == "main" => {
             handle_main_window_resized(app_handle);
+        }
+        tauri::RunEvent::Exit => {
+            stop_clipboard_monitor(app_handle);
         }
         _ => {}
     });

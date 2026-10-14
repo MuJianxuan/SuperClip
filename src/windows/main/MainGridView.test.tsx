@@ -46,6 +46,16 @@ describe("MainGridView", () => {
     expect(screen.getByText("剪贴板暂无记录")).toBeInTheDocument();
   });
 
+  it("marks truncated cards with a badge", () => {
+    render(
+      <MainGridView
+        {...defaultProps}
+        items={[{ ...mockItems[0], isTruncated: true }, mockItems[1]]}
+      />,
+    );
+    expect(screen.getByTestId("grid-card-truncated")).toBeInTheDocument();
+  });
+
   it("shows empty state with no-match copy when search has no results", () => {
     render(<MainGridView {...defaultProps} items={[]} hasQuery />);
     expect(screen.getByText("没有匹配的内容")).toBeInTheDocument();

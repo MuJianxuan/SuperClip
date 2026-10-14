@@ -194,6 +194,18 @@ function Row({
           >
             {item.title}
           </span>
+          {item.isTruncated ? (
+            <span
+              data-testid="main-row-truncated"
+              className="shrink-0 rounded-[6px] border px-1 text-[10px] leading-4"
+              style={{
+                borderColor: "var(--border)",
+                color: "var(--row-meta, var(--text-tertiary))",
+              }}
+            >
+              已截断
+            </span>
+          ) : null}
           {item.isPinned && (
             <Star
               className="h-[9px] w-[9px] shrink-0"

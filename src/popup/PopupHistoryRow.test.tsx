@@ -41,6 +41,16 @@ describe("PopupHistoryRow", () => {
     expect(screen.getByText("Hello World preview")).toBeInTheDocument();
   });
 
+  it("marks truncated items with a badge", () => {
+    renderRow({ isTruncated: true });
+    expect(screen.getByTestId("popup-row-truncated")).toBeInTheDocument();
+  });
+
+  it("omits the truncated badge for normal items", () => {
+    renderRow();
+    expect(screen.queryByTestId("popup-row-truncated")).not.toBeInTheDocument();
+  });
+
   it("renders time label", () => {
     renderRow();
     expect(screen.getByText("3s前")).toBeInTheDocument();

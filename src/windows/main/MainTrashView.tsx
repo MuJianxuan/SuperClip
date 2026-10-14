@@ -229,7 +229,18 @@ function TrashRow({
         </button>
       </td>
       <td className="border-b px-3 py-[10px]" style={{ borderColor: "var(--divider)" }}>
-        <span className="block truncate font-medium text-[var(--text-primary)]">{entry.title}</span>
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className="block truncate font-medium text-[var(--text-primary)]">{entry.title}</span>
+          {entry.isTruncated ? (
+            <span
+              data-testid="trash-row-truncated"
+              className="shrink-0 rounded-[6px] border px-1 text-[10px] leading-4"
+              style={{ borderColor: "var(--border)", color: "var(--text-tertiary)" }}
+            >
+              已截断
+            </span>
+          ) : null}
+        </span>
         <span className="block truncate text-[11px] text-[var(--text-tertiary)]">{entry.preview}</span>
       </td>
       <td className="truncate border-b px-3 py-[10px] text-[var(--text-secondary)]" style={{ borderColor: "var(--divider)" }}>
