@@ -3,7 +3,7 @@
 :root {
   /* ========== Light theme (soft consumer, paired with dark) ========== */
   --bg: rgba(250, 250, 252, 0.86);
-  /* 实底背景：Toast/浮层用（毛玻瑀 --bg 半透明会让文字对比度不可控） */
+  /* 实底背景：Toast/浮层用（毛玻璃 --bg 半透明会让文字对比度不可控） */
   --bg-window-solid: #fafafc;
   --bg-elevated: rgba(15, 20, 30, 0.035);
   --bg-accent: rgba(0, 102, 214, 0.06);

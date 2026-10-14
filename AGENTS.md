@@ -4,24 +4,24 @@
 
 SuperClip 是一个基于 Tauri 2.x 框架构建的 macOS 剪贴板管理工具，技术栈：
 
-┌────────┬───────────────────────────┐
-│  层级  │           技术            │
-├────────┼───────────────────────────┤
-│ 后端   │ Rust 2021 (lib.rs 单文件 ~5800 行) │
-├────────┼───────────────────────────┤
-│ 前端   │ React 19 + TypeScript 5.8 │
-├────────┼───────────────────────────┤
-│ 构建   │ Vite 7 + Tailwind CSS 4   │
-├────────┼───────────────────────────┤
-│ 数据库 │ SQLite (rusqlite, bundled)│
-├────────┼───────────────────────────┤
-│ 剪贴板 │ arboard 3.6 + pbcopy/osascript │
-└────────┴───────────────────────────┘
+┌────────┬────────────────────────────────────┐
+│  层级  │                技术                │
+├────────┼────────────────────────────────────┤
+│ 后端   │ Rust 2021 (lib.rs 单文件 ~8915 行) │
+├────────┼────────────────────────────────────┤
+│ 前端   │ React 19 + TypeScript 5.8          │
+├────────┼────────────────────────────────────┤
+│ 构建   │ Vite 7 + Tailwind CSS 4            │
+├────────┼────────────────────────────────────┤
+│ 数据库 │ SQLite (rusqlite, bundled)         │
+├────────┼────────────────────────────────────┤
+│ 剪贴板 │ clipboard-rs 0.3.5 (NSPasteboard)  │
+└────────┴────────────────────────────────────┘
 
 ---
 ✅ 核心功能
 
-1. 剪贴板监控与记录 - 900ms 轮询捕获 text/html/rtf/image/file，SHA-256 去重
+1. 剪贴板监控与记录 - clipboard-rs watcher 捕获 text/html/rtf/image/file 及全部 flavor，SHA-256 去重
 2. 全文搜索 (FTS5) - 搜索标题、摘要、应用来源，含高亮与匹配类型
 3. 排除规则 - 按 bundle_id、content_kind、keyword 过滤敏感内容
 4. 直接粘贴 - Accessibility API (osascript) 模拟 Cmd+V，无权限降级仅复制
@@ -63,8 +63,9 @@ popup/quick_panel/preview 使用 `tauri_panel!`（NSPanel）+ `NSVisualEffectMat
 ## 1. 捕获 → 存储链路
 
 ```
-arboard 轮询(900ms, 独立线程)
-  → read_clipboard_snapshot (text_html/rtf/image/file_urls)
+clipboard-rs watcher (NSPasteboard.changeCount, 500ms, 独立线程)
+  → on_clipboard_change → process_clipboard_monitor_tick
+  → read_clipboard_snapshot (text_html/rtf/image/file_urls + flavors)
   → content_hash (SHA-256)
   → 去重: last_seen_hash 重复跳过; self_write_hash(自身粘贴写入)跳过
   → snapshot_is_excluded(排除规则缓存) 命中则丢弃
@@ -92,8 +93,9 @@ clipboard_search(前端 useClipboardData 150ms debounce)
 ```
 clipboard_paste
   → 读 item + payload + content_hash
-  → write_payload_to_clipboard 按类型写回系统剪贴板:
-       image → arboard set_image; html → nspasteboard; rtf → nspasteboard; text → pbcopy
+  → write_payload_to_clipboard 写回系统剪贴板 (clipboard-rs):
+       纯文本模式 → set_text; file → set_files(NSURL writeObjects);
+       其余 → set(vec![Html, Rtf, Text, Other*]) 单 item 多表示一次写入（图片为自编码 Other("public.png") + Other("public.tiff")）
   → mark_self_write_hash (防止监控器把自身写入当新条目)
   → 有 Accessibility 信任且非 file → trigger_direct_paste(osascript Cmd+V)
        否则 → 降级仅复制 (copy_only)
@@ -141,11 +143,12 @@ clipboard_clear → 清空回收站
 - 恢复模式：DB 打开失败降级内存 SQLite，只读；写操作返回 `RECOVERY_MODE_READ_ONLY`
 
 ---
-🗄️ 数据库 (SQLite + FTS5, WAL, migrations 版本 4)
+🗄️ 数据库 (SQLite + FTS5, WAL, migrations 版本 5)
 
 - `clipboard_items` — id, kind, content_hash(UNIQUE), title, preview_text, source_app, meta, is_pinned, use_count, last_used_at, payload_size_bytes, is_truncated, is_sensitive, origin_bundle_id, preview_strategy, created_at, last_seen_at
 - `clipboard_payloads` — item_id(FK CASCADE), text_plain/html/rtf, image_blob, image_width/height, file_urls_json, extra_json
-- `clipboard_trash` — trash_id, item_id, undo_token(UNIQUE), item_json, payload_json, deleted_at, expires_at, deleted_by_action
+- `clipboard_flavors` — item_id(FK CASCADE), format, ordinal, size_bytes, digest, is_truncated, data; PK(item_id, format) — 全量 pasteboard representation
+- `clipboard_trash` — trash_id, item_id, undo_token(UNIQUE), item_json, payload_json, flavors_json, deleted_at, expires_at, deleted_by_action
 - `settings` — key/value/updated_at
 - `exclusion_rules` — id, kind, value, enabled, UNIQUE(kind,value)
 - `fts_clipboard_items` — FTS5(item_id, title, preview_text, source_app, meta, normalized_plain_text; tokenize=unicode61)
@@ -161,7 +164,7 @@ clipboard_clear → 清空回收站
 ---
 ⚙️ 关键常量与限额
 
-- 监控轮询 900ms；TEXT_PAYLOAD 上限 2MB；IMAGE_PAYLOAD 上限 8MB；图片预览边 360px
+- watcher 检测间隔 500ms；MONITOR_POLL_MS=900 仅用于 watcher fallback 轮询、失败重试、系统外观检测；TEXT_PAYLOAD 上限 2MB；IMAGE_PAYLOAD 上限 8MB；图片预览边 360px
 - 历史保留上限默认 1000（可配最高 5000）；单次搜索/列表返回上限 5000
 - 错误环形日志 50 条
 
