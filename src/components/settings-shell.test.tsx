@@ -179,6 +179,22 @@ describe("SettingsShell (F2 分区化)", () => {
     expect(screen.getByText("新增规则")).toBeInTheDocument();
   });
 
+  it("排除规则编辑器：新增按钮真正提交表单（F-11 回归）", () => {
+    const onRuleUpsert = vi.fn();
+    render(<SettingsShell {...makeProps({ onRuleUpsert })} />);
+    fireEvent.click(screen.getByText("排除规则"));
+    fireEvent.click(screen.getByText("添加规则"));
+    // 规则类型 → 内容类型；规则值 → Link（P-07 新增选项）
+    fireEvent.change(screen.getByDisplayValue("App Bundle ID"), {
+      target: { value: "content_kind" },
+    });
+    fireEvent.change(screen.getByDisplayValue("Text"), { target: { value: "link" } });
+    fireEvent.click(screen.getByText("新增规则"));
+    expect(onRuleUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: "content_kind", value: "link", enabled: true }),
+    );
+  });
+
   it("切到高级分区：存储信息 + 诊断 danger 按钮", () => {
     render(<SettingsShell {...makeProps()} />);
     fireEvent.click(screen.getByText("高级"));

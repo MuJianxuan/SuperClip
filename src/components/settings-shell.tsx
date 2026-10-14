@@ -1310,7 +1310,7 @@ export function SettingsShell({
                         ) : null}
 
                         <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
-                          <PrimaryBtn disabled={readOnlyMode}>
+                          <PrimaryBtn type="submit" disabled={readOnlyMode}>
                             {editingRuleId ? "保存规则" : "新增规则"}
                           </PrimaryBtn>
                           <ChangeButton

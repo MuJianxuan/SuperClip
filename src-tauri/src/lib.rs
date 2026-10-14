@@ -1323,9 +1323,12 @@ const FLAVOR_SKIPLIST: &[&str] = &[
 ];
 
 /// 无粘贴价值或体积过大的 flavor：忽略且不计数。
-/// - `dyn.*`：NSPasteboard 给应用私有归档类型的动态 UTI（不可跨应用还原），Finder 文件复制实测出现；
+/// - `Apple * pasteboard type` / `NeXT * pasteboard type`：Apple 旧别名命名空间，
+///   实测均为 public.* / com.apple.* 同义重复（V-06/V-07 验收发现）；
+/// - `dyn.*`：NSPasteboard 给应用私有归档类型的动态 UTI（不可跨应用还原）；
 /// - `com.apple.icns` / `CorePasteboardFlavorType 0x69636E73`：Finder 给图标文件的预览数据（单份 1MB+）；
 /// - `PVPboardInfoPboardType`：Preview 私有粘贴板信息；
+/// - `com.apple.WebKit.custom-pasteboard-data`：Safari 私有元数据；
 /// - `com.apple.coredrag`：拖拽会话类型。
 const FLAVOR_DENYLIST: &[&str] = &[
     "com.apple.coredrag",
@@ -1334,6 +1337,7 @@ const FLAVOR_DENYLIST: &[&str] = &[
     "com.apple.icns",
     "CorePasteboardFlavorType 0x69636E73",
     "PVPboardInfoPboardType",
+    "com.apple.WebKit.custom-pasteboard-data",
 ];
 
 /// 生成式跳过（与 text_plain 字节完全相同）的豁免名单：链接的 URL flavor 必须保留。
@@ -1344,6 +1348,8 @@ fn is_skipped_flavor(format: &str) -> bool {
         || FLAVOR_DENYLIST.contains(&format)
         || format.starts_with("com.apple.pasteboard.promised-")
         || format.starts_with("dyn.")
+        || format.starts_with("Apple ") && format.ends_with(" pasteboard type")
+        || format.starts_with("NeXT ") && format.ends_with(" pasteboard type")
 }
 
 fn is_reserved_flavor(format: &str) -> bool {
@@ -1658,16 +1664,20 @@ fn build_clipboard_snapshot(
         }
     }
     if let Some((width, height, bytes)) = representations.image.clone() {
-        let size = bytes.len();
-        if size > IMAGE_PAYLOAD_LIMIT_BYTES {
-            payload.extra_json = build_image_preview_extra_json(&bytes, width, height);
-            is_truncated = true;
-        } else {
-            payload.image_bytes = Some(bytes);
+        // 文件条目不存图片表示：Finder 复制图片/图标类文件时会附带 TIFF 图标（≈4MB RGBA），
+        // 而粘贴一律走 set_files，这份图片不会被用（V-06 实测发现，见验收记录 F-03）。
+        if kind != "file" {
+            let size = bytes.len();
+            if size > IMAGE_PAYLOAD_LIMIT_BYTES {
+                payload.extra_json = build_image_preview_extra_json(&bytes, width, height);
+                is_truncated = true;
+            } else {
+                payload.image_bytes = Some(bytes);
+            }
+            payload.image_width = Some(width);
+            payload.image_height = Some(height);
+            payload_size_bytes = payload_size_bytes.max(size);
         }
-        payload.image_width = Some(width);
-        payload.image_height = Some(height);
-        payload_size_bytes = payload_size_bytes.max(size);
     }
     if kind == "file" {
         payload.text_plain = Some(representations.file_urls.join("\n"));
@@ -1783,6 +1793,24 @@ fn build_clipboard_snapshot(
             (title, truncate_chars(&names.join(" · "), 140), meta)
         }
     };
+
+    // 截断信息必须对用户可见（D-04/S-06）：「其他」已在自身 meta 里说明，其余类型统一追加后缀。
+    let mut meta = meta;
+    if kind != "other" {
+        if representations
+            .flavors
+            .iter()
+            .any(|flavor| flavor.is_truncated)
+        {
+            meta.push_str(" · 已截断");
+        }
+        if representations.dropped_flavor_count > 0 {
+            meta.push_str(&format!(
+                " · 另有 {} 个格式未存",
+                representations.dropped_flavor_count
+            ));
+        }
+    }
 
     let content_hash = snapshot_content_hash(kind, &payload);
 
@@ -7740,6 +7768,9 @@ mod tests {
         .expect("snapshot");
         assert_eq!(file_like.kind, "file");
         assert_eq!(file_like.payload.file_urls.as_deref(), Some(&["/private/tmp/a.png".to_string()][..]));
+        // 文件条目不存图标图片（否则每次图片文件复制都多 4MB RGBA）
+        assert!(file_like.payload.image_bytes.is_none());
+        assert!(file_like.payload.image_width.is_none());
 
         // 纯图片（无 file-url，如 Preview 拷贝）：仍是 image，且不写 file_urls
         let image_only = build_clipboard_snapshot(
@@ -7787,9 +7818,18 @@ mod tests {
             "CorePasteboardFlavorType 0x69636E73".to_string(),
             "com.apple.icns".to_string(),
             "PVPboardInfoPboardType".to_string(),
-            // 同义别名（Finder/Preview 复制实测）：与 public.png / public.tiff 重复
+            // 同义别名（Finder/Preview/Probe 实测）：与 public.png / public.tiff 重复
             "Apple PNG pasteboard type".to_string(),
             "NeXT TIFF v4.0 pasteboard type".to_string(),
+            // 别名模式：Apple */NeXT * pasteboard type 全家族均跳过
+            "Apple VCard pasteboard type".to_string(),
+            "Apple PDF pasteboard type".to_string(),
+            "Apple HTML pasteboard type".to_string(),
+            "Apple Web Archive pasteboard type".to_string(),
+            "NeXT Rich Text Format v1.0 pasteboard type".to_string(),
+            "NeXT smart paste pasteboard type".to_string(),
+            // Safari 私有元数据
+            "com.apple.WebKit.custom-pasteboard-data".to_string(),
             "public.url".to_string(),
             "com.apple.fake.plain-alias".to_string(),
             "com.adobe.pdf".to_string(),
@@ -7817,7 +7857,7 @@ mod tests {
                 "com.apple.NSColorPboardType",
                 "public.vcard"
             ],
-            "跳过名单/生成式跳过/同 format 去重都必须生效"
+            "跳过名单/别名模式/生成式跳过/同 format 去重都必须生效"
         );
         assert_eq!(dropped, 0);
 
@@ -7859,6 +7899,25 @@ mod tests {
         );
         assert_eq!(flavors.len(), 2);
         assert_eq!(dropped, 1);
+    }
+
+    #[test]
+    fn snapshot_meta_marks_truncated_flavors() {
+        let mut representations = ClipboardRepresentations {
+            plain_text: Some("body".into()),
+            ..Default::default()
+        };
+        representations
+            .flavors
+            .push(flavor("com.adobe.pdf", 0, &vec![7u8; 32], true));
+        let snapshot =
+            build_clipboard_snapshot(representations, "Test").expect("snapshot should build");
+        assert!(snapshot.is_truncated);
+        assert!(snapshot.meta.contains("已截断"), "meta = {}", snapshot.meta);
+
+        // 未截断时不加后缀
+        let clean = normalize_text_snapshot("plain body", "Test").expect("snapshot");
+        assert!(!clean.meta.contains("已截断"));
     }
 
     #[test]
