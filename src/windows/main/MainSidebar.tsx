@@ -37,24 +37,13 @@ export const MainSidebar = memo(function MainSidebar({
   return (
     <aside
       data-testid="main-sidebar"
-      className="flex w-[192px] shrink-0 flex-col border-r px-[10px] pb-[10px] pt-[10px]"
+      className="flex w-[192px] shrink-0 flex-col border-r px-[10px] pb-[10px] pt-0"
       style={{ background: "var(--card-bg)", borderColor: "var(--divider)" }}
     >
-      {/* 品牌行（拖拽区）。顶部另留 38px：原生红绿灯固定在窗口左上角 (x:20,y:20)，
-          而侧栏宽 192 > 74，不避让就会压住 logo；同时这段空白继续承担拖动窗口 */}
-      <div
-        data-tauri-drag-region
-        className="flex cursor-grab items-center gap-2 px-2 pb-2 pt-[38px] active:cursor-grabbing"
-      >
-        <span
-          className="flex h-[21px] w-[21px] shrink-0 items-center justify-center rounded-[6px]"
-          style={{ background: "var(--accent)", color: "var(--accent-contrast)" }}
-        >
-          <ClipboardList size={12} />
-        </span>
-        <span className="text-[13px] font-semibold text-[var(--text-primary)]">SuperClip</span>
-      </div>
-
+      {/* 顶部 44px 拖拽条：覆盖原生红绿灯所在高度带 (x:20,y:20，底部约 y=34)，
+          既避让红绿灯（侧栏宽 192 > 74），又承担窗口拖动；
+          与内容区顶栏一致：不用抓手光标（cursor-grab），保持默认箭头 */}
+      <div data-tauri-drag-region className="-mx-[10px] h-[44px] shrink-0" />
       <NavCaption>历史</NavCaption>
       <NavItem
         icon={<ClipboardList size={15} />}

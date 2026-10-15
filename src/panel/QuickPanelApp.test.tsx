@@ -49,11 +49,11 @@ describe("QuickPanelApp", () => {
     vi.clearAllMocks();
   });
 
-  it("renders brand header with live status pill", async () => {
+  it("renders status pill header without brand", async () => {
     render(<QuickPanelApp />);
-    expect(await screen.findByText("SuperClip")).toBeInTheDocument();
-    expect(screen.getByTestId("panel-status-pill")).toHaveTextContent("监听中");
+    expect(await screen.findByTestId("panel-status-pill")).toHaveTextContent("监听中");
     expect(screen.getByTestId("panel-status-pill")).not.toHaveAttribute("data-paused");
+    expect(screen.queryByText("SuperClip")).toBeNull();
   });
 
   it("loads paste mode from settings on mount", async () => {
@@ -84,7 +84,7 @@ describe("QuickPanelApp", () => {
 
   it("移到设置页的主题切换不再出现在面板（D8 移出外观分组）", async () => {
     render(<QuickPanelApp />);
-    await screen.findByText("SuperClip");
+    await screen.findByTestId("panel-status-pill");
     expect(screen.queryByText("外观")).not.toBeInTheDocument();
     expect(screen.queryByText("跟随系统")).not.toBeInTheDocument();
     expect(screen.queryByText("浅色")).not.toBeInTheDocument();
@@ -93,7 +93,7 @@ describe("QuickPanelApp", () => {
 
   it("底部不再有独立状态栏（状态已上移到头部胶囊）", async () => {
     const { container } = render(<QuickPanelApp />);
-    await screen.findByText("SuperClip");
+    await screen.findByTestId("panel-status-pill");
     const footers = Array.from(container.querySelectorAll("div")).filter((el) =>
       el.className.includes("h-[35px]"),
     );

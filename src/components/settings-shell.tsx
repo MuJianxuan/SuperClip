@@ -865,9 +865,11 @@ export function SettingsShell({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {/* ================= F2 顶部 toolbar：identity + 返回列表（与 E2/F2 同位） =================
-           Overlay 标题栏：整行作为窗口拖拽区（返回按钮可交互自动豁免），左侧 pl-[84px] 避让红绿灯 */}
-      <div data-tauri-drag-region="deep" className="shrink-0 pl-[84px] pr-4 pt-3.5">
-        <div className="flex items-center gap-2.5">
+           Overlay 标题栏：空白区域（含左侧避开红绿灯的 pl-[84px] 带）可拖窗口，返回按钮不参与；
+           拖拽属性需写在鼠标下的元素上（tauri 2.10.3 不支持 "deep" 子树匹配），
+           且带属性的元素必须有高度（flex-1 占位在 items-center 下高度为 0，点不到） */}
+      <div data-tauri-drag-region className="shrink-0 pl-[84px] pr-4 pt-3.5">
+        <div data-tauri-drag-region className="flex items-center gap-2.5">
           <div className="flex-1" />
 
           {/* 返回列表（回到 Main 的剪贴板分区） */}

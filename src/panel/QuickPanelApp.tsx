@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pause, Play, ExternalLink, Settings2, LogOut, ClipboardList } from "lucide-react";
+import { Pause, Play, ExternalLink, Settings2, LogOut } from "lucide-react";
 import {
   appQuit,
   monitorStatusGet,
@@ -223,17 +223,8 @@ export function QuickPanelApp() {
         animation: "panelPopIn 0.16s ease-out",
       }}
     >
-      {/* 头部：品牌 + 状态胶囊（监听中 = 实心点；暂停 = 描边胶囊） */}
+      {/* 头部：状态胶囊（监听中 = 实心点；暂停 = 描边胶囊） */}
       <div className="flex shrink-0 items-center gap-2 px-3 pb-2.5 pt-3">
-        <span
-          className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-[6px]"
-          style={{ background: "var(--accent)", color: "var(--accent-contrast)" }}
-        >
-          <ClipboardList size={11} />
-        </span>
-        <span className="text-[13px] font-semibold" style={{ color: "var(--text-primary)" }}>
-          SuperClip
-        </span>
         <span
           data-testid="panel-status-pill"
           data-paused={!isMonitoring || undefined}

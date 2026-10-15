@@ -29,11 +29,19 @@ describe("MainApp", () => {
     }
   });
 
-  it("renders 192 sidebar with brand and 5 navigation entries", () => {
+  it("renders 192 sidebar with 5 navigation entries and no brand row", () => {
     render(<MainApp />);
     const sidebar = screen.getByTestId("main-sidebar");
     expect(sidebar.className).toContain("w-[192px]");
-    expect(screen.getByText("SuperClip")).toBeInTheDocument();
+    // 顶部 44px 拖拽条：与内容区顶栏一致支持拖窗口，且不用抓手光标；
+    // 它是侧栏首个子元素（覆盖红绿灯高度带），且只有它可拖（aside 自身不自带拖拽属性）
+    const dragArea = sidebar.querySelector("[data-tauri-drag-region]");
+    expect(dragArea).not.toBeNull();
+    expect(dragArea?.className ?? "").not.toContain("cursor-");
+    expect(dragArea?.className ?? "").toContain("h-[44px]");
+    expect(sidebar.firstElementChild).toBe(dragArea);
+    expect(sidebar.getAttribute("data-tauri-drag-region")).toBeNull();
+    expect(screen.queryByText("SuperClip")).toBeNull();
     expect(screen.getAllByText("全部记录").length).toBeGreaterThan(0);
     expect(screen.getAllByText("已置顶").length).toBeGreaterThan(0);
     expect(screen.getAllByText("回收站").length).toBeGreaterThan(0);

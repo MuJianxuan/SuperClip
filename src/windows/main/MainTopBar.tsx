@@ -12,7 +12,8 @@ interface MainTopBarProps {
 
 /**
  * 内容区标题栏（D3）：标题 + 副标题 + 搜索 + 视图分段。
- * 设置入口移到左侧栏，主窗口拖拽区由左侧栏品牌行承担。
+ * 设置入口移到左侧栏；主窗口拖拽区由本顶栏（含标题区）与左侧栏顶部 44px 拖拽条承担。
+ * 拖拽属性必须写在鼠标下的元素上：内容区顶栏只有自身内边距带可拖，标题容器与标题也要带（tauri 2.10.3 不支持 "deep" 子树匹配）。
  */
 export const MainTopBar = memo(function MainTopBar({
   viewMode,
@@ -27,9 +28,12 @@ export const MainTopBar = memo(function MainTopBar({
   const searchActive = searchFocused || searchHovered;
 
   return (
-    <header data-tauri-drag-region="deep" className="flex shrink-0 items-center gap-3 px-5 pb-3 pt-4">
-      <div className="min-w-0 flex-1">
-        <h1 className="truncate text-[18px] font-semibold tracking-[-0.01em] text-[var(--text-primary)]">
+    <header data-tauri-drag-region className="flex shrink-0 items-center gap-3 px-5 pb-3 pt-4">
+      <div data-tauri-drag-region className="min-w-0 flex-1">
+        <h1
+          data-tauri-drag-region
+          className="truncate text-[18px] font-semibold tracking-[-0.01em] text-[var(--text-primary)]"
+        >
           {title ?? (viewMode === "grid" ? "网格视图" : "全部记录")}
         </h1>
       </div>

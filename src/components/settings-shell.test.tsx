@@ -81,6 +81,17 @@ describe("SettingsShell (F2 分区化)", () => {
     expect(screen.getByText("关于")).toBeInTheDocument();
   });
 
+  it("顶部 toolbar 空白区可拖窗口，返回按钮不参与拖拽", () => {
+    render(<SettingsShell {...makeProps()} />);
+    const back = screen.getByRole("button", { name: /返回列表/ });
+    // 拖拽属性写在有高度的容器上（返回按钮所在行 + 外层 toolbar），按钮自身不带
+    expect(back.parentElement?.hasAttribute("data-tauri-drag-region")).toBe(true);
+    expect(back.parentElement?.parentElement?.hasAttribute("data-tauri-drag-region")).toBe(true);
+    expect(back.hasAttribute("data-tauri-drag-region")).toBe(false);
+    // 零高度占位（items-center 下 flex-1 高度为 0）不能带属性：带了也点不到，提示后人别把属性挪过去
+    expect(back.parentElement?.firstElementChild?.hasAttribute("data-tauri-drag-region")).toBe(false);
+  });
+
   it("高级分区同时提供诊断与两项危险操作（清空历史 / 重置设置）", () => {
     const onClearHistory = vi.fn();
     render(<SettingsShell {...makeProps({ onClearHistory })} />);

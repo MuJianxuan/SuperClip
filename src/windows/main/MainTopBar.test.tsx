@@ -45,4 +45,20 @@ describe("MainTopBar", () => {
     render(<MainTopBar {...defaultProps} />);
     expect(screen.queryByTitle("设置")).not.toBeInTheDocument();
   });
+
+  it("标题区可拖窗口，搜索框与视图切换不参与拖拽", () => {
+    const { container } = render(<MainTopBar {...defaultProps} />);
+    const header = container.querySelector("header");
+    const title = screen.getByRole("heading", { name: "全部记录" });
+    // tauri 2.10.3 只认鼠标下元素自身的属性：标题容器与标题都要带，否则按在标题上拖不动
+    expect(header?.hasAttribute("data-tauri-drag-region")).toBe(true);
+    expect(title.hasAttribute("data-tauri-drag-region")).toBe(true);
+    expect(title.parentElement?.hasAttribute("data-tauri-drag-region")).toBe(true);
+    // 交互元素不能带：否则点击/拖动会被当成拖窗口
+    expect(screen.getByPlaceholderText("搜索…").closest("label")?.hasAttribute("data-tauri-drag-region")).toBe(false);
+    const viewToggle = screen.getByTitle("列表视图").parentElement;
+    expect(viewToggle).not.toBeNull();
+    expect(viewToggle?.hasAttribute("data-tauri-drag-region")).toBe(false);
+    expect(screen.getByTitle("列表视图").hasAttribute("data-tauri-drag-region")).toBe(false);
+  });
 });
