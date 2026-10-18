@@ -5,13 +5,17 @@ import tailwindcss from "@tailwindcss/vite";
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
-// Port offset support: set PORT_OFFSET (e.g. `PORT_OFFSET=100 npm run tauri dev`)
-// to avoid port collisions with other local apps that also default to 1420.
-// The same offset is applied to Vite's dev server here and to Tauri's build.devUrl
-// by the wrapper script (scripts/tauri.mjs).
+// Port resolution: scripts/tauri.mjs decides the dev server port first, then
+// injects SUPERCLIP_DEV_PORT so Vite binds exactly that port. Standalone
+// `npm run dev` (no wrapper) falls back to 1420 + optional PORT_OFFSET.
+// strictPort stays true on purpose: if the port was taken between probing and
+// binding, fail loudly instead of drifting to a port Tauri does not know.
+// @ts-expect-error process is a nodejs global
+const resolvedPort = Number.parseInt(process.env.SUPERCLIP_DEV_PORT ?? "", 10);
 // @ts-expect-error process is a nodejs global
 const portOffset = Number.parseInt(process.env.PORT_OFFSET ?? "0", 10) || 0;
-const devPort = 1420 + portOffset;
+const devPort =
+  resolvedPort >= 1 && resolvedPort <= 65535 ? resolvedPort : 1420 + portOffset;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({

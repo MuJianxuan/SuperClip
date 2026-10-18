@@ -172,9 +172,9 @@ clipboard_clear → 清空回收站
 🔧 常用命令
 
 ```bash
-npm run dev                    # 纯前端 Vite (端口 1420, fallback 数据)
-npm run tauri dev              # 完整 Tauri 开发
-PORT_OFFSET=100 npm run tauri dev   # 端口偏移避冲突 (1420+100=1520)
+npm run dev                    # 纯前端 Vite (自动选端口, 默认 1420，被占则顺延)
+npm run tauri dev              # 完整 Tauri 开发 (自动选端口)
+PORT_OFFSET=100 npm run tauri dev   # 显式固定端口 (1420+100=1520，不自动漂移)
 npm run build                  # tsc + vite build
 npm run tauri build            # 完整 macOS .app 打包
 npm run test:frontend          # vitest (jsdom)

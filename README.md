@@ -22,20 +22,42 @@
 - Popup = 历史列表主面板
 - Popover = 右侧预览浮层
 
-## 开发：端口偏移
+## 开发：端口
 
-默认开发端口为 `1420`。当多个本地 Tauri 应用同时开发时，可通过端口偏移避免冲突：
+默认开发端口为 `1420`。**无参数启动会自动找下一个可用端口**，无需手动偏移：
 
 ```bash
-# 方式一：环境变量（推荐）
-PORT_OFFSET=100 npm run tauri dev   # 端口 = 1420 + 100 = 1520
-
-# 方式二：命令行 flag（优先级更高）
-npm run tauri dev -- --port-offset 100
-
-# 纯前端（仅 Vite，不启动 Tauri）同样支持
-PORT_OFFSET=100 npm run dev         # Vite 监听 1520
+npm run tauri dev     # 1420 被占时自动落到 1421、1422 ...（最多试 20 个）
+npm run dev           # 纯前端（仅 Vite），端口规则同上
 ```
 
-偏移会同时作用于 Vite dev server 和 Tauri 的 `build.devUrl`，
-因此 Rust 后端能正确加载偏移后的前端页面。
+启动日志会说明实际端口与原因：
+
+```
+[tauri] dev server on http://localhost:1421 (端口 1420 已被占用)
+```
+
+### 显式指定端口（不漂移）
+
+需要固定端口时用偏移，此时**严格使用**该端口，被占则直接报错，不会自动换：
+
+```bash
+PORT_OFFSET=100 npm run tauri dev    # 端口 = 1420 + 100 = 1520
+npm run tauri dev -- --port-offset 100   # flag 优先级高于环境变量
+```
+
+端口解析流程：`scripts/tauri.mjs` 先定端口，再通过环境变量 `SUPERCLIP_DEV_PORT`
+传给 Vite，同时用 `--config` 注入 Tauri 的 `build.devUrl`。因此 Rust 后端加载的
+一定是 Vite 实际监听的端口。
+
+### 关于「本仓库遗留的 dev server」
+
+若某端口被**本项目**之前没退干净的 dev server 占用，启动时会给出提示（不会自动 kill）：
+
+```
+[tauri] 端口 1421 被本仓库遗留的 dev server 占用（PID 99667, cwd /…/SuperClip）。
+        如需复用该端口：kill 99667 后重启；本次已另选端口。
+```
+
+识别方式：`lsof` 反查占用进程的 cwd 是否在本仓库内；cwd 不可读时改用 HTTP 探测
+页面 `<title>SuperClip</title>`。
