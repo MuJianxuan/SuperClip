@@ -8826,7 +8826,7 @@ mod tests {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app = tauri::Builder::default()
+    let mut app = tauri::Builder::default()
         .manage(AppState::new())
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
@@ -8916,6 +8916,12 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
+
+    // 启动即 Accessory：Info.plist 的 LSUIElement 会被 tao 在 didFinishLaunching 里
+    // 用 setActivationPolicy(Regular) 覆盖，Dock 图标闪一帧；这里在启动前把 tao 的
+    // 初始策略也定为 Accessory，避免那次 Foreground 状态切换。
+    #[cfg(target_os = "macos")]
+    app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
     app.run(|app_handle, event| match event {
         #[cfg(target_os = "macos")]

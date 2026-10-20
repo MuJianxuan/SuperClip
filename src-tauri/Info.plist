@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- 菜单栏常驻工具：Dock 图标永不创建，避免启动时先出图标再隐藏的闪动 -->
+	<key>LSUIElement</key>
+	<true/>
+</dict>
+</plist>
