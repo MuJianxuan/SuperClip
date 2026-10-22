@@ -1,0 +1,806 @@
+<!-- ===== 组 1：选中即预览（取代 hover 浮窗） ===== -->
+
+<div class="stage" data-group="选中即预览" data-cell="1,1">
+  <div class="stage-label">① 全部记录 · 扫读（hover 不弹窗）</div>
+  <div class="screen" id="all-scan">
+    <div class="shell">
+      <div class="sidebar" style="width:192px;">
+        <div class="side-cap">历史</div>
+        <div class="side-item active"><i data-lucide="clipboard-list"></i>全部记录<span class="side-tail">59</span></div>
+        <div class="side-item"><i data-lucide="star"></i>已置顶<span class="side-tail">0</span></div>
+        <div class="side-item"><i data-lucide="trash-2"></i>回收站<span class="side-tail">0</span></div>
+        <div class="side-cap">管理</div>
+        <div class="side-item"><i data-lucide="ban"></i>排除规则<span class="side-tail">3</span></div>
+        <div class="side-item"><i data-lucide="settings"></i>设置</div>
+        <div class="side-tail" style="margin-top:auto;padding:12px;">● 监听中 · 直接粘贴</div>
+      </div>
+      <div class="main">
+        <div class="main-hd">
+          <div class="hd-row"><div><h2>全部记录</h2></div>
+            <div class="hd-actions">
+              <span class="pc-search"><i data-lucide="search"></i><span class="sph">搜索…</span></span>
+              <span class="btn outline sm"><i data-lucide="list"></i>列表</span>
+              <span class="btn ghost sm"><i data-lucide="layout-grid"></i>网格</span>
+            </div>
+          </div>
+        </div>
+        <div class="main-bd">
+          <div class="filterbar" style="padding:0 0 12px;">
+            <span class="chip active">全部 59</span><span class="chip">文本 34</span><span class="chip">富文本 4</span><span class="chip">图片 11</span><span class="chip">文件 4</span><span class="chip">链接 2</span><span class="chip">其他 4</span>
+          </div>
+          <div class="panel" style="margin-bottom:0;">
+            <div class="panel-bd flush" style="height:520px;overflow:hidden;">
+              <div style="padding:8px 16px 4px;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.08em;">今天　2</div>
+              <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+                <span class="cbox"></span>
+                <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+                <div style="min-width:0;flex:1;">
+                  <div style="font-size:13px;font-weight:600;color:var(--ink);">rao@RaodeMacBook-Air % npm r…</div>
+                  <div style="font-size:12px;color:var(--muted);">rao@RaodeMacBook-Air % npm run tauri dev</div>
+                </div>
+                <span style="font-size:11px;color:var(--muted);">com.muxy.app　刚刚</span>
+              </div>
+              <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);background:var(--fill-2);border-left:3px solid var(--ink);display:flex;gap:10px;align-items:flex-start;" data-hot="go-selected">
+                <span class="cbox"></span>
+                <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+                <div style="min-width:0;flex:1;">
+                  <div style="font-size:13px;font-weight:600;color:var(--ink);">pi-skill-manager</div>
+                  <div style="font-size:12px;color:var(--muted);">pi-skill-manager</div>
+                </div>
+                <span style="font-size:11px;color:var(--muted);">com.muxy.app　刚刚</span>
+              </div>
+              <div style="padding:8px 16px 4px;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.08em;">更早　57</div>
+              <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+                <span class="cbox"></span>
+                <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+                <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">PID 16112 (/Users/rao/AiDoWor…</div><div style="font-size:12px;color:var(--muted);">PID 16112 (/Users/rao/AiDoWork/SuperClip 的残留</div></div>
+                <span style="font-size:11px;color:var(--muted);">4 天前</span>
+              </div>
+              <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+                <span class="cbox"></span>
+                <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+                <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">Q1 D，其余按推荐</div><div style="font-size:12px;color:var(--muted);">Q1 D，其余按推荐</div></div>
+                <span style="font-size:11px;color:var(--muted);">4 天前</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note-block" data-for="all-scan">
+    <div class="note-title">① 全部记录 · 扫读</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>鼠标在行上移动：只有行高亮，右侧无任何变化</li>
+        <li>列表区占满窗口宽度</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>单击行 → 选中并在右侧打开预览区（②）</li>
+        <li>不再有 hover 浮窗、不再跟随鼠标</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="stage" data-group="选中即预览" data-cell="1,2">
+  <div class="stage-label">② 选中文本 · 右侧 dock</div>
+  <div class="screen" id="all-text">
+    <div class="shell">
+      <div class="sidebar" style="width:192px;">
+        <div class="side-cap">历史</div>
+        <div class="side-item active"><i data-lucide="clipboard-list"></i>全部记录<span class="side-tail">59</span></div>
+        <div class="side-item"><i data-lucide="star"></i>已置顶<span class="side-tail">0</span></div>
+        <div class="side-item"><i data-lucide="trash-2"></i>回收站<span class="side-tail">0</span></div>
+        <div class="side-cap">管理</div>
+        <div class="side-item"><i data-lucide="ban"></i>排除规则<span class="side-tail">3</span></div>
+        <div class="side-item"><i data-lucide="settings"></i>设置</div>
+      </div>
+      <div class="main">
+        <div class="main-hd">
+          <div class="hd-row"><div><h2>全部记录</h2></div>
+            <div class="hd-actions">
+              <span class="pc-search"><i data-lucide="search"></i><span class="sph">搜索…</span></span>
+              <span class="btn outline sm"><i data-lucide="panel-right"></i>⌘\</span>
+            </div>
+          </div>
+        </div>
+        <div class="main-bd" style="display:flex;gap:0;padding:0;">
+          <div style="flex:1;min-width:0;border-right:1px solid var(--hairline);">
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">rao@RaodeMacBook-Air % npm r…</div><div style="font-size:12px;color:var(--muted);">rao@RaodeMacBook-Air % npm run tauri dev</div></div>
+              <span style="font-size:11px;color:var(--muted);">刚刚</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);background:var(--fill-2);border-left:3px solid var(--ink);display:flex;gap:10px;align-items:flex-start;" data-hot="go-longtext">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">PID 16112 (/Users/rao/AiDoWor…</div><div style="font-size:12px;color:var(--muted);">PID 16112 (/Users/rao/AiDoWork/SuperClip 的残留</div></div>
+              <span style="font-size:11px;color:var(--muted);">2 天前</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="file-code"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">已按你的答复更新方案。QuickPanel…</div><div style="font-size:12px;color:var(--muted);">已按你的答复更新方案。</div></div>
+              <span style="font-size:11px;color:var(--muted);">4 天前</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="image"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">图片剪贴板</div><div style="font-size:12px;color:var(--muted);">读取到 2400×2400 图片</div></div>
+              <span style="font-size:11px;color:var(--muted);">5 天前</span>
+            </div>
+          </div>
+          <div style="width:300px;flex-shrink:0;background:var(--white);display:flex;flex-direction:column;">
+            <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line-soft);">
+              <span style="font-size:13px;font-weight:600;color:var(--ink);">文本</span>
+              <span style="font-size:12px;color:var(--muted);">2 天前</span>
+              <span style="margin-left:auto;font-size:11px;color:var(--muted);">只读预览</span>
+            </div>
+            <div style="flex:1;padding:14px 16px;">
+              <div style="font-size:14px;font-weight:600;color:var(--ink);line-height:1.4;margin-bottom:10px;">PID 16112 (/Users/rao/AiDoWork/SuperClip 的残留)</div>
+              <div style="font-size:13px;line-height:1.75;color:var(--ink);">PID 16112 (/Users/rao/AiDoWork/SuperClip 的残留 npm run dev</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line-soft);font-size:11px;color:var(--muted);">
+              <span class="avatar-cell" style="width:20px;height:20px;font-size:10px;">C</span>来自 com.muxy.app
+              <span style="margin-left:auto;">63 B · 55 字符</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note-block" data-for="all-text">
+    <div class="note-title">② 选中文本</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>dock 宽 300，撑满窗口高度</li>
+        <li>头：类型 + 时间 + 「只读预览」</li>
+        <li>体：标题 + 全文，可滚动</li>
+        <li>脚：来源 App + 体积 + 字符数</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>单击任一行 → dock 内容切换</li>
+        <li>↑↓ 键移动选中，dock 同步刷新</li>
+        <li>双击 / ↵ 粘贴；⌘\ 折叠 dock</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="stage" data-group="选中即预览" data-cell="1,3">
+  <div class="stage-label">③ 长文本 · dock 内滚动</div>
+  <div class="screen" id="all-longtext">
+    <div class="shell">
+      <div class="sidebar" style="width:192px;">
+        <div class="side-cap">历史</div>
+        <div class="side-item active"><i data-lucide="clipboard-list"></i>全部记录<span class="side-tail">59</span></div>
+        <div class="side-item"><i data-lucide="star"></i>已置顶<span class="side-tail">0</span></div>
+        <div class="side-item"><i data-lucide="trash-2"></i>回收站<span class="side-tail">0</span></div>
+      </div>
+      <div class="main">
+        <div class="main-hd"><div class="hd-row"><div><h2>全部记录</h2></div></div></div>
+        <div class="main-bd" style="display:flex;padding:0;">
+          <div style="flex:1;min-width:0;border-right:1px solid var(--hairline);">
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);background:var(--fill-2);border-left:3px solid var(--ink);display:flex;gap:10px;align-items:flex-start;" data-hot="go-grid">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="file-code"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">已按你的答复更新方案 · QuickPanel</div><div style="font-size:12px;color:var(--muted);">已按你的答复更新方案。QuickPanel…</div></div>
+              <span style="font-size:11px;color:var(--muted);">4 天前</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">npm run tauri dev</div><div style="font-size:12px;color:var(--muted);">npm run tauri dev</div></div>
+              <span style="font-size:11px;color:var(--muted);">4 天前</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="link"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">https://github.com/p0deje/Maccy</div><div style="font-size:12px;color:var(--muted);">github.com</div></div>
+              <span style="font-size:11px;color:var(--muted);">5 天前</span>
+            </div>
+          </div>
+          <div style="width:300px;flex-shrink:0;background:var(--white);display:flex;flex-direction:column;">
+            <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line-soft);">
+              <span style="font-size:13px;font-weight:600;color:var(--ink);">文本</span><span style="font-size:12px;color:var(--muted);">4 天前</span>
+              <span style="margin-left:auto;font-size:11px;color:var(--muted);">只读预览</span>
+            </div>
+            <div style="flex:1;padding:14px 16px;overflow:hidden;">
+              <div style="font-size:14px;font-weight:600;color:var(--ink);line-height:1.4;margin-bottom:10px;">已按你的答复更新方案</div>
+              <div style="font-size:13px;line-height:1.75;color:var(--ink);margin-bottom:10px;">已按你的答复更新方案。QuickPanel 的默认尺寸、快捷键与折叠状态按推荐值落地。</div>
+              <div style="background:var(--fill);border:1px solid var(--hairline);border-radius:8px;padding:10px 12px;font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.7;color:var(--ink);margin-bottom:10px;">const preview = await<br>&nbsp;&nbsp;clipboardGet(item.id);<br>setDetail(preview);</div>
+              <div style="font-size:13px;line-height:1.75;color:var(--ink);margin-bottom:10px;">切换选中时先显示骨架，等 detail 返回后填充，避免旧内容残留造成串条。</div>
+              <div style="font-size:13px;line-height:1.75;color:var(--muted);">继续向下滚动……</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line-soft);font-size:11px;color:var(--muted);">
+              <span class="avatar-cell" style="width:20px;height:20px;font-size:10px;">C</span>来自 com.muxy.app<span style="margin-left:auto;">1.2 KB · 862 字符</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note-block" data-for="all-longtext">
+    <div class="note-title">③ 长文本</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>正文在 dock 内部独立滚动</li>
+        <li>``` 包裹的段落按等宽代码块渲染</li>
+        <li>脚注给出字符数与体积</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>滚轮滚动只影响 dock，不影响列表位置</li>
+        <li>选中项若无变化，滚动位置保持</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="stage" data-group="选中即预览" data-cell="2,1">
+  <div class="stage-label">④ 网格视图 · 同一套 dock</div>
+  <div class="screen" id="grid">
+    <div class="shell">
+      <div class="sidebar" style="width:192px;">
+        <div class="side-cap">历史</div>
+        <div class="side-item active"><i data-lucide="clipboard-list"></i>全部记录<span class="side-tail">59</span></div>
+        <div class="side-item"><i data-lucide="star"></i>已置顶<span class="side-tail">0</span></div>
+        <div class="side-item"><i data-lucide="trash-2"></i>回收站<span class="side-tail">0</span></div>
+      </div>
+      <div class="main">
+        <div class="main-hd">
+          <div class="hd-row"><div><h2>全部记录</h2></div>
+            <div class="hd-actions"><span class="btn ghost sm"><i data-lucide="list"></i>列表</span><span class="btn outline sm"><i data-lucide="layout-grid"></i>网格</span></div>
+          </div>
+        </div>
+        <div class="main-bd" style="display:flex;padding:0;">
+          <div style="flex:1;min-width:0;border-right:1px solid var(--hairline);padding:14px 16px;display:grid;grid-template-columns:repeat(2,1fr);gap:12px;align-content:start;">
+            <div style="border:1px solid var(--hairline);border-radius:12px;padding:12px;background:var(--fill-2);border-color:var(--ink);" data-hot="go-empty">
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;"><i data-lucide="type" style="width:15px;height:15px;color:var(--line);"></i><span style="font-size:11px;color:var(--muted);">文本</span></div>
+              <div style="font-size:13px;font-weight:600;color:var(--ink);margin-bottom:4px;">npm run tauri dev</div>
+              <div style="font-size:11px;color:var(--muted);">npm run tauri dev</div>
+            </div>
+            <div style="border:1px solid var(--hairline);border-radius:12px;padding:12px;">
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;"><i data-lucide="image" style="width:15px;height:15px;color:var(--line);"></i><span style="font-size:11px;color:var(--muted);">图片</span></div>
+              <div style="height:64px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;margin-bottom:6px;"><i data-lucide="image" style="width:20px;height:20px;color:var(--line);"></i></div>
+              <div style="font-size:11px;color:var(--muted);">2400×2400</div>
+            </div>
+            <div style="border:1px solid var(--hairline);border-radius:12px;padding:12px;">
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;"><i data-lucide="link" style="width:15px;height:15px;color:var(--line);"></i><span style="font-size:11px;color:var(--muted);">链接</span></div>
+              <div style="font-size:13px;font-weight:600;color:var(--ink);">Maccy Releases</div>
+              <div style="font-size:11px;color:var(--muted);">github.com</div>
+            </div>
+            <div style="border:1px solid var(--hairline);border-radius:12px;padding:12px;">
+              <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;"><i data-lucide="file" style="width:15px;height:15px;color:var(--line);"></i><span style="font-size:11px;color:var(--muted);">文件</span></div>
+              <div style="font-size:13px;font-weight:600;color:var(--ink);">brief.pdf</div>
+              <div style="font-size:11px;color:var(--muted);">/Users/rao/Desktop</div>
+            </div>
+          </div>
+          <div style="width:300px;flex-shrink:0;background:var(--white);display:flex;flex-direction:column;">
+            <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line-soft);"><span style="font-size:13px;font-weight:600;color:var(--ink);">文本</span><span style="font-size:12px;color:var(--muted);">4 天前</span><span style="margin-left:auto;font-size:11px;color:var(--muted);">只读预览</span></div>
+            <div style="flex:1;padding:14px 16px;"><div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:10px;">npm run tauri dev</div><div style="font-size:13px;line-height:1.75;color:var(--ink);">npm run tauri dev</div></div>
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line-soft);font-size:11px;color:var(--muted);"><span class="avatar-cell" style="width:20px;height:20px;font-size:10px;">C</span>来自 com.muxy.app<span style="margin-left:auto;">19 B · 19 字符</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note-block" data-for="grid">
+    <div class="note-title">④ 网格视图</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>卡片 2 列，dock 依然常驻</li>
+        <li>卡片只保留标题与一行摘要</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>点卡片 = 选中并刷新 dock，与列表视图一致</li>
+        <li>⌘L 在列表 / 网格间切换，预览逻辑不变</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="stage" data-group="选中即预览" data-cell="2,2">
+  <div class="stage-label">⑤ 空态 · 未选中</div>
+  <div class="screen" id="all-empty">
+    <div class="shell">
+      <div class="sidebar" style="width:192px;">
+        <div class="side-cap">历史</div>
+        <div class="side-item active"><i data-lucide="clipboard-list"></i>全部记录<span class="side-tail">59</span></div>
+        <div class="side-item"><i data-lucide="star"></i>已置顶<span class="side-tail">0</span></div>
+        <div class="side-item"><i data-lucide="trash-2"></i>回收站<span class="side-tail">0</span></div>
+      </div>
+      <div class="main">
+        <div class="main-hd"><div class="hd-row"><div><h2>全部记录</h2></div></div></div>
+        <div class="main-bd" style="display:flex;padding:0;">
+          <div style="flex:1;min-width:0;border-right:1px solid var(--hairline);">
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;" data-hot="go-text">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">rao@RaodeMacBook-Air % npm r…</div><div style="font-size:12px;color:var(--muted);">rao@RaodeMacBook-Air % npm run tauri dev</div></div>
+              <span style="font-size:11px;color:var(--muted);">刚刚</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">pi-skill-manager</div><div style="font-size:12px;color:var(--muted);">pi-skill-manager</div></div>
+              <span style="font-size:11px;color:var(--muted);">刚刚</span>
+            </div>
+          </div>
+          <div style="width:300px;flex-shrink:0;background:var(--white);display:flex;flex-direction:column;border-left:1px solid var(--hairline);">
+            <div class="empty" style="flex:1;justify-content:center;">
+              <div class="eic"><i data-lucide="panel-right"></i></div>
+              <div class="e1">选择一条记录</div>
+              <div class="e2">单击左侧任意一行即可在此查看完整内容</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note-block" data-for="all-empty">
+    <div class="note-title">⑤ 空态</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>dock 显示引导文案</li>
+        <li>不自动选中第一行</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>单击行进入②；或按 ↑↓ 直接选中首项</li>
+        <li>切换 chip / 搜索导致选中项消失 → 回到本态</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 组 2：分类型展示 ===== -->
+
+<div class="stage" data-group="分类型展示" data-cell="1,1">
+  <div class="stage-label">⑥ 图片</div>
+  <div class="screen" id="all-image">
+    <div class="shell">
+      <div class="sidebar" style="width:192px;">
+        <div class="side-cap">历史</div>
+        <div class="side-item active"><i data-lucide="clipboard-list"></i>全部记录<span class="side-tail">59</span></div>
+        <div class="side-item"><i data-lucide="image"></i>图片<span class="side-tail">11</span></div>
+      </div>
+      <div class="main">
+        <div class="main-hd"><div class="hd-row"><div><h2>全部记录</h2></div></div></div>
+        <div class="main-bd" style="display:flex;padding:0;">
+          <div style="flex:1;min-width:0;border-right:1px solid var(--hairline);">
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);background:var(--fill-2);border-left:3px solid var(--ink);display:flex;gap:10px;align-items:flex-start;" data-hot="go-file">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="image"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">图片剪贴板</div><div style="font-size:12px;color:var(--muted);">读取到 2400×2400 图片</div></div>
+              <span style="font-size:11px;color:var(--muted);">5 天前</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">R3-1</div><div style="font-size:12px;color:var(--muted);">R3-1</div></div>
+              <span style="font-size:11px;color:var(--muted);">4 天前</span>
+            </div>
+          </div>
+          <div style="width:300px;flex-shrink:0;background:var(--white);display:flex;flex-direction:column;border-left:1px solid var(--hairline);">
+            <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line-soft);"><span style="font-size:13px;font-weight:600;color:var(--ink);">图片</span><span style="font-size:12px;color:var(--muted);">5 天前</span><span style="margin-left:auto;font-size:11px;color:var(--muted);">只读预览</span></div>
+            <div style="flex:1;padding:14px 16px;">
+              <div style="height:170px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;margin-bottom:8px;"><i data-lucide="image" style="width:26px;height:26px;color:var(--line);"></i></div>
+              <div style="font-size:12px;color:var(--muted);">截图 · 2026-10-15 11:02</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line-soft);font-size:11px;color:var(--muted);"><span class="avatar-cell" style="width:20px;height:20px;font-size:10px;">W</span>来自 com.xinWeChat<span style="margin-left:auto;">2400×2400 · 1.8 MB</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note-block" data-for="all-image">
+    <div class="note-title">⑥ 图片</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>大图撑满 dock 宽度（约 268）</li>
+        <li>脚注：原始像素尺寸 + 体积</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>点击图片 → 在独立窗口中放大（沿用既有预览窗口）</li>
+        <li>切换选中即换图，不保留旧图</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="stage" data-group="分类型展示" data-cell="1,2">
+  <div class="stage-label">⑦ 文件</div>
+  <div class="screen" id="all-file">
+    <div class="shell">
+      <div class="sidebar" style="width:192px;">
+        <div class="side-cap">历史</div>
+        <div class="side-item active"><i data-lucide="clipboard-list"></i>全部记录<span class="side-tail">59</span></div>
+        <div class="side-item"><i data-lucide="file"></i>文件<span class="side-tail">4</span></div>
+      </div>
+      <div class="main">
+        <div class="main-hd"><div class="hd-row"><div><h2>全部记录</h2></div></div></div>
+        <div class="main-bd" style="display:flex;padding:0;">
+          <div style="flex:1;min-width:0;border-right:1px solid var(--hairline);">
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);background:var(--fill-2);border-left:3px solid var(--ink);display:flex;gap:10px;align-items:flex-start;" data-hot="go-link">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="file"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">3 个文件</div><div style="font-size:12px;color:var(--muted);">brief.pdf 等</div></div>
+              <span style="font-size:11px;color:var(--muted);">6 天前</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="image"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">图片剪贴板</div><div style="font-size:12px;color:var(--muted);">读取到 2400×2400 图片</div></div>
+              <span style="font-size:11px;color:var(--muted);">5 天前</span>
+            </div>
+          </div>
+          <div style="width:300px;flex-shrink:0;background:var(--white);display:flex;flex-direction:column;border-left:1px solid var(--hairline);">
+            <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line-soft);"><span style="font-size:13px;font-weight:600;color:var(--ink);">文件</span><span style="font-size:12px;color:var(--muted);">6 天前</span><span style="margin-left:auto;font-size:11px;color:var(--muted);">只读预览</span></div>
+            <div style="flex:1;padding:12px 14px;">
+              <div style="border:1px solid var(--hairline);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;"><i data-lucide="file-text" style="width:18px;height:18px;color:var(--line);"></i><div style="min-width:0;"><div style="font-size:12px;font-weight:600;color:var(--ink);">brief.pdf</div><div style="font-size:11px;color:var(--muted);">/Users/rao/Desktop</div></div></div>
+              <div style="border:1px solid var(--hairline);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;gap:10px;align-items:center;"><i data-lucide="file-text" style="width:18px;height:18px;color:var(--line);"></i><div style="min-width:0;"><div style="font-size:12px;font-weight:600;color:var(--ink);">spec-v3.docx</div><div style="font-size:11px;color:var(--muted);">/Users/rao/Desktop</div></div></div>
+              <div style="border:1px solid var(--hairline);border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:center;"><i data-lucide="folder" style="width:18px;height:18px;color:var(--line);"></i><div style="min-width:0;"><div style="font-size:12px;font-weight:600;color:var(--ink);">assets/</div><div style="font-size:11px;color:var(--muted);">/Users/rao/Desktop</div></div></div>
+              <div style="margin-top:10px;font-size:11px;color:var(--muted);">仅支持复制，需手动粘贴到目标位置。</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line-soft);font-size:11px;color:var(--muted);"><span class="avatar-cell" style="width:20px;height:20px;font-size:10px;">F</span>来自 Finder<span style="margin-left:auto;">3 项 · 2.4 MB</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note-block" data-for="all-file">
+    <div class="note-title">⑦ 文件</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>多文件清单：文件名 + 所在目录</li>
+        <li>项多时 dock 内滚动</li>
+        <li>提示「仅支持复制」</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>点击单项 → 在 Finder 中显示</li>
+        <li>双击整行 → 复制全部文件并粘贴</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="stage" data-group="分类型展示" data-cell="2,1">
+  <div class="stage-label">⑧ 链接</div>
+  <div class="screen" id="all-link">
+    <div class="shell">
+      <div class="sidebar" style="width:192px;">
+        <div class="side-cap">历史</div>
+        <div class="side-item active"><i data-lucide="clipboard-list"></i>全部记录<span class="side-tail">59</span></div>
+        <div class="side-item"><i data-lucide="link"></i>链接<span class="side-tail">2</span></div>
+      </div>
+      <div class="main">
+        <div class="main-hd"><div class="hd-row"><div><h2>全部记录</h2></div></div></div>
+        <div class="main-bd" style="display:flex;padding:0;">
+          <div style="flex:1;min-width:0;border-right:1px solid var(--hairline);">
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);background:var(--fill-2);border-left:3px solid var(--ink);display:flex;gap:10px;align-items:flex-start;" data-hot="go-other">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="link"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">https://github.com/p0deje/Maccy</div><div style="font-size:12px;color:var(--muted);">github.com</div></div>
+              <span style="font-size:11px;color:var(--muted);">5 天前</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="file"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">3 个文件</div><div style="font-size:12px;color:var(--muted);">brief.pdf 等</div></div>
+              <span style="font-size:11px;color:var(--muted);">6 天前</span>
+            </div>
+          </div>
+          <div style="width:300px;flex-shrink:0;background:var(--white);display:flex;flex-direction:column;border-left:1px solid var(--hairline);">
+            <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line-soft);"><span style="font-size:13px;font-weight:600;color:var(--ink);">链接</span><span style="font-size:12px;color:var(--muted);">5 天前</span><span style="margin-left:auto;font-size:11px;color:var(--muted);">只读预览</span></div>
+            <div style="flex:1;padding:14px 16px;">
+              <div style="font-size:14px;font-weight:600;color:var(--ink);line-height:1.4;margin-bottom:10px;">p0deje/Maccy · Releases</div>
+              <div style="border:1px solid var(--hairline);border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.6;color:var(--ink);word-break:break-all;margin-bottom:10px;">https://github.com/p0deje/Maccy/releases</div>
+              <div style="display:flex;gap:6px;"><span class="chip">github.com</span><span class="chip">62 字符</span></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line-soft);font-size:11px;color:var(--muted);"><span class="avatar-cell" style="width:20px;height:20px;font-size:10px;">S</span>来自 com.apple.Safari</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note-block" data-for="all-link">
+    <div class="note-title">⑧ 链接</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>标题 + 完整 URL（可选中复制）</li>
+        <li>域名与字符数胶囊</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>点击 URL → 跳转（按住 ⌘ 或单击域名单选文字）</li>
+        <li>双击行 → 粘贴链接文本</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="stage" data-group="分类型展示" data-cell="2,2">
+  <div class="stage-label">⑨ 其他类型 · 表示清单</div>
+  <div class="screen" id="all-other">
+    <div class="shell">
+      <div class="sidebar" style="width:192px;">
+        <div class="side-cap">历史</div>
+        <div class="side-item active"><i data-lucide="clipboard-list"></i>全部记录<span class="side-tail">59</span></div>
+        <div class="side-item"><i data-lucide="layers"></i>其他<span class="side-tail">4</span></div>
+      </div>
+      <div class="main">
+        <div class="main-hd"><div class="hd-row"><div><h2>全部记录</h2></div></div></div>
+        <div class="main-bd" style="display:flex;padding:0;">
+          <div style="flex:1;min-width:0;border-right:1px solid var(--hairline);">
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);background:var(--fill-2);border-left:3px solid var(--ink);display:flex;gap:10px;align-items:flex-start;" data-hot="go-multi">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="layers"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">Vector 剪贴板</div><div style="font-size:12px;color:var(--muted);">com.adobe.pdf</div></div>
+              <span style="font-size:11px;color:var(--muted);">7 天前</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="link"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">https://github.com/p0deje/Maccy</div><div style="font-size:12px;color:var(--muted);">github.com</div></div>
+              <span style="font-size:11px;color:var(--muted);">5 天前</span>
+            </div>
+          </div>
+          <div style="width:300px;flex-shrink:0;background:var(--white);display:flex;flex-direction:column;border-left:1px solid var(--hairline);">
+            <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line-soft);"><span style="font-size:13px;font-weight:600;color:var(--ink);">其他</span><span style="font-size:12px;color:var(--muted);">7 天前</span><span style="margin-left:auto;font-size:11px;color:var(--muted);">只读预览</span></div>
+            <div style="flex:1;padding:14px 16px;">
+              <div style="font-size:11px;color:var(--muted);margin-bottom:8px;">该类型仅支持复制，可手动粘贴。</div>
+              <div style="border:1px solid var(--hairline);border-radius:8px;padding:10px 12px;">
+                <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">表示（3）</div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ink);margin-bottom:4px;"><span style="font-family:ui-monospace,Menlo,monospace;">com.adobe.pdf</span><span style="color:var(--muted);">1.2 MB</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ink);margin-bottom:4px;"><span style="font-family:ui-monospace,Menlo,monospace;">public.data</span><span style="color:var(--muted);">1.2 MB</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ink);"><span style="font-family:ui-monospace,Menlo,monospace;">public.tiff</span><span style="color:var(--muted);">已截断</span></div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line-soft);font-size:11px;color:var(--muted);"><span class="avatar-cell" style="width:20px;height:20px;font-size:10px;">P</span>来自 com.apple.Preview<span style="margin-left:auto;">1.2 MB</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note-block" data-for="all-other">
+    <div class="note-title">⑨ 其他类型</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>提示「仅支持复制」</li>
+        <li>表示清单：格式名 + 体积 + 截断标记</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>表示超过 6 项时折叠，点「还有 N 种…」展开</li>
+        <li>双击行 → 只复制，不直接粘贴</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 组 3：布局与状态 ===== -->
+
+<div class="stage" data-group="布局与状态" data-cell="1,1">
+  <div class="stage-label">⑩ dock 折叠 · 全宽列表</div>
+  <div class="screen" id="dock-collapsed">
+    <div class="shell">
+      <div class="sidebar" style="width:192px;">
+        <div class="side-cap">历史</div>
+        <div class="side-item active"><i data-lucide="clipboard-list"></i>全部记录<span class="side-tail">59</span></div>
+        <div class="side-item"><i data-lucide="star"></i>已置顶<span class="side-tail">0</span></div>
+        <div class="side-item"><i data-lucide="trash-2"></i>回收站<span class="side-tail">0</span></div>
+      </div>
+      <div class="main">
+        <div class="main-hd">
+          <div class="hd-row"><div><h2>全部记录</h2></div>
+            <div class="hd-actions">
+              <span class="pc-search"><i data-lucide="search"></i><span class="sph">搜索…</span></span>
+              <span class="btn primary sm"><i data-lucide="panel-right"></i>⌘\ 显示预览</span>
+            </div>
+          </div>
+        </div>
+        <div class="main-bd" style="display:flex;padding:0;">
+          <div style="flex:1;min-width:0;">
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);background:var(--fill-2);border-left:3px solid var(--ink);display:flex;gap:10px;align-items:flex-start;" data-hot="go-multi">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">rao@RaodeMacBook-Air % npm run tauri dev &gt; superclip@0.1.0 tauri</div><div style="font-size:12px;color:var(--muted);">rao@RaodeMacBook-Air % npm run tauri dev &gt; superclip@0.1.0 tauri &gt; node scripts/tauri…</div></div>
+              <span style="font-size:11px;color:var(--muted);">com.muxy.app　刚刚</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">pi-skill-manager</div><div style="font-size:12px;color:var(--muted);">pi-skill-manager</div></div>
+              <span style="font-size:11px;color:var(--muted);">com.muxy.app　刚刚</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">PID 16112 (/Users/rao/AiDoWork/SuperClip 的残留</div><div style="font-size:12px;color:var(--muted);">PID 16112 (/Users/rao/AiDoWork/SuperClip 的残留 npm run dev</div></div>
+              <span style="font-size:11px;color:var(--muted);">4 天前</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="image"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">图片剪贴板</div><div style="font-size:12px;color:var(--muted);">读取到 2400×2400 图片</div></div>
+              <span style="font-size:11px;color:var(--muted);">5 天前</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note-block" data-for="dock-collapsed">
+    <div class="note-title">⑩ 折叠</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>dock 收起后列表恢复全宽</li>
+        <li>标题栏出现「显示预览」按钮</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>⌘\ 或点顶部按钮切换折叠 / 展开</li>
+        <li>折叠状态记忆，下次启动沿用</li>
+        <li>折叠时选中仍保留，展开即显示</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="stage" data-group="布局与状态" data-cell="1,2">
+  <div class="stage-label">⑪ 多选 · 批量摘要</div>
+  <div class="screen" id="all-multi">
+    <div class="shell">
+      <div class="sidebar" style="width:192px;">
+        <div class="side-cap">历史</div>
+        <div class="side-item active"><i data-lucide="clipboard-list"></i>全部记录<span class="side-tail">59</span></div>
+        <div class="side-item"><i data-lucide="star"></i>已置顶<span class="side-tail">0</span></div>
+        <div class="side-item"><i data-lucide="trash-2"></i>回收站<span class="side-tail">0</span></div>
+      </div>
+      <div class="main">
+        <div class="main-hd"><div class="hd-row"><div><h2>全部记录</h2></div></div></div>
+        <div class="main-bd" style="display:flex;padding:0;">
+          <div style="flex:1;min-width:0;border-right:1px solid var(--hairline);">
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);background:var(--fill-2);display:flex;gap:10px;align-items:flex-start;" data-hot="go-narrow">
+              <span class="cbox on" style="background:var(--ink);border-color:var(--ink);"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">rao@RaodeMacBook-Air % npm r…</div><div style="font-size:12px;color:var(--muted);">rao@RaodeMacBook-Air % npm run tauri dev</div></div>
+              <span style="font-size:11px;color:var(--muted);">刚刚</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);background:var(--fill-2);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox on" style="background:var(--ink);border-color:var(--ink);"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">pi-skill-manager</div><div style="font-size:12px;color:var(--muted);">pi-skill-manager</div></div>
+              <span style="font-size:11px;color:var(--muted);">刚刚</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);background:var(--fill-2);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox on" style="background:var(--ink);border-color:var(--ink);"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="image"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">图片剪贴板</div><div style="font-size:12px;color:var(--muted);">读取到 2400×2400 图片</div></div>
+              <span style="font-size:11px;color:var(--muted);">5 天前</span>
+            </div>
+            <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+              <span class="cbox"></span>
+              <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="link"></i></span>
+              <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">Maccy · Releases</div><div style="font-size:12px;color:var(--muted);">github.com</div></div>
+              <span style="font-size:11px;color:var(--muted);">5 天前</span>
+            </div>
+          </div>
+          <div style="width:300px;flex-shrink:0;background:var(--white);display:flex;flex-direction:column;border-left:1px solid var(--hairline);">
+            <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line-soft);"><span style="font-size:13px;font-weight:600;color:var(--ink);">已选 3 项</span><span style="margin-left:auto;font-size:11px;color:var(--muted);">批量操作</span></div>
+            <div style="flex:1;padding:14px 16px;">
+              <div style="font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:12px;">多选时不显示单条预览，避免与批量操作互相干扰。</div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <span class="btn ghost sm" style="justify-content:center;">批量复制</span>
+                <span class="btn ghost sm" style="justify-content:center;">批量置顶</span>
+                <span class="btn outline sm" style="justify-content:center;">批量删除</span>
+                <span class="btn outline sm" style="justify-content:center;">取消选择</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line-soft);font-size:11px;color:var(--muted);">合计 3 条 · 2.1 MB</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note-block" data-for="all-multi">
+    <div class="note-title">⑪ 多选</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>选中 ≥2 项时 dock 切为批量摘要</li>
+        <li>列出批量动作与合计体积</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>取消选择 → 回到单条预览或空态</li>
+        <li>⌘A 全选同样进入本态</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="stage" data-group="布局与状态" data-cell="2,1">
+  <div class="stage-label">⑫ 窄窗 · 覆盖式</div>
+  <div class="screen" id="narrow-overlay">
+    <div class="shell">
+      <div class="sidebar" style="width:192px;">
+        <div class="side-cap">历史</div>
+        <div class="side-item active"><i data-lucide="clipboard-list"></i>全部记录<span class="side-tail">59</span></div>
+        <div class="side-item"><i data-lucide="star"></i>已置顶<span class="side-tail">0</span></div>
+        <div class="side-item"><i data-lucide="trash-2"></i>回收站<span class="side-tail">0</span></div>
+      </div>
+      <div class="main">
+        <div class="main-hd"><div class="hd-row"><div><h2>全部记录</h2></div></div></div>
+        <div class="main-bd" style="padding:0;position:relative;">
+          <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);background:var(--fill-2);border-left:3px solid var(--ink);display:flex;gap:10px;align-items:flex-start;">
+            <span class="cbox"></span>
+            <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+            <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">PID 16112 (/Users/rao/AiDoWork/SuperClip 的残留</div><div style="font-size:12px;color:var(--muted);">PID 16112 (/Users/rao/AiDoWork/SuperClip 的残留 npm run dev</div></div>
+            <span style="font-size:11px;color:var(--muted);">4 天前</span>
+          </div>
+          <div style="padding:10px 16px;border-bottom:1px solid var(--line-soft);display:flex;gap:10px;align-items:flex-start;">
+            <span class="cbox"></span>
+            <span style="width:26px;height:26px;border-radius:8px;background:var(--fill);display:flex;align-items:center;justify-content:center;"><i data-lucide="type" style="width:14px;height:14px;color:var(--line);"></i></span>
+            <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:600;color:var(--ink);">Q1 D，其余按推荐</div><div style="font-size:12px;color:var(--muted);">Q1 D，其余按推荐</div></div>
+            <span style="font-size:11px;color:var(--muted);">4 天前</span>
+          </div>
+          <div style="position:absolute;top:0;right:8px;bottom:8px;width:300px;background:var(--white);border:1px solid var(--hairline);border-radius:12px;box-shadow:-10px 0 28px rgba(33,37,41,.14);display:flex;flex-direction:column;">
+            <div style="display:flex;align-items:center;gap:8px;padding:14px 16px;border-bottom:1px solid var(--line-soft);"><span style="font-size:13px;font-weight:600;color:var(--ink);">文本</span><span style="font-size:12px;color:var(--muted);">4 天前</span><span style="margin-left:auto;font-size:11px;color:var(--muted);">Esc 关闭</span></div>
+            <div style="flex:1;padding:14px 16px;"><div style="font-size:14px;font-weight:600;color:var(--ink);margin-bottom:10px;">PID 16112 (/Users/rao/AiDoWork/SuperClip 的残留)</div><div style="font-size:13px;line-height:1.75;color:var(--ink);">PID 16112 (/Users/rao/AiDoWork/SuperClip 的残留 npm run dev</div></div>
+            <div style="display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line-soft);font-size:11px;color:var(--muted);"><span class="avatar-cell" style="width:20px;height:20px;font-size:10px;">C</span>com.muxy.app<span style="margin-left:auto;">63 B · 55 字符</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="note-block" data-for="narrow-overlay">
+    <div class="note-title">⑫ 窄窗覆盖式</div>
+    <div class="note-body">
+      <div class="note-sec">功能</div>
+      <ul>
+        <li>窗口宽 &lt; 960 时 dock 改浮层</li>
+        <li>不压缩列表，圆角 + 投影浮于其上</li>
+      </ul>
+      <div class="note-sec">交互</div>
+      <ul>
+        <li>Esc 或点击列表空白 → 关闭</li>
+        <li>拖宽窗口过 960 → 自动回到常驻</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 连线 ===== -->
+
+<div class="link" data-from="all-scan" data-to="all-text" data-tag="单击行 → 右侧 dock" data-trigger="go-selected"></div>
+<div class="link" data-from="all-text" data-to="all-longtext" data-tag="长文本 · dock 内滚动" data-trigger="go-longtext"></div>
+<div class="link" data-from="all-longtext" data-to="grid" data-tag="⌘L 切网格视图" data-trigger="go-grid"></div>
+<div class="link" data-from="all-empty" data-to="all-text" data-tag="单击任一行" data-trigger="go-text" data-dash="1"></div>
+<div class="link" data-from="all-text" data-to="all-empty" data-tag="选中项被过滤掉" data-dash="1"></div>
+
+<div class="link" data-from="all-image" data-to="all-file" data-tag="选中到文件类型" data-trigger="go-file"></div>
+<div class="link" data-from="all-file" data-to="all-link" data-tag="选中到链接类型" data-trigger="go-link"></div>
+<div class="link" data-from="all-link" data-to="all-other" data-tag="选中到其他类型" data-trigger="go-other"></div>
+
+<div class="link" data-from="dock-collapsed" data-to="all-multi" data-tag="⌘\ 展开后多选" data-trigger="go-multi"></div>
+<div class="link" data-from="all-multi" data-to="narrow-overlay" data-tag="窗口收窄到 900" data-trigger="go-narrow"></div>
+<div class="link" data-from="all-text" data-to="dock-collapsed" data-tag="⌘\ 折叠 dock"></div>
